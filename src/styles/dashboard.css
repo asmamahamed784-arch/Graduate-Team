@@ -1,0 +1,70 @@
+/* src/styles/dashboard.css */
+/* Premium NQS Dashboard and Widget Styles */
+
+.dashboard-panel-card {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-smooth);
+}
+
+.dashboard-panel-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Timeline specific styles */
+.timeline-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 16px;
+  width: 2px;
+  background-color: var(--border-light);
+}
+
+[dir="rtl"] .timeline-line {
+  left: auto;
+  right: 16px;
+}
+
+.timeline-item-node {
+  position: absolute;
+  left: 8px;
+  top: 6px;
+  z-index: 10;
+}
+
+[dir="rtl"] .timeline-item-node {
+  left: auto;
+  right: 8px;
+}
+
+/* Interactive table styling */
+.nqs-custom-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.nqs-custom-table th {
+  background-color: var(--bg-app);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  border-bottom: 2px solid var(--border-light);
+}
+
+.nqs-custom-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-main);
+  transition: var(--transition-smooth);
+}
+
+.nqs-custom-table tr:hover td {
+  background-color: var(--bg-app);
+}

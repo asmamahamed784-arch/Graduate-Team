@@ -1,0 +1,26 @@
+/* src/styles/responsive.css */
+/* Mobile-First Layout Rules and Responsive Screen Adapters */
+
+@media (max-width: 640px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .stats-card-container {
+    padding: 12px !important;
+  }
+
+  .nav-header-compact {
+    padding: 8px 16px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .sidebar-collapsed {
+    transform: translateX(-100%);
+  }
+  
+  .dashboard-content-shift {
+    margin-left: 0 !important;
+  }
+}

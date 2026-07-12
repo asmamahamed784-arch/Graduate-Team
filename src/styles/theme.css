@@ -1,0 +1,81 @@
+/* src/styles/theme.css */
+/* Modern government portal theme tokens */
+
+:root {
+  /* Brand Palettes */
+  --color-primary-50: #f0f4f9;
+  --color-primary-100: #dce6f2;
+  --color-primary-200: #bfd1e6;
+  --color-primary-300: #93b2d6;
+  --color-primary-400: #608ec3;
+  --color-primary-500: #4189DD;
+  --color-primary-600: #2c5691;
+  --color-primary-700: #1a365d;
+  --color-primary-800: #10223e;
+  --color-primary-900: #0a1427;
+
+  --color-secondary-50: #f0fdfa;
+  --color-secondary-500: #14B8A6;
+  --color-secondary-600: #0d9488;
+  --color-secondary-700: #0f766e;
+
+  --color-accent-50: #fef3c7;
+  --color-accent-500: #F59E0B;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+
+  /* Official portal surface tokens */
+  --bg-app: #f5f8fc;
+  --bg-card: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --border-light: #dbe7f3;
+  --border-focus: #4189DD;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+
+  --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+}
+
+/* Dark mode tokens used by the whole web app. */
+.dark,
+.nqs-theme-dark {
+  --bg-app: #061225;
+  --bg-card: #071a33;
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --border-light: #1d355f;
+  --border-focus: #60a5fa;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 8px 20px -14px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 18px 36px -24px rgba(0, 0, 0, 0.65);
+}
+
+/* Premium Animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(65, 137, 221, 0.35));
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

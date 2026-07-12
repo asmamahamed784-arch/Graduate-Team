@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 780" role="img" aria-labelledby="title desc">
+  <title id="title">National ID office hero image placeholder</title>
+  <desc id="desc">Replace this file with your Banaadir building hero photo.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#7ec8ff"/>
+      <stop offset="1" stop-color="#dff2ff"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#cde8ff"/>
+      <stop offset="1" stop-color="#4d9dde"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="780" fill="url(#sky)"/>
+  <circle cx="232" cy="150" r="64" fill="#ffffff" opacity=".72"/>
+  <circle cx="1350" cy="120" r="78" fill="#ffffff" opacity=".8"/>
+  <path d="M0 575c210-90 331-21 514-72 181-51 300-146 505-84 190 58 322-16 581-80v441H0z" fill="#0b4e8f" opacity=".14"/>
+  <path d="M153 607h1287v76H153z" fill="#e9eef5"/>
+  <path d="M290 290h1010v320H290z" fill="#f8fbff"/>
+  <path d="M245 350h1110v55H245z" fill="#ffffff"/>
+  <path d="M350 235h890v80H350z" fill="#ffffff"/>
+  <path d="M420 166h720v78H420z" fill="#f8fbff"/>
+  <path d="M737 86h126v86H737z" fill="#f8fbff"/>
+  <path d="M800 52v112" stroke="#0b4e8f" stroke-width="7"/>
+  <path d="M808 62c35 7 58 31 92 18v64c-34 13-57-11-92-18z" fill="#1593e6"/>
+  <path d="M258 405h1084" stroke="#d9e4f1" stroke-width="10"/>
+  <path d="M384 338h138v72H384zM590 338h138v72H590zM874 338h138v72H874zM1080 338h138v72h-138z" fill="url(#glass)"/>
+  <path d="M384 450h138v96H384zM590 450h138v96H590zM874 450h138v96H874zM1080 450h138v96h-138z" fill="url(#glass)"/>
+  <path d="M725 430h150v180H725z" fill="#0b4e8f"/>
+  <path d="M748 456h104v154H748z" fill="#5fb5ee"/>
+  <path d="M384 338h138v72H384zM590 338h138v72H590zM874 338h138v72H874zM1080 338h138v72h-138zM384 450h138v96H384zM590 450h138v96H590zM874 450h138v96H874zM1080 450h138v96h-138z" fill="none" stroke="#ffffff" stroke-width="7"/>
+  <text x="800" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="800" fill="#0b2f5b">BANAADIR NATIONAL ID OFFICE</text>
+  <text x="800" y="262" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#0b4e8f">Add Hero Image Here</text>
+  <rect x="726" y="118" width="148" height="55" rx="8" fill="#f2b632"/>
+  <path d="M800 128l12 24 27 4-19 19 4 27-24-13-24 13 4-27-19-19 27-4z" fill="#ffffff"/>
+  <rect x="0" y="610" width="1600" height="170" fill="#06305e" opacity=".18"/>
+</svg>

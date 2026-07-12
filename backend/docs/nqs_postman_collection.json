@@ -1,0 +1,563 @@
+{
+	"info": {
+		"_postman_id": "84c8a2b5-559d-4e92-bc2f-a9cb62fe7694",
+		"name": "NQS Government Portal Backend",
+		"description": "Postman collection for testing the National Queue System (NQS) Node.js/Express/MongoDB REST API.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register Citizen",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Amina Ali\",\n  \"email\": \"amina.ali@gov.so\",\n  \"phone\": \"+252 61 000 0003\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login Citizen",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const responseJson = pm.response.json();",
+									"if (responseJson.success && responseJson.data.token) {",
+									"    pm.environment.set(\"token\", responseJson.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"amina.ali@gov.so\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login Operator Staff",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const responseJson = pm.response.json();",
+									"if (responseJson.success && responseJson.data.token) {",
+									"    pm.environment.set(\"token\", responseJson.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"operator.nqs@gov.so\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login Administrator",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const responseJson = pm.response.json();",
+									"if (responseJson.success && responseJson.data.token) {",
+									"    pm.environment.set(\"token\", responseJson.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin.nqs@gov.so\",\n  \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Services",
+			"item": [
+				{
+					"name": "List Services",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/services",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"services"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Service (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"National ID Registration\",\n  \"description\": \"Apply for a new National ID card or update identity details.\",\n  \"category\": \"National ID\",\n  \"duration\": 15,\n  \"priority\": \"High\",\n  \"requirements\": [\"Existing identification or birth record\", \"Recent ID photo\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/services",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"services"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Centers",
+			"item": [
+				{
+					"name": "List Centers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/centers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"centers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Center (Admin Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Karaan National ID Center\",\n  \"address\": \"Karaan District Office, Mogadishu\",\n  \"city\": \"Banaadir\",\n  \"phone\": \"+252 61 000 1005\",\n  \"counters\": 5,\n  \"capacity\": 180,\n  \"hours\": \"08:00 AM - 04:00 PM\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/centers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"centers"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bookings & Appointments",
+			"item": [
+				{
+					"name": "Create Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"serviceId\": \"{{service_id}}\",\n  \"centerId\": \"{{center_id}}\",\n  \"date\": \"2026-06-10\",\n  \"timeSlot\": \"10:30 AM\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bookings",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bookings"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Bookings",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bookings/my",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bookings",
+								"my"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Queue Operations",
+			"item": [
+				{
+					"name": "Call Next Ticket (Operator Only)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"centerId\": \"{{center_id}}\",\n  \"counter\": \"Counter 04\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/queue/call-next",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"queue",
+								"call-next"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Track Queue position",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/queue/track/NQS-1024",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"queue",
+								"track",
+								"NQS-1024"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Live Center Queue",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/queue/live/{{center_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"queue",
+								"live",
+								"{{center_id}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Analytics & Reports",
+			"item": [
+				{
+					"name": "Get Dashboard Stats (Admin/Operator)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/reports/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"stats"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Analytics Charts Data (Admin Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/reports/analytics",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reports",
+								"analytics"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Anti-Corruption Audit Logs",
+			"item": [
+				{
+					"name": "Get Audit Logs (Admin Only)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/audits?riskLevel=Medium&page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"audits"
+							],
+							"query": [
+								{
+									"key": "riskLevel",
+									"value": "Medium"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5001",
+			"type": "string"
+		},
+		{
+			"key": "service_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "center_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

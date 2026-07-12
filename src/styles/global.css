@@ -1,0 +1,67 @@
+/* src/styles/global.css */
+@import './theme.css';
+
+/* Global resets and baseline styling */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: var(--bg-app);
+  color: var(--text-main);
+  transition: var(--transition-smooth);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-400);
+}
+
+/* Card utility kept for compatibility with existing components. */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  transition: var(--transition-smooth);
+}
+
+.dark .glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+}
+
+/* Custom pulsing live dot indicator */
+.live-status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-accent-500);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+/* Focus and input states */
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(65, 137, 221, 0.22);
+}
+
+.dark input:focus, .dark select:focus, .dark textarea:focus {
+  box-shadow: 0 0 0 3px rgba(65, 137, 221, 0.18);
+}

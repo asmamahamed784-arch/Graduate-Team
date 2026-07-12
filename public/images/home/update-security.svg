@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Ticket security update placeholder</title>
+  <desc id="desc">Replace this file with your third update photo.</desc>
+  <rect width="900" height="520" fill="#fff7ed"/>
+  <rect x="154" y="108" width="590" height="300" rx="34" fill="#ffffff" stroke="#fed7aa" stroke-width="6"/>
+  <rect x="198" y="160" width="160" height="98" rx="14" fill="#fef3c7" stroke="#f59e0b" stroke-width="6"/>
+  <path d="M224 190h108M224 218h78" stroke="#f59e0b" stroke-width="12" stroke-linecap="round"/>
+  <rect x="418" y="164" width="250" height="24" rx="12" fill="#cbd5e1"/>
+  <rect x="418" y="212" width="200" height="18" rx="9" fill="#e2e8f0"/>
+  <rect x="418" y="256" width="245" height="18" rx="9" fill="#e2e8f0"/>
+  <path d="M456 325c64-42 113-42 177 0v54H456z" fill="#0b3a75" opacity=".12"/>
+  <path d="M545 292l16 33 36 5-26 25 6 36-32-17-32 17 6-36-26-25 36-5z" fill="#f59e0b"/>
+  <text x="64" y="60" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800" fill="#ea580c">SECURITY</text>
+  <text x="450" y="478" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#7c4a18">Add Update Image Here</text>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Service center update placeholder</title>
+  <desc id="desc">Replace this file with your first update photo.</desc>
+  <rect width="900" height="520" fill="#eaf3ff"/>
+  <rect x="95" y="110" width="710" height="280" rx="18" fill="#ffffff" stroke="#c8d9ee" stroke-width="6"/>
+  <rect x="142" y="156" width="150" height="116" fill="#8fc5ee"/>
+  <rect x="330" y="156" width="150" height="116" fill="#8fc5ee"/>
+  <rect x="518" y="156" width="150" height="116" fill="#8fc5ee"/>
+  <rect x="706" y="156" width="55" height="116" fill="#8fc5ee"/>
+  <rect x="390" y="295" width="120" height="95" fill="#0b3a75"/>
+  <rect x="0" y="390" width="900" height="130" fill="#cfe0f3"/>
+  <circle cx="206" cy="403" r="28" fill="#0b3a75"/>
+  <circle cx="310" cy="403" r="28" fill="#0b3a75"/>
+  <circle cx="594" cy="403" r="28" fill="#0b3a75"/>
+  <circle cx="698" cy="403" r="28" fill="#0b3a75"/>
+  <text x="58" y="60" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800" fill="#0b3a75">ANNOUNCEMENT</text>
+  <text x="450" y="475" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#406078">Add Update Image Here</text>
+</svg>
