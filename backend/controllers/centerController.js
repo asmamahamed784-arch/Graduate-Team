@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Center from '../models/Center.js';
 import AuditLog from '../models/AuditLog.js';
 import Ticket from '../models/Ticket.js';
@@ -164,6 +165,9 @@ export const listCenters = async (req, res) => {
 // @access  Public
 export const getCenterById = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Center not found' });
+    }
     const center = await Center.findById(req.params.id);
     if (!center) {
       return res.status(404).json({ success: false, message: 'Center not found' });

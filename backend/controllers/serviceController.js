@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Service from '../models/Service.js';
 import AuditLog from '../models/AuditLog.js';
 import Ticket from '../models/Ticket.js';
@@ -39,6 +40,9 @@ export const listServices = async (req, res) => {
 // @access  Public
 export const getServiceById = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
     const service = await Service.findById(req.params.id);
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });

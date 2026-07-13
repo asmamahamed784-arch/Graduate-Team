@@ -85,7 +85,12 @@ SMS is currently log-only in MongoDB. A real SMS provider can be added later in 
 ## 4. Vercel Frontend
 
 1. Create a new Vercel project from the GitHub repository.
-2. Use the project root as the frontend root.
+2. Set the root directory to:
+
+```text
+frontend
+```
+
 3. Set the build command:
 
 ```bash
@@ -108,19 +113,19 @@ Local development can leave `VITE_API_URL` empty and use the Vite proxy to the l
 
 ## 5. Local Development
 
-Backend:
+From the repository root:
 
 ```bash
-cd backend
-npm install
-npm run dev
+npm run install:all   # installs root tooling + backend + frontend
+npm run seed:full     # seeds demo data (services, centers, users, tickets)
+npm run dev           # runs backend and frontend together
 ```
 
-Frontend:
+Or run each side separately:
 
 ```bash
-npm install
-npm run dev
+cd backend && npm run dev     # API on http://localhost:5001
+cd frontend && npm run dev    # SPA on http://localhost:5173
 ```
 
 Open:

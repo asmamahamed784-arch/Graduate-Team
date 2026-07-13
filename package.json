@@ -1,47 +1,19 @@
 {
-  "name": "web-system-nqs",
+  "name": "nqs-national-id",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "National Queue System (NQS) — National ID appointment and queue management. Monorepo root: see backend/ and frontend/.",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
-    "@zxing/library": "^0.23.0",
-    "axios": "^1.16.1",
-    "chart.js": "^4.5.1",
-    "framer-motion": "^12.40.0",
-    "i18next": "^26.2.0",
-    "qrcode.react": "^4.2.0",
-    "react": "^19.2.6",
-    "react-chartjs-2": "^5.3.1",
-    "react-datepicker": "^9.1.0",
-    "react-dom": "^19.2.6",
-    "react-hook-form": "^7.76.0",
-    "react-i18next": "^17.0.8",
-    "react-icons": "^5.6.0",
-    "react-router-dom": "^7.15.1",
-    "react-toastify": "^11.1.0",
-    "socket.io-client": "^4.8.3",
-    "yup": "^1.7.1"
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "seed": "npm --prefix backend run seed",
+    "seed:full": "node backend/utils/seed.js --full",
+    "build": "npm --prefix frontend run build",
+    "lint": "npm --prefix frontend run lint"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@tailwindcss/vite": "^4.3.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "autoprefixer": "^10.5.0",
-    "eslint": "^10.3.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.6.0",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^4.3.0",
-    "vite": "^8.0.12"
+    "concurrently": "^9.1.2"
   }
 }

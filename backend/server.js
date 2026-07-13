@@ -41,9 +41,20 @@ const allowedOrigins = (process.env.FRONTEND_URL || '')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const isProduction = process.env.NODE_ENV === 'production';
+// Any localhost/127.0.0.1 port counts as a dev origin so local testing
+// works regardless of which host or port Vite ends up on.
+const isLocalOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+const isOriginAllowed = (origin) =>
+  !origin ||
+  allowedOrigins.length === 0 ||
+  allowedOrigins.includes(origin) ||
+  (!isProduction && isLocalOrigin(origin));
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
@@ -55,7 +66,12 @@ const corsOptions = {
 // Socket.io initialization
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });

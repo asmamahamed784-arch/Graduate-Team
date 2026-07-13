@@ -1,0 +1,1523 @@
+@import "tailwindcss";
+
+/* Tailwind v4 defaults dark: variants to the OS color scheme. The app has its
+   own Light/Dark toggle that sets the .dark class, so bind dark: to that class
+   or the toggle silently stops controlling most of the UI. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary-50: #f0f4f9;
+  --color-primary-100: #dce6f2;
+  --color-primary-200: #bfd1e6;
+  --color-primary-300: #93b2d6;
+  --color-primary-400: #608ec3;
+  --color-primary-500: #4189DD;
+  --color-primary-600: #2c5691;
+  --color-primary-700: #1a365d;
+  --color-primary-800: #10223e;
+  --color-primary-900: #0a1427;
+
+  --color-secondary-50: #f0fdfa;
+  --color-secondary-500: #14B8A6;
+  --color-secondary-600: #0d9488;
+  --color-secondary-700: #0f766e;
+
+  --color-accent-50: #fef3c7;
+  --color-accent-500: #F59E0B;
+  --color-accent-600: #d97706;
+  --color-accent-700: #b45309;
+}
+
+@import "./styles/theme.css";
+@import "./styles/global.css";
+@import "./styles/responsive.css";
+@import "./styles/dashboard.css";
+
+/* Base fonts and root configurations */
+@layer base {
+  :root {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Government portal visual skin */
+.nqs-public-surface,
+.nqs-dashboard-surface {
+  background: #f5f8fc;
+}
+
+.nqs-public-surface [class*="bg-gradient-to"][class*="from-slate"],
+.nqs-public-surface [class*="bg-gradient-to"][class*="via-slate"],
+.nqs-public-surface [class*="bg-gradient-to"][class*="to-slate"],
+.nqs-dashboard-surface [class*="bg-gradient-to"][class*="from-slate"],
+.nqs-dashboard-surface [class*="bg-gradient-to"][class*="via-slate"],
+.nqs-dashboard-surface [class*="bg-gradient-to"][class*="to-slate"] {
+  background-image: none !important;
+}
+
+.nqs-public-surface [class*="from-slate-950"],
+.nqs-public-surface [class*="via-slate-900"],
+.nqs-public-surface [class*="to-slate-950"],
+.nqs-public-surface [class*="bg-slate-950"],
+.nqs-public-surface [class*="bg-slate-900"],
+.nqs-public-surface [class*="bg-gray-800"],
+.nqs-public-surface [class*="bg-gray-700"],
+.nqs-public-surface [class*="bg-[#061225]"],
+.nqs-public-surface [class*="bg-[#071A33]"],
+.nqs-public-surface [class*="bg-[#071B35]"],
+.nqs-public-surface [class*="bg-[#071428]"],
+.nqs-public-surface [class*="bg-[#F6FAFF]"],
+.nqs-dashboard-surface [class*="from-slate-950"],
+.nqs-dashboard-surface [class*="via-slate-900"],
+.nqs-dashboard-surface [class*="to-slate-950"],
+.nqs-dashboard-surface [class*="bg-slate-950"],
+.nqs-dashboard-surface [class*="bg-slate-900"],
+.nqs-dashboard-surface [class*="bg-slate-800"],
+.nqs-dashboard-surface [class*="bg-gray-800"],
+.nqs-dashboard-surface [class*="bg-gray-700"],
+.nqs-dashboard-surface [class*="bg-[#061225]"],
+.nqs-dashboard-surface [class*="bg-[#071a33]"],
+.nqs-dashboard-surface [class*="bg-[#071A33]"] {
+  background: #ffffff !important;
+  border-color: #dbe7f3 !important;
+}
+
+.nqs-public-surface [class*="shadow-"],
+.nqs-dashboard-surface [class*="shadow-"] {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.nqs-public-surface .fixed[class*="inset-0"][class*="bg-slate-950"],
+.nqs-dashboard-surface .fixed[class*="inset-0"][class*="bg-slate-950"] {
+  background: rgba(15, 23, 42, 0.45) !important;
+}
+
+.nqs-public-surface h1,
+.nqs-public-surface h2,
+.nqs-public-surface h3,
+.nqs-public-surface h4,
+.nqs-public-surface p,
+.nqs-public-surface label,
+.nqs-public-surface li,
+.nqs-dashboard-surface h1,
+.nqs-dashboard-surface h2,
+.nqs-dashboard-surface h3,
+.nqs-dashboard-surface h4,
+.nqs-dashboard-surface p,
+.nqs-dashboard-surface label,
+.nqs-dashboard-surface th,
+.nqs-dashboard-surface td,
+.nqs-dashboard-surface li {
+  color: #0f172a;
+}
+
+.nqs-public-surface [class*="text-white"],
+.nqs-dashboard-surface [class*="text-white"],
+.nqs-public-surface [class*="text-gray-100"],
+.nqs-dashboard-surface [class*="text-gray-100"] {
+  color: #0f172a !important;
+}
+
+.nqs-public-surface [class*="text-slate-300"],
+.nqs-public-surface [class*="text-slate-400"],
+.nqs-public-surface [class*="text-slate-500"],
+.nqs-public-surface [class*="text-gray-300"],
+.nqs-public-surface [class*="text-gray-400"],
+.nqs-public-surface [class*="text-gray-500"],
+.nqs-dashboard-surface [class*="text-slate-300"],
+.nqs-dashboard-surface [class*="text-slate-400"],
+.nqs-dashboard-surface [class*="text-slate-500"],
+.nqs-dashboard-surface [class*="text-gray-300"],
+.nqs-dashboard-surface [class*="text-gray-400"],
+.nqs-dashboard-surface [class*="text-gray-500"] {
+  color: #475569 !important;
+}
+
+.nqs-public-surface [class*="text-[#7CB8FF]"],
+.nqs-dashboard-surface [class*="text-[#7CB8FF]"],
+.nqs-public-surface [class*="text-blue-200"],
+.nqs-dashboard-surface [class*="text-blue-200"] {
+  color: #2563eb !important;
+}
+
+.nqs-public-surface .nqs-portal-hero,
+.nqs-public-surface .nqs-portal-hero h1,
+.nqs-public-surface .nqs-portal-hero h2,
+.nqs-public-surface .nqs-portal-hero h3,
+.nqs-public-surface .nqs-portal-hero p,
+.nqs-public-surface .nqs-portal-hero [class*="text-white"],
+.nqs-public-surface .nqs-portal-hero [class*="text-blue-50"] {
+  color: #ffffff !important;
+}
+
+.nqs-public-surface .nqs-accent-icon,
+.nqs-public-surface .nqs-accent-icon *,
+.nqs-dashboard-surface .nqs-accent-icon,
+.nqs-dashboard-surface .nqs-accent-icon * {
+  color: #ffffff !important;
+}
+
+.nqs-public-surface [class*="bg-blue-600"][class*="text-white"],
+.nqs-public-surface [class*="bg-blue-700"][class*="text-white"],
+.nqs-public-surface [class*="bg-emerald-600"][class*="text-white"],
+.nqs-public-surface [class*="bg-green-600"][class*="text-white"],
+.nqs-public-surface [class*="bg-orange-500"][class*="text-white"],
+.nqs-public-surface [class*="bg-violet-600"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-blue-600"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-blue-700"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-emerald-600"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-green-600"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-orange-500"][class*="text-white"],
+.nqs-dashboard-surface [class*="bg-violet-600"][class*="text-white"] {
+  color: #ffffff !important;
+}
+
+.nqs-public-surface [class*="border-slate-800"],
+.nqs-public-surface [class*="border-slate-700"],
+.nqs-public-surface [class*="border-gray-700"],
+.nqs-public-surface [class*="border-gray-600"],
+.nqs-dashboard-surface [class*="border-slate-800"],
+.nqs-dashboard-surface [class*="border-slate-700"],
+.nqs-dashboard-surface [class*="border-gray-700"],
+.nqs-dashboard-surface [class*="border-gray-600"] {
+  border-color: #dbe7f3 !important;
+}
+
+.nqs-public-surface input,
+.nqs-public-surface select,
+.nqs-public-surface textarea,
+.nqs-dashboard-surface input,
+.nqs-dashboard-surface select,
+.nqs-dashboard-surface textarea {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.nqs-public-surface button[class*="bg-amber"],
+.nqs-public-surface a[class*="bg-amber"],
+.nqs-dashboard-surface button[class*="bg-amber"],
+.nqs-dashboard-surface a[class*="bg-amber"] {
+  background: #16a34a !important;
+  color: #ffffff !important;
+}
+
+.nqs-public-surface button[class*="bg-[#4189DD]"],
+.nqs-public-surface a[class*="bg-[#4189DD]"],
+.nqs-public-surface button[class*="bg-[#0B3A75]"],
+.nqs-public-surface a[class*="bg-[#0B3A75]"],
+.nqs-public-surface button[class*="bg-blue-600"],
+.nqs-public-surface a[class*="bg-blue-600"],
+.nqs-public-surface button[class*="bg-blue-700"],
+.nqs-public-surface a[class*="bg-blue-700"],
+.nqs-public-surface button[class*="bg-green-600"],
+.nqs-public-surface a[class*="bg-green-600"],
+.nqs-public-surface button[class*="bg-emerald-600"],
+.nqs-public-surface a[class*="bg-emerald-600"],
+.nqs-public-surface button[class*="bg-sky-600"],
+.nqs-public-surface a[class*="bg-sky-600"],
+.nqs-public-surface button[class*="bg-red-600"],
+.nqs-public-surface a[class*="bg-red-600"],
+.nqs-dashboard-surface button[class*="bg-[#4189DD]"],
+.nqs-dashboard-surface a[class*="bg-[#4189DD]"],
+.nqs-dashboard-surface button[class*="bg-blue-600"],
+.nqs-dashboard-surface a[class*="bg-blue-600"],
+.nqs-dashboard-surface button[class*="bg-blue-700"],
+.nqs-dashboard-surface a[class*="bg-blue-700"],
+.nqs-dashboard-surface button[class*="bg-green-600"],
+.nqs-dashboard-surface a[class*="bg-green-600"],
+.nqs-dashboard-surface button[class*="bg-emerald-600"],
+.nqs-dashboard-surface a[class*="bg-emerald-600"],
+.nqs-dashboard-surface button[class*="bg-sky-600"],
+.nqs-dashboard-surface a[class*="bg-sky-600"],
+.nqs-dashboard-surface button[class*="bg-red-600"],
+.nqs-dashboard-surface a[class*="bg-red-600"] {
+  color: #ffffff !important;
+}
+
+.nqs-dashboard-surface table thead tr {
+  background: #eef6ff !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-public-surface,
+html:not(.nqs-theme-dark) .nqs-dashboard-surface {
+  color: #0f172a !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-public-surface [class*="text-[#082A55]"],
+html:not(.nqs-theme-dark) .nqs-public-surface [class*="text-slate-950"],
+html:not(.nqs-theme-dark) .nqs-public-surface [class*="text-slate-900"],
+html:not(.nqs-theme-dark) .nqs-dashboard-surface [class*="text-[#082A55]"],
+html:not(.nqs-theme-dark) .nqs-dashboard-surface [class*="text-slate-950"],
+html:not(.nqs-theme-dark) .nqs-dashboard-surface [class*="text-slate-900"] {
+  color: #0f172a !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-public-surface [class*="text-slate-700"],
+html:not(.nqs-theme-dark) .nqs-public-surface [class*="text-slate-600"],
+html:not(.nqs-theme-dark) .nqs-dashboard-surface [class*="text-slate-700"],
+html:not(.nqs-theme-dark) .nqs-dashboard-surface [class*="text-slate-600"] {
+  color: #334155 !important;
+}
+
+/* Working dark/white portal toggle */
+html.nqs-theme-dark body {
+  background: #061225;
+  color: #f8fafc;
+}
+
+html.nqs-theme-dark .nqs-public-surface,
+html.nqs-theme-dark .nqs-dashboard-surface {
+  background: #061225 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F8FAFC]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-violet-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F8FAFC]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-violet-50"] {
+  background: #071a33 !important;
+  border-color: #1d355f !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface h1,
+html.nqs-theme-dark .nqs-public-surface h2,
+html.nqs-theme-dark .nqs-public-surface h3,
+html.nqs-theme-dark .nqs-public-surface h4,
+html.nqs-theme-dark .nqs-public-surface p,
+html.nqs-theme-dark .nqs-public-surface label,
+html.nqs-theme-dark .nqs-public-surface li,
+html.nqs-theme-dark .nqs-dashboard-surface h1,
+html.nqs-theme-dark .nqs-dashboard-surface h2,
+html.nqs-theme-dark .nqs-dashboard-surface h3,
+html.nqs-theme-dark .nqs-dashboard-surface h4,
+html.nqs-theme-dark .nqs-dashboard-surface p,
+html.nqs-theme-dark .nqs-dashboard-surface label,
+html.nqs-theme-dark .nqs-dashboard-surface th,
+html.nqs-theme-dark .nqs-dashboard-surface td,
+html.nqs-theme-dark .nqs-dashboard-surface li,
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-950"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-900"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-[#082A55]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-950"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-900"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-[#082A55]"] {
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-500"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-500"] {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-[#0B3A75]"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-blue-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-emerald-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-orange-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-violet-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-[#0B3A75]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-blue-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-emerald-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-orange-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-violet-700"] {
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface input,
+html.nqs-theme-dark .nqs-public-surface select,
+html.nqs-theme-dark .nqs-public-surface textarea,
+html.nqs-theme-dark .nqs-dashboard-surface input,
+html.nqs-theme-dark .nqs-dashboard-surface select,
+html.nqs-theme-dark .nqs-dashboard-surface textarea {
+  background: #061225 !important;
+  border-color: #27476f !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface table thead tr,
+html.nqs-theme-dark .nqs-dashboard-surface table thead tr {
+  background: #0b2444 !important;
+}
+
+html.nqs-theme-dark .nqs-portal-hero,
+html.nqs-theme-dark .nqs-portal-hero h1,
+html.nqs-theme-dark .nqs-portal-hero p,
+html.nqs-theme-dark .nqs-portal-hero [class*="text-white"],
+html.nqs-theme-dark .nqs-portal-hero [class*="text-blue-50"] {
+  color: #ffffff !important;
+}
+
+/* About page theme guard: keep text readable in both modes. */
+html:not(.nqs-theme-dark) .nqs-about-page {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-hero {
+  background: #f8fbff !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-section {
+  background: #ffffff !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-process {
+  background: #f1f7ff !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-title,
+html:not(.nqs-theme-dark) .nqs-about-heading {
+  color: #082a55 !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-eyebrow {
+  color: #1d4ed8 !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-subtitle {
+  color: #1e293b !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-about-body {
+  color: #475569 !important;
+}
+
+html.nqs-theme-dark .nqs-about-page {
+  background: #061225 !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-about-hero,
+html.nqs-theme-dark .nqs-about-section,
+html.nqs-theme-dark .nqs-about-process {
+  background: #071a33 !important;
+  border-color: #1d355f !important;
+}
+
+html.nqs-theme-dark .nqs-about-title,
+html.nqs-theme-dark .nqs-about-heading,
+html.nqs-theme-dark .nqs-about-eyebrow {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-dark .nqs-about-subtitle,
+html.nqs-theme-dark .nqs-about-body {
+  color: #cbd5e1 !important;
+}
+
+/* Operator dashboard readability guard. The queue rows must stay readable even
+   when the global light/dark toggle changes dashboard colors. */
+html:not(.nqs-theme-dark) .nqs-operator-dashboard,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard h1,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard h2,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard h3,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard p,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard span,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard div {
+  color: #0f172a !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-operator-dashboard .nqs-operator-muted,
+html:not(.nqs-theme-dark) .nqs-operator-dashboard .nqs-operator-head {
+  color: #334155 !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-operator-dashboard .nqs-operator-link {
+  color: #1d4ed8 !important;
+}
+
+html:not(.nqs-theme-dark) .nqs-operator-dashboard button[class*="bg-blue-"],
+html:not(.nqs-theme-dark) .nqs-operator-dashboard a[class*="bg-blue-"],
+html:not(.nqs-theme-dark) .nqs-operator-dashboard button[class*="bg-green-"],
+html:not(.nqs-theme-dark) .nqs-operator-dashboard a[class*="bg-green-"],
+html:not(.nqs-theme-dark) .nqs-operator-dashboard button[class*="bg-red-"],
+html:not(.nqs-theme-dark) .nqs-operator-dashboard a[class*="bg-red-"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-dark .nqs-operator-dashboard,
+html.nqs-theme-dark .nqs-operator-dashboard h1,
+html.nqs-theme-dark .nqs-operator-dashboard h2,
+html.nqs-theme-dark .nqs-operator-dashboard h3,
+html.nqs-theme-dark .nqs-operator-dashboard p,
+html.nqs-theme-dark .nqs-operator-dashboard span,
+html.nqs-theme-dark .nqs-operator-dashboard div {
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-operator-dashboard .nqs-operator-muted,
+html.nqs-theme-dark .nqs-operator-dashboard .nqs-operator-head {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-dark .nqs-operator-dashboard .nqs-operator-link {
+  color: #93c5fd !important;
+}
+
+/* Auth pages keep a clean light portal design regardless of the global theme. */
+.nqs-public-surface .nqs-auth-page {
+  background:
+    radial-gradient(circle at 28% 20%, rgba(219, 234, 254, 0.75), transparent 28%),
+    linear-gradient(135deg, #f7fbff 0%, #ffffff 52%, #eaf4ff 100%) !important;
+  color: #0f172a !important;
+}
+
+.nqs-public-surface .nqs-auth-page h1,
+.nqs-public-surface .nqs-auth-page h2,
+.nqs-public-surface .nqs-auth-page h3,
+.nqs-public-surface .nqs-auth-page p,
+.nqs-public-surface .nqs-auth-page label,
+.nqs-public-surface .nqs-auth-page span {
+  color: inherit;
+}
+
+.nqs-public-surface .nqs-auth-page [class*="text-slate-950"],
+.nqs-public-surface .nqs-auth-page [class*="text-slate-900"] {
+  color: #0f172a !important;
+}
+
+.nqs-public-surface .nqs-auth-page [class*="text-slate-700"],
+.nqs-public-surface .nqs-auth-page [class*="text-slate-600"] {
+  color: #334155 !important;
+}
+
+.nqs-public-surface .nqs-auth-page [class*="text-slate-500"],
+.nqs-public-surface .nqs-auth-page [class*="text-slate-400"] {
+  color: #64748b !important;
+}
+
+.nqs-public-surface .nqs-auth-page [class*="text-blue-"],
+.nqs-public-surface .nqs-auth-page a[class*="text-blue-"] {
+  color: #1d4ed8 !important;
+}
+
+.nqs-public-surface .nqs-auth-page [class*="text-white"],
+.nqs-public-surface .nqs-auth-page button[type="submit"],
+.nqs-public-surface .nqs-auth-page button[type="submit"] *,
+.nqs-public-surface .nqs-auth-page [class*="bg-[#0B3A75]"] {
+  color: #ffffff !important;
+}
+
+.nqs-public-surface .nqs-auth-page input {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Final whole-web theme layer.
+   This keeps every public page, dashboard page, form, card, and table readable
+   when the global Dark/Light button is used. */
+html.nqs-theme-light body {
+  background: #f5f8fc;
+  color: #0f172a;
+}
+
+html.nqs-theme-light .nqs-public-surface,
+html.nqs-theme-light .nqs-dashboard-surface {
+  background: #f5f8fc !important;
+  color: #0f172a !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#f5f8fc]"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#f3f6fb]"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#F3F6FB]"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f5f8fc]"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f3f6fb]"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F3F6FB]"] {
+  background: #f5f8fc !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-slate-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-50"] {
+  background: #ffffff !important;
+  border-color: #dbe7f3 !important;
+}
+
+html.nqs-theme-light .nqs-public-surface h1,
+html.nqs-theme-light .nqs-public-surface h2,
+html.nqs-theme-light .nqs-public-surface h3,
+html.nqs-theme-light .nqs-public-surface h4,
+html.nqs-theme-light .nqs-public-surface p,
+html.nqs-theme-light .nqs-public-surface label,
+html.nqs-theme-light .nqs-public-surface span,
+html.nqs-theme-light .nqs-public-surface li,
+html.nqs-theme-light .nqs-public-surface td,
+html.nqs-theme-light .nqs-public-surface th,
+html.nqs-theme-light .nqs-dashboard-surface h1,
+html.nqs-theme-light .nqs-dashboard-surface h2,
+html.nqs-theme-light .nqs-dashboard-surface h3,
+html.nqs-theme-light .nqs-dashboard-surface h4,
+html.nqs-theme-light .nqs-dashboard-surface p,
+html.nqs-theme-light .nqs-dashboard-surface label,
+html.nqs-theme-light .nqs-dashboard-surface span,
+html.nqs-theme-light .nqs-dashboard-surface li,
+html.nqs-theme-light .nqs-dashboard-surface td,
+html.nqs-theme-light .nqs-dashboard-surface th {
+  color: #0f172a;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-700"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-700"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-700"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-700"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-700"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-700"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-700"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-700"],
+html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-700"],
+html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-700"],
+html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-700"],
+html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-700"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-dark body {
+  background: #061225;
+  color: #f8fafc;
+}
+
+html.nqs-theme-dark .nqs-public-surface,
+html.nqs-theme-dark .nqs-dashboard-surface {
+  background: #061225 !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#f5f8fc]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#f3f6fb]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F3F6FB]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F8FAFC]"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#f8fafc]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f5f8fc]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F5F8FC]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f3f6fb]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F3F6FB]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F8FAFC]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f8fafc]"] {
+  background: #061225 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-gray-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-green-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-violet-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-gray-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-green-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-violet-50"] {
+  background: #071a33 !important;
+  border-color: #1d355f !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-100"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-gray-100"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-100"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-100"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-gray-100"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-blue-100"] {
+  background: #0b2444 !important;
+  border-color: #27476f !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface h1,
+html.nqs-theme-dark .nqs-public-surface h2,
+html.nqs-theme-dark .nqs-public-surface h3,
+html.nqs-theme-dark .nqs-public-surface h4,
+html.nqs-theme-dark .nqs-public-surface p,
+html.nqs-theme-dark .nqs-public-surface label,
+html.nqs-theme-dark .nqs-public-surface span,
+html.nqs-theme-dark .nqs-public-surface li,
+html.nqs-theme-dark .nqs-public-surface td,
+html.nqs-theme-dark .nqs-public-surface th,
+html.nqs-theme-dark .nqs-dashboard-surface h1,
+html.nqs-theme-dark .nqs-dashboard-surface h2,
+html.nqs-theme-dark .nqs-dashboard-surface h3,
+html.nqs-theme-dark .nqs-dashboard-surface h4,
+html.nqs-theme-dark .nqs-dashboard-surface p,
+html.nqs-theme-dark .nqs-dashboard-surface label,
+html.nqs-theme-dark .nqs-dashboard-surface span,
+html.nqs-theme-dark .nqs-dashboard-surface li,
+html.nqs-theme-dark .nqs-dashboard-surface td,
+html.nqs-theme-dark .nqs-dashboard-surface th,
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-950"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-900"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-950"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-900"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-black"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-[#06194A]"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-[#0B3A75]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-950"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-900"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-950"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-900"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-black"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-[#06194A]"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-[#0B3A75]"] {
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-800"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-800"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-500"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-800"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-800"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-500"] {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-blue-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-blue-600"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-emerald-700"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-green-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-blue-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-blue-600"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-emerald-700"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-green-700"] {
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-700"],
+html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-700"],
+html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-700"],
+html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-700"],
+html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-700"],
+html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-700"],
+html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-700"],
+html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-700"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-700"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-700"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-700"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-700"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-700"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-700"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-700"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-700"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="border-slate"],
+html.nqs-theme-dark .nqs-public-surface [class*="border-gray"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="border-slate"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="border-gray"] {
+  border-color: #1d355f !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface input,
+html.nqs-theme-dark .nqs-public-surface select,
+html.nqs-theme-dark .nqs-public-surface textarea,
+html.nqs-theme-dark .nqs-dashboard-surface input,
+html.nqs-theme-dark .nqs-dashboard-surface select,
+html.nqs-theme-dark .nqs-dashboard-surface textarea {
+  background: #061225 !important;
+  border-color: #27476f !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface input::placeholder,
+html.nqs-theme-dark .nqs-public-surface textarea::placeholder,
+html.nqs-theme-dark .nqs-dashboard-surface input::placeholder,
+html.nqs-theme-dark .nqs-dashboard-surface textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface table,
+html.nqs-theme-dark .nqs-dashboard-surface table {
+  background: #071a33 !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface table thead,
+html.nqs-theme-dark .nqs-public-surface table thead tr,
+html.nqs-theme-dark .nqs-dashboard-surface table thead,
+html.nqs-theme-dark .nqs-dashboard-surface table thead tr {
+  background: #0b2444 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface .nqs-auth-page {
+  background:
+    radial-gradient(circle at 24% 12%, rgba(37, 99, 235, 0.16), transparent 30%),
+    linear-gradient(135deg, #061225 0%, #071a33 58%, #061225 100%) !important;
+  color: #f8fafc !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface .nqs-auth-page input {
+  background: #071a33 !important;
+  border-color: #27476f !important;
+  color: #f8fafc !important;
+}
+
+/* FAQ readability fix for both themes. */
+.nqs-faq-page {
+  background: #f5f8fc !important;
+  color: #0f172a !important;
+}
+
+.nqs-faq-hero,
+.nqs-faq-item,
+.nqs-faq-trigger,
+.nqs-faq-search,
+.nqs-faq-help {
+  background: #ffffff !important;
+  border-color: #dbe7f3 !important;
+}
+
+.nqs-faq-title,
+.nqs-faq-heading,
+.nqs-faq-question {
+  color: #0f172a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.nqs-faq-muted,
+.nqs-faq-answer {
+  color: #475569 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.nqs-faq-answer {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+.nqs-faq-input {
+  background: transparent !important;
+  color: #0f172a !important;
+}
+
+.nqs-faq-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+.nqs-faq-icon {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-faq-page {
+  background: #f5f8fc !important;
+  color: #0f172a !important;
+}
+
+html.nqs-theme-light .nqs-faq-hero,
+html.nqs-theme-light .nqs-faq-item,
+html.nqs-theme-light .nqs-faq-trigger,
+html.nqs-theme-light .nqs-faq-search,
+html.nqs-theme-light .nqs-faq-help {
+  background: #ffffff !important;
+  border-color: #dbe7f3 !important;
+}
+
+html.nqs-theme-light .nqs-faq-title,
+html.nqs-theme-light .nqs-faq-heading,
+html.nqs-theme-light .nqs-faq-question {
+  color: #0f172a !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.nqs-theme-light .nqs-faq-muted,
+html.nqs-theme-light .nqs-faq-answer {
+  color: #475569 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.nqs-theme-light .nqs-faq-answer {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.nqs-theme-light .nqs-faq-input {
+  background: transparent !important;
+  color: #0f172a !important;
+}
+
+html.nqs-theme-light .nqs-faq-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-faq-icon {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-dark .nqs-faq-page {
+  background: #061225 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .nqs-faq-page,
+html.nqs-theme-dark .nqs-faq-page {
+  background: #061225 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .nqs-faq-hero,
+html.dark .nqs-faq-item,
+html.dark .nqs-faq-trigger,
+html.dark .nqs-faq-search,
+html.dark .nqs-faq-help,
+html.nqs-theme-dark .nqs-faq-hero,
+html.nqs-theme-dark .nqs-faq-item,
+html.nqs-theme-dark .nqs-faq-trigger,
+html.nqs-theme-dark .nqs-faq-search,
+html.nqs-theme-dark .nqs-faq-help {
+  background: #071a33 !important;
+  border-color: #1d355f !important;
+}
+
+html.dark .nqs-faq-title,
+html.dark .nqs-faq-heading,
+html.dark .nqs-faq-question,
+html.nqs-theme-dark .nqs-faq-title,
+html.nqs-theme-dark .nqs-faq-heading,
+html.nqs-theme-dark .nqs-faq-question {
+  color: #ffffff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.dark .nqs-faq-muted,
+html.dark .nqs-faq-answer,
+html.nqs-theme-dark .nqs-faq-muted,
+html.nqs-theme-dark .nqs-faq-answer {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.dark .nqs-faq-answer,
+html.nqs-theme-dark .nqs-faq-answer {
+  background: #061225 !important;
+  border-color: #1d355f !important;
+}
+
+html.dark .nqs-faq-input,
+html.nqs-theme-dark .nqs-faq-input {
+  background: transparent !important;
+  color: #f8fafc !important;
+}
+
+html.dark .nqs-faq-input::placeholder,
+html.nqs-theme-dark .nqs-faq-input::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* Final global Light/Dark theme contract.
+   This block intentionally sits last so page-specific Tailwind colors cannot
+   leave mixed light/dark screens after the theme toggle changes. */
+:root,
+html.nqs-theme-light {
+  --nqs-bg: #f8fafc;
+  --nqs-card: #ffffff;
+  --nqs-card-soft: #eff6ff;
+  --nqs-text: #0f172a;
+  --nqs-muted: #475569;
+  --nqs-border: #dbeafe;
+  --nqs-input: #ffffff;
+  --nqs-header: #0b3a75;
+  --nqs-header-text: #ffffff;
+  --nqs-primary: #2563eb;
+  --nqs-primary-hover: #1d4ed8;
+  --nqs-success: #059669;
+  --nqs-danger: #dc2626;
+}
+
+html.nqs-theme-dark {
+  --nqs-bg: #071527;
+  --nqs-card: #0f2238;
+  --nqs-card-soft: #0b1d31;
+  --nqs-text: #ffffff;
+  --nqs-muted: #cbd5e1;
+  --nqs-border: #1e3a5f;
+  --nqs-input: #0b1d31;
+  --nqs-header: #071527;
+  --nqs-header-text: #ffffff;
+  --nqs-primary: #4189dd;
+  --nqs-primary-hover: #60a5fa;
+  --nqs-success: #34d399;
+  --nqs-danger: #f87171;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+.nqs-public-surface,
+.nqs-dashboard-surface,
+.nqs-auth-page,
+.nqs-faq-page,
+.nqs-about-page,
+.nqs-about-hero,
+.nqs-about-section,
+.nqs-about-process,
+main,
+.nqs-public-surface [class*="min-h-screen"],
+.nqs-dashboard-surface [class*="min-h-screen"],
+.nqs-public-surface [class~="bg-[#F5F8FC]"],
+.nqs-public-surface [class~="bg-[#F3F6FB]"],
+.nqs-public-surface [class~="bg-[#F8FAFC]"],
+.nqs-public-surface [class~="bg-[#f8fafc]"],
+.nqs-public-surface [class~="bg-[#f5f8fc]"],
+.nqs-public-surface [class~="bg-[#f3f6fb]"],
+.nqs-public-surface [class~="bg-[#061225]"],
+.nqs-public-surface [class~="bg-[#071527]"],
+.nqs-public-surface [class~="bg-[#071a33]"],
+.nqs-public-surface [class~="bg-[#071A33]"],
+.nqs-dashboard-surface [class~="bg-[#F5F8FC]"],
+.nqs-dashboard-surface [class~="bg-[#F3F6FB]"],
+.nqs-dashboard-surface [class~="bg-[#F8FAFC]"],
+.nqs-dashboard-surface [class~="bg-[#f8fafc]"],
+.nqs-dashboard-surface [class~="bg-[#f5f8fc]"],
+.nqs-dashboard-surface [class~="bg-[#f3f6fb]"],
+.nqs-dashboard-surface [class~="bg-[#061225]"],
+.nqs-dashboard-surface [class~="bg-[#071527]"],
+.nqs-dashboard-surface [class~="bg-[#071a33]"],
+.nqs-dashboard-surface [class~="bg-[#071A33]"] {
+  background-color: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+.nqs-auth-page,
+.nqs-faq-page,
+.nqs-about-page {
+  background: var(--nqs-bg) !important;
+}
+
+/* Only the public navbar and footer keep the fixed navy government banner.
+   The dashboard sidebar (<nav>) and header (<header>) must follow the theme
+   toggle through their own Tailwind dark: classes, so they are NOT forced here. */
+.nqs-navbar,
+footer.nqs-footer {
+  background-color: var(--nqs-header) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-header-text) !important;
+}
+
+.nqs-navbar *,
+footer.nqs-footer * {
+  color: var(--nqs-header-text) !important;
+}
+
+.nqs-dashboard-surface aside,
+.nqs-public-surface aside,
+.nqs-auth-page [class*="rounded"],
+.nqs-faq-item,
+.nqs-faq-trigger,
+.nqs-faq-search,
+.nqs-faq-help,
+[role="dialog"],
+[class*="modal"],
+[class*="dropdown"],
+[class*="popover"],
+.nqs-public-surface [class~="bg-white"],
+.nqs-public-surface [class~="bg-slate-50"],
+.nqs-public-surface [class~="bg-slate-100"],
+.nqs-public-surface [class~="bg-gray-50"],
+.nqs-public-surface [class~="bg-gray-100"],
+.nqs-public-surface [class~="bg-blue-50"],
+.nqs-public-surface [class~="bg-blue-100"],
+.nqs-public-surface [class~="bg-emerald-50"],
+.nqs-public-surface [class~="bg-green-50"],
+.nqs-public-surface [class~="bg-orange-50"],
+.nqs-public-surface [class~="bg-violet-50"],
+.nqs-public-surface [class~="bg-slate-900"],
+.nqs-public-surface [class~="bg-slate-950"],
+.nqs-public-surface [class~="bg-gray-800"],
+.nqs-public-surface [class~="bg-gray-900"],
+.nqs-dashboard-surface [class~="bg-white"],
+.nqs-dashboard-surface [class~="bg-slate-50"],
+.nqs-dashboard-surface [class~="bg-slate-100"],
+.nqs-dashboard-surface [class~="bg-gray-50"],
+.nqs-dashboard-surface [class~="bg-gray-100"],
+.nqs-dashboard-surface [class~="bg-blue-50"],
+.nqs-dashboard-surface [class~="bg-blue-100"],
+.nqs-dashboard-surface [class~="bg-emerald-50"],
+.nqs-dashboard-surface [class~="bg-green-50"],
+.nqs-dashboard-surface [class~="bg-orange-50"],
+.nqs-dashboard-surface [class~="bg-violet-50"],
+.nqs-dashboard-surface [class~="bg-slate-900"],
+.nqs-dashboard-surface [class~="bg-slate-950"],
+.nqs-dashboard-surface [class~="bg-gray-800"],
+.nqs-dashboard-surface [class~="bg-gray-900"] {
+  background-color: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+.nqs-public-surface [class*="bg-gradient-to"],
+.nqs-public-surface [class*="from-slate"],
+.nqs-public-surface [class*="via-slate"],
+.nqs-public-surface [class*="to-slate"],
+.nqs-dashboard-surface [class*="bg-gradient-to"],
+.nqs-dashboard-surface [class*="from-slate"],
+.nqs-dashboard-surface [class*="via-slate"],
+.nqs-dashboard-surface [class*="to-slate"] {
+  border-color: var(--nqs-border) !important;
+}
+
+.nqs-public-surface h1,
+.nqs-public-surface h2,
+.nqs-public-surface h3,
+.nqs-public-surface h4,
+.nqs-public-surface h5,
+.nqs-public-surface h6,
+.nqs-public-surface p,
+.nqs-public-surface label,
+.nqs-public-surface li,
+.nqs-public-surface td,
+.nqs-public-surface th,
+.nqs-public-surface span,
+.nqs-dashboard-surface h1,
+.nqs-dashboard-surface h2,
+.nqs-dashboard-surface h3,
+.nqs-dashboard-surface h4,
+.nqs-dashboard-surface h5,
+.nqs-dashboard-surface h6,
+.nqs-dashboard-surface p,
+.nqs-dashboard-surface label,
+.nqs-dashboard-surface li,
+.nqs-dashboard-surface td,
+.nqs-dashboard-surface th,
+.nqs-dashboard-surface span,
+.nqs-auth-page h1,
+.nqs-auth-page h2,
+.nqs-auth-page h3,
+.nqs-auth-page p,
+.nqs-auth-page label,
+.nqs-auth-page span,
+.nqs-faq-title,
+.nqs-faq-heading,
+.nqs-faq-question {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+.nqs-public-surface [class*="text-slate-950"],
+.nqs-public-surface [class*="text-slate-900"],
+.nqs-public-surface [class*="text-slate-800"],
+.nqs-public-surface [class*="text-gray-950"],
+.nqs-public-surface [class*="text-gray-900"],
+.nqs-public-surface [class*="text-black"],
+.nqs-dashboard-surface [class*="text-slate-950"],
+.nqs-dashboard-surface [class*="text-slate-900"],
+.nqs-dashboard-surface [class*="text-slate-800"],
+.nqs-dashboard-surface [class*="text-gray-950"],
+.nqs-dashboard-surface [class*="text-gray-900"],
+.nqs-dashboard-surface [class*="text-black"] {
+  color: var(--nqs-text) !important;
+}
+
+.nqs-public-surface [class*="text-slate-700"],
+.nqs-public-surface [class*="text-slate-600"],
+.nqs-public-surface [class*="text-slate-500"],
+.nqs-public-surface [class*="text-gray-700"],
+.nqs-public-surface [class*="text-gray-600"],
+.nqs-public-surface [class*="text-gray-500"],
+.nqs-dashboard-surface [class*="text-slate-700"],
+.nqs-dashboard-surface [class*="text-slate-600"],
+.nqs-dashboard-surface [class*="text-slate-500"],
+.nqs-dashboard-surface [class*="text-gray-700"],
+.nqs-dashboard-surface [class*="text-gray-600"],
+.nqs-dashboard-surface [class*="text-gray-500"],
+.nqs-faq-muted,
+.nqs-faq-answer {
+  color: var(--nqs-muted) !important;
+  opacity: 1 !important;
+}
+
+input,
+select,
+textarea,
+.nqs-faq-input {
+  background-color: var(--nqs-input) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+.nqs-faq-input::placeholder {
+  color: var(--nqs-muted) !important;
+  opacity: 0.8 !important;
+}
+
+table,
+thead,
+tbody,
+tr,
+td,
+th {
+  border-color: var(--nqs-border) !important;
+}
+
+table,
+tbody,
+tbody tr {
+  background-color: var(--nqs-card) !important;
+  color: var(--nqs-text) !important;
+}
+
+thead,
+thead tr {
+  background-color: var(--nqs-card-soft) !important;
+  color: var(--nqs-text) !important;
+}
+
+button,
+a {
+  border-color: var(--nqs-border);
+}
+
+.nqs-public-surface button[class~="bg-blue-500"],
+.nqs-public-surface button[class~="bg-blue-600"],
+.nqs-public-surface button[class~="bg-blue-700"],
+.nqs-public-surface a[class~="bg-blue-500"],
+.nqs-public-surface a[class~="bg-blue-600"],
+.nqs-public-surface a[class~="bg-blue-700"],
+.nqs-public-surface button[class~="bg-[#2563EB]"],
+.nqs-public-surface a[class~="bg-[#2563EB]"],
+.nqs-public-surface button[class~="bg-[#4189DD]"],
+.nqs-public-surface a[class~="bg-[#4189DD]"],
+.nqs-public-surface button[class~="bg-[#0B3A75]"],
+.nqs-public-surface a[class~="bg-[#0B3A75]"],
+.nqs-dashboard-surface button[class~="bg-blue-500"],
+.nqs-dashboard-surface button[class~="bg-blue-600"],
+.nqs-dashboard-surface button[class~="bg-blue-700"],
+.nqs-dashboard-surface a[class~="bg-blue-500"],
+.nqs-dashboard-surface a[class~="bg-blue-600"],
+.nqs-dashboard-surface a[class~="bg-blue-700"],
+.nqs-dashboard-surface button[class~="bg-[#2563EB]"],
+.nqs-dashboard-surface a[class~="bg-[#2563EB]"],
+.nqs-dashboard-surface button[class~="bg-[#4189DD]"],
+.nqs-dashboard-surface a[class~="bg-[#4189DD]"],
+.nqs-dashboard-surface button[class~="bg-[#0B3A75]"],
+.nqs-dashboard-surface a[class~="bg-[#0B3A75]"] {
+  background-color: var(--nqs-primary) !important;
+  border-color: var(--nqs-primary) !important;
+  color: #ffffff !important;
+}
+
+.nqs-public-surface button[class~="bg-green-500"],
+.nqs-public-surface button[class~="bg-green-600"],
+.nqs-public-surface button[class~="bg-emerald-500"],
+.nqs-public-surface button[class~="bg-emerald-600"],
+.nqs-public-surface a[class~="bg-green-500"],
+.nqs-public-surface a[class~="bg-green-600"],
+.nqs-public-surface a[class~="bg-emerald-500"],
+.nqs-public-surface a[class~="bg-emerald-600"],
+.nqs-dashboard-surface button[class~="bg-green-500"],
+.nqs-dashboard-surface button[class~="bg-green-600"],
+.nqs-dashboard-surface button[class~="bg-emerald-500"],
+.nqs-dashboard-surface button[class~="bg-emerald-600"],
+.nqs-dashboard-surface a[class~="bg-green-500"],
+.nqs-dashboard-surface a[class~="bg-green-600"],
+.nqs-dashboard-surface a[class~="bg-emerald-500"],
+.nqs-dashboard-surface a[class~="bg-emerald-600"] {
+  color: #ffffff !important;
+}
+
+.nqs-public-surface button[class~="bg-red-500"],
+.nqs-public-surface button[class~="bg-red-600"],
+.nqs-public-surface a[class~="bg-red-500"],
+.nqs-public-surface a[class~="bg-red-600"],
+.nqs-dashboard-surface button[class~="bg-red-500"],
+.nqs-dashboard-surface button[class~="bg-red-600"],
+.nqs-dashboard-surface a[class~="bg-red-500"],
+.nqs-dashboard-surface a[class~="bg-red-600"] {
+  color: #ffffff !important;
+}
+
+button:disabled,
+a[aria-disabled="true"] {
+  opacity: 0.55 !important;
+  cursor: not-allowed;
+}
+
+.nqs-portal-hero,
+.nqs-portal-hero *,
+[class*="bg-[#082A55]"] *,
+[class*="bg-[#092B5A]"] *,
+[class*="bg-[#0B3A75]"] * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="shadow"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="shadow"] {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.24) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="shadow"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="shadow"] {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08) !important;
+}
+
+html.nqs-theme-dark ::selection {
+  background: #4189dd;
+  color: #ffffff;
+}
+
+html.nqs-theme-light ::selection {
+  background: #bfdbfe;
+  color: #0f172a;
+}
+
+/* New National ID Registration form: official light government form skin. */
+.nqs-new-id-page,
+html.nqs-theme-dark .nqs-new-id-page,
+html.nqs-theme-light .nqs-new-id-page {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.nqs-new-id-page .nqs-new-id-hero,
+.nqs-new-id-page .nqs-new-id-card,
+.nqs-new-id-page .nqs-new-id-receipt-row {
+  background: #ffffff !important;
+  border-color: #dbeafe !important;
+  color: #0f172a !important;
+}
+
+.nqs-new-id-page .nqs-new-id-receipt-row,
+.nqs-new-id-page [class~="bg-[#F8FAFC]"],
+.nqs-new-id-page [class~="bg-blue-50"],
+.nqs-new-id-page [class~="bg-emerald-50"] {
+  background: #f8fafc !important;
+}
+
+.nqs-new-id-page h1,
+.nqs-new-id-page h2,
+.nqs-new-id-page h3,
+.nqs-new-id-page h4,
+.nqs-new-id-page [class*="text-[#0B3A75]"] {
+  color: #0b3a75 !important;
+}
+
+.nqs-new-id-page p,
+.nqs-new-id-page label,
+.nqs-new-id-page span,
+.nqs-new-id-page li,
+.nqs-new-id-page [class*="text-slate-600"],
+.nqs-new-id-page [class*="text-slate-700"] {
+  color: #475569 !important;
+}
+
+.nqs-new-id-page [class*="text-slate-950"],
+.nqs-new-id-page [class*="text-slate-900"],
+.nqs-new-id-page [class*="text-slate-800"] {
+  color: #0f172a !important;
+}
+
+.nqs-new-id-page [class*="text-blue-700"] {
+  color: #1d4ed8 !important;
+}
+
+.nqs-new-id-page [class*="text-red-600"] {
+  color: #dc2626 !important;
+}
+
+.nqs-new-id-page input,
+.nqs-new-id-page select,
+.nqs-new-id-page textarea {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.nqs-new-id-page input:focus,
+.nqs-new-id-page select:focus,
+.nqs-new-id-page textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14) !important;
+}
+
+.nqs-new-id-page input::placeholder,
+.nqs-new-id-page textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.nqs-new-id-page button[class~="bg-blue-600"],
+.nqs-new-id-page a[class~="bg-blue-600"] {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.nqs-new-id-page button[class~="bg-emerald-600"] {
+  background: #059669 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+.nqs-new-id-page button:disabled {
+  background: #cbd5e1 !important;
+  color: #ffffff !important;
+}
+
+/* ── Hero contract (must stay LAST) ──────────────────────────────────────
+   Navy hero sections (.nqs-portal-hero) own their colors in BOTH themes.
+   The theme guard layers above must never recolor them:
+   - all hero text is white
+   - glassy "bg-white/NN" chips stay translucent, never solid white
+   - .nqs-hero-card marks a white info panel inside a hero: dark text inside
+   - gradient headlines (bg-clip-text) stay transparent so the gradient shows
+   The html.nqs-theme-* prefixes match the guard's specificity so source
+   order (this block last) decides the winner. */
+html.nqs-theme-light .nqs-portal-hero h1,
+html.nqs-theme-light .nqs-portal-hero h2,
+html.nqs-theme-light .nqs-portal-hero h3,
+html.nqs-theme-light .nqs-portal-hero p,
+html.nqs-theme-light .nqs-portal-hero span,
+html.nqs-theme-light .nqs-portal-hero a,
+html.nqs-theme-light .nqs-portal-hero li,
+html.nqs-theme-dark .nqs-portal-hero h1,
+html.nqs-theme-dark .nqs-portal-hero h2,
+html.nqs-theme-dark .nqs-portal-hero h3,
+html.nqs-theme-dark .nqs-portal-hero p,
+html.nqs-theme-dark .nqs-portal-hero span,
+html.nqs-theme-dark .nqs-portal-hero a,
+html.nqs-theme-dark .nqs-portal-hero li,
+.nqs-portal-hero h1,
+.nqs-portal-hero h2,
+.nqs-portal-hero h3,
+.nqs-portal-hero p,
+.nqs-portal-hero span,
+.nqs-portal-hero a,
+.nqs-portal-hero li {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero [class*="text-emerald-300"],
+html.nqs-theme-dark .nqs-portal-hero [class*="text-emerald-300"],
+.nqs-portal-hero [class*="text-emerald-300"] {
+  color: #6ee7b7 !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero [class*="bg-white/"],
+html.nqs-theme-dark .nqs-portal-hero [class*="bg-white/"],
+.nqs-portal-hero [class*="bg-white/"] {
+  background-color: rgb(255 255 255 / 0.12) !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero [class*="bg-clip-text"],
+html.nqs-theme-dark .nqs-portal-hero [class*="bg-clip-text"],
+.nqs-portal-hero [class*="bg-clip-text"] {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+}
+
+/* White info panel inside a hero: solid white with dark, readable text. */
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card,
+.nqs-portal-hero .nqs-hero-card {
+  background-color: #ffffff !important;
+  border-color: #dbe7f3 !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h1,
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h2,
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h3,
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card p,
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card span,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h1,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h2,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h3,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card p,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card span,
+.nqs-portal-hero .nqs-hero-card h1,
+.nqs-portal-hero .nqs-hero-card h2,
+.nqs-portal-hero .nqs-hero-card h3,
+.nqs-portal-hero .nqs-hero-card p,
+.nqs-portal-hero .nqs-hero-card span {
+  color: #0f172a !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
+.nqs-portal-hero .nqs-hero-card [class*="text-slate-500"] {
+  color: #64748b !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"],
+.nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"] {
+  background-color: #f8fafc !important;
+}
+
+/* Hero contract extension: an element carrying .nqs-hero-card (including a
+   white CTA link) and everything inside it uses dark text — this must come
+   after the hero white-text rules so it wins on source order. */
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card,
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card *,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card,
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card *,
+.nqs-portal-hero .nqs-hero-card,
+.nqs-portal-hero .nqs-hero-card * {
+  color: #0f172a !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
+.nqs-portal-hero .nqs-hero-card [class*="text-slate-500"] {
+  color: #64748b !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-blue-7"],
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-blue-7"],
+.nqs-portal-hero .nqs-hero-card [class*="text-blue-7"] {
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"],
+html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"],
+.nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"] {
+  color: #047857 !important;
+}

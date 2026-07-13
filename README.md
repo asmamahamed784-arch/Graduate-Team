@@ -1,16 +1,78 @@
-# React + Vite
+# NQS — National Queue System (National ID)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A full-stack web system for booking National ID appointments and managing live service queues across Banaadir centers. Citizens book appointments and track queue tickets in real time; operators serve counters; admins manage centers, services, reports, and audits.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Layer | Technology |
+|-------|------------|
+| Frontend | React 19, Vite, Tailwind CSS 4, React Router 7, Socket.IO client, i18next, Chart.js |
+| Backend | Node.js, Express 4, Socket.IO, JWT auth, Nodemailer |
+| Database | MongoDB (Mongoose 8) |
 
-## React Compiler
+## Project Structure
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+Graduate-Team/
+├── backend/            # Express REST API + Socket.IO server
+│   ├── config/         # Database connection
+│   ├── controllers/    # Route handlers (business logic)
+│   ├── middleware/     # Auth (JWT), roles, error handling
+│   ├── models/         # Mongoose schemas
+│   ├── routes/         # API route definitions (mounted in server.js)
+│   ├── services/       # Email / SMS log services
+│   ├── utils/          # Seeder, RBAC helpers, scope rules
+│   ├── docs/           # API docs + Postman collection
+│   └── server.js       # App entry point
+├── frontend/           # React SPA (Vite)
+│   ├── public/         # Static assets
+│   └── src/
+│       ├── api/        # Axios instance + response-envelope wrapper
+│       ├── auth/       # JWT token storage helpers
+│       ├── components/ # Reusable UI components
+│       ├── context/    # Auth, Queue, Notification providers
+│       ├── hooks/      # Custom hooks (useAuth, useQueue, ...)
+│       ├── layouts/    # Main / Auth / Dashboard layouts
+│       ├── pages/      # Route views (public, citizen, operator, admin)
+│       ├── routes/     # Router config + route guards
+│       └── utils/      # Shared helpers (ticket PDF, ...)
+├── scripts/            # Verification / maintenance scripts
+└── DEPLOYMENT.md       # Production deployment guide
+```
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Prerequisites: Node.js 20+, a running MongoDB instance (local service or Atlas).
+
+```bash
+# 1. Install everything (root tooling + backend + frontend)
+npm run install:all
+
+# 2. Configure the backend
+#    Copy backend/.env.example to backend/.env and fill in MONGO_URI + JWT_SECRET
+#    (SMTP settings are optional in development)
+
+# 3. Seed the database with demo data (services, centers, users, tickets)
+npm run seed:full
+
+# 4. Run backend + frontend together
+npm run dev
+```
+
+Open http://localhost:5173. The Vite dev server proxies `/api` and `/socket.io` to the backend on port 5001.
+
+You can also run each side separately: `npm run dev:backend` / `npm run dev:frontend`, or `npm run dev` inside `backend/` or `frontend/`.
+
+### Seeded accounts (after `npm run seed:full`)
+
+| Role | Username | Password |
+|----------|------------|----------------|
+| Admin | `admin` | `Admin@12345` |
+| Operator | `operator` | `Operator@123` |
+| Citizen | `amina` | `password123` |
+
+`npm run seed` (without `:full`) only ensures the admin/operator accounts exist and leaves existing data untouched.
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for MongoDB Atlas, Render (backend), and Vercel (frontend) setup.
