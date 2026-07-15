@@ -12,10 +12,8 @@ import { motion } from 'framer-motion';
  * @returns {JSX.Element}
  */
 const Card = ({ title, children, className = '', variant = 'primary' }) => {
-  const bgClass = variant === 'secondary'
-    ? 'bg-slate-50 dark:bg-[#0b2444]'
-    : 'bg-white dark:bg-[#071a33]';
-  const borderClass = 'border border-slate-200 dark:border-[#1d355f]';
+  const bgClass = variant === 'secondary' ? 'bg-slate-50' : 'bg-white';
+  const borderClass = 'border border-slate-200';
 
   return (
     <motion.div
@@ -25,11 +23,11 @@ const Card = ({ title, children, className = '', variant = 'primary' }) => {
       className={`rounded-xl shadow-sm ${bgClass} ${borderClass} ${className}`}
     >
       {title && (
-        <div className="px-6 py-4 border-b border-slate-200 text-lg font-semibold text-slate-900 dark:border-[#1d355f] dark:text-white">
+        <div className="px-6 py-4 border-b border-slate-200 text-lg font-semibold text-slate-900">
           {title}
         </div>
       )}
-      <div className="p-6 text-slate-700 dark:text-slate-300">{children}</div>
+      <div className="p-6 text-slate-700">{children}</div>
     </motion.div>
   );
 };

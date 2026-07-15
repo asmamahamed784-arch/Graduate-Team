@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiEye, FiEyeOff, FiLock, FiUser } from 'react-icons/fi';
 import { useAuth } from '../hooks';
@@ -14,14 +14,13 @@ const schema = yup.object().shape({
 
 const dashboardMap = {
   admin: '/dashboard/admin',
-  operator: '/dashboard/operator',
-  super_operator: '/dashboard/operator',
+  operator: '/operator-dashboard',
+  super_operator: '/operator-dashboard',
   citizen: '/dashboard/user',
 };
 
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { login, isAuthenticated, role } = useAuth();
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,18 +41,11 @@ export default function Login() {
     }
   }, [setValue]);
 
-  const requestedPath = location.state?.from?.pathname
-    ? `${location.state.from.pathname}${location.state.from.search || ''}${location.state.from.hash || ''}`
-    : '';
-  const nextPath = requestedPath && requestedPath !== '/login' && requestedPath !== '/register'
-    ? requestedPath
-    : '';
-
   useEffect(() => {
     if (isAuthenticated && role) {
-      navigate(nextPath || dashboardMap[role] || '/', { replace: true });
+      navigate(dashboardMap[role] || '/');
     }
-  }, [isAuthenticated, role, navigate, nextPath]);
+  }, [isAuthenticated, role, navigate]);
 
   const onSubmit = async (data) => {
     setLoading(true);
@@ -66,7 +58,7 @@ export default function Login() {
         localStorage.removeItem('nqs_remembered_username');
       }
 
-      navigate(nextPath || dashboardMap[user.role] || '/', { replace: true });
+      navigate(dashboardMap[user.role] || '/');
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || 'Invalid username or password.');
     } finally {
@@ -86,9 +78,6 @@ export default function Login() {
             NQS
           </div>
           <h1 className="text-2xl font-black">Sign in to National Queue System</h1>
-          <p className="mt-2 text-sm font-semibold text-blue-100/80">
-            {nextPath ? 'Continue to your selected service after signing in.' : 'Access your dashboard and service workflows.'}
-          </p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -171,7 +160,7 @@ export default function Login() {
 
         <p className="mt-6 text-center text-sm text-blue-100">
           Do not have an account?{' '}
-          <Link to="/register" state={location.state} className="font-black text-blue-300 hover:text-blue-100">
+          <Link to="/register" className="font-black text-blue-300 hover:text-blue-100">
             Register
           </Link>
         </p>

@@ -1,19 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useAuth, useTheme } from '../hooks';
-import {
-  HiOutlineMoon, HiOutlineSun, HiOutlineBars3, HiOutlineXMark,
-  HiOutlineArrowRightOnRectangle, HiOutlineUserPlus, HiOutlineSquares2X2,
-} from 'react-icons/hi2';
+import { FiMenu, FiMoon, FiSun, FiX, FiUser } from 'react-icons/fi';
 import crestLogo from '../assets/logo/government_crest.svg';
 
 const navItems = [
   { name: 'Home', to: '/' },
   { name: 'About', to: '/about' },
-  { name: 'Features', to: '/features' },
-  { name: 'Services', to: '/services' },
-  { name: 'Pricing', to: '/pricing' },
-  { name: 'Queue', to: '/track' },
+  { name: 'Check Queue', to: '/track' },
   { name: 'Centers', to: '/centers' },
   { name: 'FAQ', to: '/faq' },
   { name: 'Contact', to: '/contact' },
@@ -29,7 +23,7 @@ function NavBar() {
     ? '/login'
     : role === 'admin'
       ? '/dashboard/admin'
-      : role === 'operator' || role === 'super_operator'
+      : role === 'operator'
         ? '/dashboard/operator'
         : '/dashboard/user';
 
@@ -41,40 +35,38 @@ function NavBar() {
 
   return (
     <nav
-      className={`fixed top-0 left-0 z-50 w-full border-b transition-all duration-300 ${
+      className={`nqs-public-navbar fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
         scrolled
-          ? 'border-slate-200/80 bg-white/85 py-2 shadow-sm backdrop-blur-xl dark:border-[#1d355f]/80 dark:bg-[#061225]/85'
-          : 'border-transparent bg-white/60 py-3 backdrop-blur-md dark:bg-[#061225]/60'
+          ? 'bg-[#092B5A]/95 backdrop-blur-xl py-2 shadow-lg border-b border-blue-900/30'
+          : 'bg-[#082A55] py-2.5 border-b border-blue-900/30'
       }`}
     >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex min-h-12 items-center justify-between gap-4">
-          {/* Brand */}
-          <Link to="/" className="group flex shrink-0 items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm transition-transform duration-200 group-hover:scale-105 dark:border-[#1d355f]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-10">
+          <Link to="/" className="flex items-center space-x-2.5 group">
+            <div className="flex h-11 w-11 items-center justify-center rounded-md bg-white p-1.5 shadow-sm transition-transform duration-200 group-hover:scale-105">
               <img src={crestLogo} alt="NQS logo" className="h-full w-full object-contain" />
             </div>
             <div className="flex flex-col text-left">
-              <span className="whitespace-nowrap text-sm font-black leading-none tracking-tight text-slate-900 dark:text-white">
+              <span className="text-white font-black text-base tracking-wide font-sans leading-none uppercase">
                 NQS National ID
               </span>
-              <span className="mt-0.5 whitespace-nowrap text-[9px] font-bold uppercase leading-none tracking-widest text-emerald-600 dark:text-emerald-400">
+              <span className="text-emerald-300 font-bold text-[9px] tracking-widest uppercase leading-none mt-0.5">
                 Banaadir Portal
               </span>
             </div>
           </Link>
 
-          {/* Center links */}
-          <div className="hidden items-center gap-0.5 lg:flex">
+          <div className="hidden lg:flex items-center space-x-1">
             {navItems.map((item) => (
               <NavLink
                 key={item.name}
                 to={item.to}
                 className={({ isActive }) =>
-                  `whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold transition-colors duration-150 ${
+                  `px-2.5 py-1.5 rounded-lg text-[11px] font-bold tracking-wide uppercase transition-colors duration-150 ${
                     isActive
-                      ? 'text-blue-700 dark:text-blue-300'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white'
+                      ? 'text-white bg-white/15'
+                      : 'text-blue-50/90 hover:text-white hover:bg-white/10'
                   }`
                 }
               >
@@ -83,112 +75,67 @@ function NavBar() {
             ))}
           </div>
 
-          {/* Right actions */}
-          <div className="hidden shrink-0 items-center gap-2 lg:flex">
+          <div className="hidden lg:flex items-center space-x-3">
             <button
               type="button"
               onClick={toggleTheme}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 dark:border-[#1d355f] dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-              aria-label="Toggle dark and light theme"
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/25 bg-white/10 px-3 py-2 text-[11px] font-extrabold uppercase text-white transition hover:bg-white/20"
+              aria-label="Toggle dark and white theme"
             >
-              {isDark ? <HiOutlineSun className="h-5 w-5" /> : <HiOutlineMoon className="h-5 w-5" />}
+              {isDark ? <FiSun className="h-3.5 w-3.5" /> : <FiMoon className="h-3.5 w-3.5" />}
+              <span>{isDark ? 'Light' : 'Dark'}</span>
             </button>
-            {isAuthenticated ? (
-              <Link
-                to={dashboardPath}
-                className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                <HiOutlineSquares2X2 className="h-4 w-4" />
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10"
-                >
-                  <HiOutlineArrowRightOnRectangle className="h-4 w-4" />
-                  Sign in
-                </Link>
-                <Link
-                  to="/register"
-                  className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-600"
-                >
-                  <HiOutlineUserPlus className="h-4 w-4" />
-                  Create account
-                </Link>
-              </>
-            )}
+            <Link
+              to={dashboardPath}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-extrabold uppercase rounded-md shadow-sm transition-all duration-200 flex items-center space-x-1.5"
+            >
+              <FiUser className="w-3.5 h-3.5" />
+              <span>Dashboard</span>
+            </Link>
           </div>
 
-          {/* Mobile toggle */}
-          <div className="flex items-center gap-2 lg:hidden">
+          <div className="flex lg:hidden items-center space-x-3">
             <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 dark:border-[#1d355f] dark:bg-white/5 dark:text-slate-300"
-              aria-label="Toggle theme"
-            >
-              {isDark ? <HiOutlineSun className="h-5 w-5" /> : <HiOutlineMoon className="h-5 w-5" />}
-            </button>
-            <button
-              className="rounded-lg p-2 text-slate-700 transition hover:bg-slate-100 focus:outline-none dark:text-slate-200 dark:hover:bg-white/10"
+              className="p-2 text-blue-50 hover:text-white rounded-lg transition focus:outline-none"
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"
             >
-              {mobileOpen ? <HiOutlineXMark className="h-6 w-6" /> : <HiOutlineBars3 className="h-6 w-6" />}
+              {mobileOpen ? <FiX className="w-6 h-6" /> : <FiMenu className="w-6 h-6" />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile menu */}
       {mobileOpen && (
-        <div className="space-y-1 border-t border-slate-200 bg-white px-4 pb-6 pt-3 shadow-xl dark:border-[#1d355f] dark:bg-[#061225] lg:hidden">
+        <div className="lg:hidden bg-[#092B5A] border-t border-blue-900/30 px-4 pt-2 pb-6 space-y-2 shadow-xl animate-slide-in">
           {navItems.map((item) => (
-            <NavLink
+            <Link
               key={item.name}
               to={item.to}
-              className={({ isActive }) =>
-                `block rounded-xl px-3 py-2.5 text-sm font-semibold ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'
-                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10'
-                }`
-              }
+              className="block px-3 py-2.5 rounded-lg text-sm font-bold uppercase text-blue-50 hover:text-white hover:bg-white/10"
               onClick={() => setMobileOpen(false)}
             >
               {item.name}
-            </NavLink>
+            </Link>
           ))}
-          <div className="my-4 h-px bg-slate-200 dark:bg-[#1d355f]" />
-          {isAuthenticated ? (
+          <div className="h-px bg-white/15 my-4" />
+          <div className="pt-2 px-3">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 py-3 text-sm font-extrabold uppercase text-white"
+            >
+              {isDark ? <FiSun className="h-4 w-4" /> : <FiMoon className="h-4 w-4" />}
+              {isDark ? 'Light Mode' : 'Dark Mode'}
+            </button>
             <Link
               to={dashboardPath}
-              className="block w-full rounded-xl bg-blue-600 py-3 text-center text-sm font-bold text-white shadow-sm"
+              className="w-full py-3 bg-blue-600 text-white font-extrabold text-sm uppercase rounded-lg text-center shadow-sm block"
               onClick={() => setMobileOpen(false)}
             >
-              Open Dashboard
+              Dashboard
             </Link>
-          ) : (
-            <div className="grid grid-cols-1 gap-2">
-              <Link
-                to="/login"
-                className="block w-full rounded-xl border border-slate-200 py-3 text-center text-sm font-bold text-slate-700 dark:border-[#1d355f] dark:text-slate-200"
-                onClick={() => setMobileOpen(false)}
-              >
-                Sign in
-              </Link>
-              <Link
-                to="/register"
-                className="block w-full rounded-xl bg-emerald-500 py-3 text-center text-sm font-bold text-white"
-                onClick={() => setMobileOpen(false)}
-              >
-                Create account
-              </Link>
-            </div>
-          )}
+          </div>
         </div>
       )}
     </nav>

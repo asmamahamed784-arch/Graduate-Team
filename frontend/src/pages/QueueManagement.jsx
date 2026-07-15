@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import {
   FaPhoneAlt,
   FaPause,
@@ -10,8 +11,6 @@ import {
   FaTicketAlt,
 } from 'react-icons/fa';
 import { useQueue } from '../hooks';
-import DataTable from '../components/ui/DataTable';
-import Tabs from '../components/ui/Tabs';
 
 const container = {
   hidden: { opacity: 0 },
@@ -21,12 +20,6 @@ const item = {
   hidden: { opacity: 0, y: 20 },
   show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
 };
-
-const queueTabs = [
-  { key: 'all', label: 'All Tickets' },
-  { key: 'waiting', label: 'Waiting' },
-  { key: 'completed', label: 'Completed' },
-];
 
 const statusBadge = (status) => {
   const base = 'px-2.5 py-0.5 rounded-full text-xs font-semibold';
@@ -38,7 +31,8 @@ const statusBadge = (status) => {
 
 const QueueManagement = () => {
   const { tickets, loading, callNextTicket, holdTicket } = useQueue();
-  const [filter, setFilter] = useState('all');
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get('filter') || 'all';
 
   const filteredTickets = useMemo(() => {
     if (filter === 'waiting') {
@@ -67,25 +61,9 @@ const QueueManagement = () => {
     holdTicket(nowServing.ref);
   }, [holdTicket, nowServing]);
 
-  const columns = [
-    { header: 'Reference', accessor: 'ref', render: (t) => <span className="font-bold text-blue-700 dark:text-blue-300">{t.ref}</span> },
-    { header: 'Service', accessor: 'service' },
-    { header: 'Center', accessor: 'center' },
-    {
-      header: 'Position',
-      accessor: 'position',
-      sortValue: (t) => (t.status === 'Being Served' ? 0 : Number.parseInt(String(t.wait || 0), 10) + 1),
-      render: (t) => t.status === 'Being Served'
-        ? <span className="inline-flex items-center gap-1 font-bold text-green-600 dark:text-green-300"><FaArrowRight /> Serving</span>
-        : `#${Math.max(filteredTickets.findIndex((entry) => entry.ref === t.ref) + 1, 1)}`
-    },
-    { header: 'Wait Time', accessor: 'wait', render: (t) => `${t.wait || 0} min` },
-    { header: 'Status', accessor: 'status', render: (t) => <span className={statusBadge(t.status)}>{t.status}</span> },
-  ];
-
   return (
     <motion.div
-      className="min-h-screen p-4 text-slate-900 dark:text-white sm:p-6 lg:p-8"
+      className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 sm:p-6 lg:p-8 text-white"
       variants={container}
       initial="hidden"
       animate="show"
@@ -134,7 +112,7 @@ const QueueManagement = () => {
           {/* Now Serving */}
           <motion.div
             variants={item}
-            className="lg:col-span-1 bg-[#0B3A75] rounded-2xl p-6 text-white shadow-xl shadow-black/10 border border-[#0B3A75] flex flex-col items-center justify-center text-center dark:bg-[#0b2444] dark:border-[#1d355f]"
+            className="lg:col-span-1 bg-slate-900 rounded-2xl p-6 text-white shadow-xl shadow-black/10 border border-slate-800 flex flex-col items-center justify-center text-center"
           >
             <p className="text-xs font-medium uppercase tracking-widest text-[#4189DD] mb-2">Now Serving</p>
             <AnimatePresence mode="wait">
@@ -182,37 +160,65 @@ const QueueManagement = () => {
           ))}
         </div>
 
-        <motion.div variants={item} className="rounded-xl border border-slate-200 bg-white p-4 shadow-md dark:border-slate-700 dark:bg-gray-800">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+        {/* Queue Table */}
+        <motion.div variants={item} className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <FaTicketAlt className="text-yellow-500" />
               Tickets in Queue
             </h2>
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {waitingTickets.length} tickets waiting
+              {waitingTickets.length} tickets in queue
             </span>
           </div>
-          <Tabs
-            tabs={queueTabs.map((tab) => ({
-              ...tab,
-              count: tab.key === 'all'
-                ? tickets.length
-                : tab.key === 'waiting'
-                  ? tickets.filter((ticket) => ticket.status === 'Waiting').length
-                  : tickets.filter((ticket) => ticket.status === 'Completed').length
-            }))}
-            active={filter}
-            onChange={setFilter}
-          />
-          <div className="mt-4">
-            <DataTable
-              columns={columns}
-              data={filteredTickets}
-              loading={loading}
-              searchPlaceholder="Search queue tickets..."
-              emptyTitle="No tickets to display"
-              emptyText="No queue records match the selected filter."
-            />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <tr>
+                  {['Reference', 'Service', 'Center', 'Position', 'Wait Time', 'Status'].map((h) => (
+                    <th key={h} className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                <AnimatePresence>
+                  {filteredTickets.length > 0 ? (
+                    filteredTickets.map((t, i) => (
+                      <motion.tr
+                        key={t.ref}
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, x: -40 }}
+                        transition={{ duration: 0.3 }}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                      >
+                        <td className="px-6 py-3 font-semibold text-blue-700 dark:text-blue-400">{t.ref}</td>
+                        <td className="px-6 py-3 text-gray-700 dark:text-gray-300">{t.service}</td>
+                        <td className="px-6 py-3 text-gray-700 dark:text-gray-300">{t.center}</td>
+                        <td className="px-6 py-3 text-gray-500 dark:text-gray-400">
+                          {t.status === 'Being Served' ? (
+                            <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-semibold">
+                              <FaArrowRight /> Serving
+                            </span>
+                          ) : (
+                            `#${i + 1}`
+                          )}
+                        </td>
+                        <td className="px-6 py-3 text-gray-500 dark:text-gray-400">{t.wait} min</td>
+                        <td className="px-6 py-3"><span className={statusBadge(t.status)}>{t.status}</span></td>
+                      </motion.tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                        No tickets to display for this filter.
+                      </td>
+                    </tr>
+                  )}
+                </AnimatePresence>
+              </tbody>
+            </table>
           </div>
         </motion.div>
 

@@ -25,11 +25,11 @@
   --color-accent-700: #b45309;
 
   /* Official portal surface tokens */
-  --bg-app: #f5f8fc;
-  --bg-card: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --border-light: #dbe7f3;
+  --bg-app: #dceeff;
+  --bg-card: #f1f8ff;
+  --text-main: #0b1f3a;
+  --text-muted: #38546f;
+  --border-light: #b7d7f3;
   --border-focus: #4189DD;
   
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);

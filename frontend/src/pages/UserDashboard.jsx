@@ -1,17 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-toastify';
 import {
-  HiOutlineCalendarDays,
-  HiOutlineClipboardDocumentList,
-  HiOutlineEye,
-  HiOutlinePlus,
-  HiOutlineTicket,
-} from 'react-icons/hi2';
+  FaCalendarAlt,
+  FaCheckCircle,
+  FaClock,
+  FaClipboardList,
+  FaPhoneAlt,
+  FaShieldAlt,
+  FaSyncAlt,
+  FaUserCircle,
+} from 'react-icons/fa';
 import api from '../api/axiosInstance';
 import { useAuth } from '../hooks/useAuth';
 import Modal from '../components/Modal';
-import DataTable from '../components/ui/DataTable';
 
 const requestTypeLabels = {
   new_national_id: 'New National ID Registration',
@@ -30,33 +33,53 @@ const asName = (value, fallback = 'Not available') => {
   return value.name || value.title || fallback;
 };
 
-const formatDate = (value) => {
+const formatIssuedDate = (value) => {
+  if (!value) return 'Not issued yet';
+  const date = new Date(String(value).includes('T') ? value : `${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return 'Not issued yet';
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+};
+
+const formatLongDate = (value) => {
   if (!value) return 'Not scheduled';
   const date = new Date(String(value).includes('T') ? value : `${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
-const formatMogadishuTime = () => new Intl.DateTimeFormat('en-US', {
-  timeZone: 'Africa/Mogadishu',
-  hour: '2-digit',
-  minute: '2-digit',
-}).format(new Date());
+const formatMaritalStatus = (value) => {
+  if (value === 'SINGLE') return 'Single';
+  if (value === 'MARRIED') return 'Married';
+  return 'Not recorded';
+};
+
+const formatAccountStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'active') return 'Active';
+  if (normalized === 'inactive') return 'Inactive';
+  return 'Active';
+};
+
+const buildFullName = (...values) => values
+  .flat()
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)
+  .join(' ');
 
 const getCitizenNameFromTicket = (ticket) => (
-  ticket.registrationDetails?.fullName ||
-  ticket.replacementDetails?.fullName ||
-  ticket.updateDetails?.fullName ||
-  ticket.citizenName
+  ticket?.registrationDetails?.fullName ||
+  ticket?.replacementDetails?.fullName ||
+  ticket?.updateDetails?.fullName ||
+  ticket?.citizenName
 );
 
-const CURRENT_STATUSES = new Set(['Pending', 'Scheduled', 'Waiting', 'On Hold', 'Now Serving', 'Resubmitted']);
-const HISTORY_STATUSES = new Set(['Completed', 'Cancelled', 'Expired']);
+const CURRENT_STATUSES = new Set(['Pending', 'Scheduled', 'Waiting', 'On Hold', 'Now Serving', 'In Progress', 'Resubmitted']);
 
 const normalizeStatus = (status) => {
   const value = String(status || 'Pending').trim().toLowerCase();
   if (value === 'approved' || value === 'confirmed') return 'Scheduled';
   if (value === 'being served' || value === 'serving' || value === 'now serving') return 'Now Serving';
+  if (value === 'in progress' || value === 'under review') return 'In Progress';
   if (value === 'on hold' || value === 'hold') return 'On Hold';
   if (value === 'cancelled' || value === 'canceled' || value === 'rejected') return 'Cancelled';
   if (value === 'completed' || value === 'complete') return 'Completed';
@@ -71,19 +94,23 @@ const normalizeTicket = (ticket) => ({
   ...ticket,
   id: ticket._id || ticket.id,
   ref: ticket.ref || ticket.reference || ticket.ticketNumber || 'No reference',
-  citizenDisplayName: getCitizenNameFromTicket(ticket) || 'Citizen',
+  citizenDisplayName: getCitizenNameFromTicket(ticket) || ticket.citizen?.name || ticket.citizen?.fullName || 'Citizen',
   serviceName: asName(ticket.service, ticket.serviceName || requestTypeLabels[ticket.requestType] || 'National ID Service'),
   centerName: asName(ticket.center, ticket.centerName || 'Not assigned'),
   centerAddress: ticket.center?.address || ticket.centerAddress || 'Banaadir, Mogadishu',
   centerPhone: ticket.center?.phone || ticket.centerPhone || '+252 61 000 1000',
+  district: ticket.district || ticket.registrationDetails?.district || ticket.replacementDetails?.district || ticket.center?.district || '',
+  citizenPhone: ticket.registrationDetails?.phone || ticket.replacementDetails?.phone || ticket.updateDetails?.phone || ticket.citizen?.phone || 'Not available',
   appointmentDate: ticket.date || ticket.appointmentDate,
   appointmentTime: ticket.timeSlot || ticket.time || ticket.appointmentTime,
+  nationalIdNumber: ticket.nationalIdNumber || ticket.replacementDetails?.nationalIdNumber || ticket.updateDetails?.nationalIdNumber || '',
+  cardSerialNumber: ticket.cardSerialNumber || '',
   currentStatus: normalizeStatus(ticket.status || ticket.requestStatus),
 });
 
-const pickActiveAppointment = (tickets) => {
-  return tickets.find((ticket) => CURRENT_STATUSES.has(ticket.currentStatus)) || null;
-};
+const pickActiveAppointment = (tickets) => (
+  tickets.find((ticket) => CURRENT_STATUSES.has(ticket.currentStatus)) || null
+);
 
 const queueNumberOf = (ticket, trackData) => {
   if (!ticket) return '--';
@@ -95,59 +122,177 @@ const queueNumberOf = (ticket, trackData) => {
   return suffix ? `A-${suffix.slice(-3)}` : '--';
 };
 
-const InfoItem = ({ label, value }) => (
-  <div>
-    <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-    <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{value || 'Not available'}</p>
-  </div>
-);
-
-const statusBadge = (status = 'Pending') => {
-  const base = 'inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-black';
-  if (status === 'Completed') return `${base} bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300`;
-  if (status === 'Now Serving') return `${base} bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300`;
-  if (status === 'Cancelled' || status === 'Expired') return `${base} bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300`;
-  if (status === 'On Hold') return `${base} bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300`;
-  if (status === 'Scheduled') return `${base} bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300`;
-  if (status === 'Resubmitted') return `${base} bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300`;
-  return `${base} bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300`;
-};
-
 const sortByAppointmentDate = (appointments) => [...appointments].sort((a, b) => {
   const aKey = `${a.appointmentDate || ''} ${a.appointmentTime || ''} ${a.createdAt || ''}`;
   const bKey = `${b.appointmentDate || ''} ${b.appointmentTime || ''} ${b.createdAt || ''}`;
   return bKey.localeCompare(aKey);
 });
 
-const cardClass = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#1d355f] dark:bg-[#071a33]';
+const normalizeNationalIdProcessStatus = (value) => {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === 'ACTIVE') return 'COMPLETED';
+  if (status === 'PENDING') return 'WAITING';
+  if (status === 'NOT_ISSUED') return 'NOT_STARTED';
+  if (status === 'BEING SERVED' || status === 'IN PROGRESS') return 'UNDER_REVIEW';
+  if (status === 'SCHEDULED') return 'WAITING';
+  if (status === 'CANCELED') return 'CANCELLED';
+  return status || 'NOT_STARTED';
+};
+
+const formatNationalIdProcessStatus = (status) => {
+  const normalized = normalizeNationalIdProcessStatus(status);
+  const labels = {
+    NOT_STARTED: 'Not Started',
+    WAITING: 'Waiting',
+    UNDER_REVIEW: 'Under Review',
+    APPROVED: 'Approved',
+    COMPLETED: 'Completed',
+    REJECTED: 'Rejected',
+    CANCELLED: 'Cancelled',
+    SUSPENDED: 'Suspended',
+    EXPIRED: 'Expired',
+    DECEASED: 'Deceased',
+  };
+  return labels[normalized] || 'Not Started';
+};
+
+const nationalIdStatusBadge = (status) => {
+  const normalized = normalizeNationalIdProcessStatus(status);
+  const base = 'inline-flex w-fit rounded-full px-3 py-1 text-xs font-black';
+  if (normalized === 'COMPLETED' || normalized === 'APPROVED') return `${base} bg-emerald-100 text-emerald-700`;
+  if (normalized === 'REJECTED' || normalized === 'CANCELLED') return `${base} bg-red-100 text-red-700`;
+  if (normalized === 'WAITING' || normalized === 'UNDER_REVIEW') return `${base} bg-amber-100 text-amber-700`;
+  return `${base} bg-slate-100 text-slate-600`;
+};
+
+const getCancellationReasonList = (item = {}) => {
+  const reasons = Array.isArray(item.cancellationReasons) ? item.cancellationReasons : [];
+  const additional = String(item.additionalCancellationReason || '').trim();
+  const filtered = reasons
+    .filter((reason) => reason && reason !== 'Other')
+    .concat(reasons.includes('Other') && additional ? [additional] : []);
+
+  if (filtered.length) return filtered;
+  return item.cancellationReason ? [item.cancellationReason] : [];
+};
+
+const StatCard = ({ icon, label, value, helper, tone = 'blue', to, onClick }) => {
+  const tones = {
+    blue: 'bg-blue-50 text-blue-700',
+    green: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+    purple: 'bg-indigo-50 text-indigo-700',
+  };
+
+  const className = 'min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const content = (
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl ${tones[tone]}`}>
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold leading-tight text-slate-600">{label}</p>
+          <p className="mt-1 text-2xl font-black leading-none text-[#06194A]">{value}</p>
+          <p className="mt-1 text-xs leading-snug text-slate-500">{helper}</p>
+        </div>
+      </div>
+  );
+
+  if (to) {
+    return <Link to={to} className={className}>{content}</Link>;
+  }
+
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className}>{content}</button>;
+  }
+
+  return <section className={className}>{content}</section>;
+};
+
+const ModalDetail = ({ label, value, wide = false, to, onClick }) => {
+  const className = `rounded-2xl border border-slate-200 bg-[#f1f8ff] p-4 text-left transition hover:border-blue-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${wide ? 'sm:col-span-2' : ''}`;
+  const content = (
+    <>
+      <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-black text-[#06194A]">{value || 'Not available'}</p>
+    </>
+  );
+
+  if (to) {
+    return <Link to={to} className={className}>{content}</Link>;
+  }
+
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className}>{content}</button>;
+  }
+
+  return <div className={className}>{content}</div>;
+};
 
 const UserDashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [trackData, setTrackData] = useState(null);
+  const [profileUser, setProfileUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const activeTicket = useMemo(() => pickActiveAppointment(bookings), [bookings]);
-  const currentAppointments = useMemo(
-    () => sortByAppointmentDate(bookings.filter((ticket) => CURRENT_STATUSES.has(ticket.currentStatus))).reverse(),
-    [bookings]
-  );
-  const appointmentHistory = useMemo(
-    () => sortByAppointmentDate(bookings.filter((ticket) => HISTORY_STATUSES.has(ticket.currentStatus))),
-    [bookings]
-  );
-  const citizenName = user?.fullName || user?.name || user?.username || getCitizenNameFromTicket(activeTicket) || 'Citizen';
+  const citizen = profileUser || user || {};
+  const dashboardTicket = activeTicket;
+  const recentRequests = useMemo(() => sortByAppointmentDate(bookings).slice(0, 5), [bookings]);
+  const stats = useMemo(() => {
+    const completed = bookings.filter((ticket) => ticket.currentStatus === 'Completed').length;
+    const pending = bookings.filter((ticket) => CURRENT_STATUSES.has(ticket.currentStatus)).length;
+    const rejected = bookings.filter((ticket) => ['Rejected', 'Cancelled', 'Expired'].includes(ticket.currentStatus)).length;
+    const replacements = bookings.filter((ticket) => ['lost_replacement', 'replace_lost_id'].includes(ticket.requestType)).length;
 
+    return {
+      total: bookings.length,
+      completed,
+      pending,
+      rejected,
+      active: dashboardTicket ? 1 : 0,
+      replacements,
+    };
+  }, [bookings, dashboardTicket]);
+
+  const citizenSummary = citizen.citizenSummary || {};
+  const nameFromParts = buildFullName(citizen.firstName, citizen.middleName, citizen.lastName);
+  const profileName = citizenSummary.fullName || nameFromParts || citizen.fullName || citizen.name;
+  const latestTicketName = getCitizenNameFromTicket(activeTicket) || getCitizenNameFromTicket(recentRequests[0]);
+  const profileNameIsUsername = profileName && citizen.username
+    && String(profileName).trim().toLowerCase() === String(citizen.username).trim().toLowerCase();
+  const citizenName = (profileNameIsUsername ? latestTicketName : profileName)
+    || latestTicketName
+    || citizen.username
+    || 'Citizen';
+  const hasIssuedNationalId = Boolean(citizenSummary.nationalIdNumber || citizen.nationalId || ['ACTIVE', 'COMPLETED'].includes(citizen.nationalIdStatus));
+  const profileProcessStatus = normalizeNationalIdProcessStatus(citizenSummary.nationalIdStatus || citizen.nationalIdStatus);
+  const nationalIdStatus = hasIssuedNationalId
+    ? 'COMPLETED'
+    : stats.pending && profileProcessStatus === 'NOT_STARTED'
+      ? 'WAITING'
+      : profileProcessStatus;
+  const nationalIdNumber = citizenSummary.nationalIdNumber || citizen.nationalId || 'Not issued yet';
+  const issueDate = citizenSummary.issueDate || citizen.cardIssueDate;
+  const expiryDate = citizenSummary.expiryDate || citizen.cardExpiryDate;
+  const currentCenter = citizenSummary.centerName
+    || dashboardTicket?.centerName
+    || citizen.center?.name
+    || citizenSummary.districtName
+    || citizen.district
+    || 'Not selected';
   const fetchDashboard = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
-    setRefreshing(true);
 
     try {
-      const bookingResponse = await api.get('/api/bookings/my');
-
+      const [profileResponse, bookingResponse] = await Promise.all([
+        api.get('/api/auth/profile'),
+        api.get('/api/bookings/my')
+      ]);
+      setProfileUser(getPayload(profileResponse));
       const ownBookings = safeArray(getPayload(bookingResponse)).map(normalizeTicket);
       setBookings(ownBookings);
 
@@ -166,7 +311,6 @@ const UserDashboard = () => {
       toast.error(error.response?.data?.message || 'Unable to load your dashboard.');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -181,217 +325,203 @@ const UserDashboard = () => {
     return () => window.clearInterval(intervalId);
   }, [authLoading, fetchDashboard]);
 
-  const handleViewTicket = async (ticket = activeTicket) => {
+  const handleViewTicket = (ticket = dashboardTicket) => {
     if (!ticket) return;
     setSelectedTicket(ticket);
     setIsModalOpen(true);
   };
 
-  const historyColumns = [
-    {
-      header: 'Ticket',
-      accessor: 'ref',
-      render: (row) => <span className="whitespace-nowrap font-mono font-black text-blue-700 dark:text-blue-300">{row.ref}</span>,
-    },
-    {
-      header: 'Service',
-      accessor: 'serviceName',
-      render: (row) => <span className="font-semibold">{row.serviceName}</span>,
-    },
-    { header: 'Center', accessor: 'centerName' },
-    {
-      header: 'Appointment',
-      accessor: 'appointmentDate',
-      sortValue: (row) => row.appointmentDate || '',
-      render: (row) => (
-        <span className="whitespace-nowrap">
-          {formatDate(row.appointmentDate)}
-          {row.appointmentTime ? <span className="block text-xs text-slate-500 dark:text-slate-400">{row.appointmentTime}</span> : null}
-        </span>
-      ),
-    },
-    {
-      header: 'Status',
-      accessor: 'currentStatus',
-      render: (row) => <span className={statusBadge(row.currentStatus)}>{row.currentStatus}</span>,
-    },
-    {
-      header: 'Actions',
-      accessor: '_actions',
-      sortable: false,
-      render: (row) => (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); handleViewTicket(row); }}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-950/40"
-        >
-          <HiOutlineEye className="h-3.5 w-3.5" /> Details
-        </button>
-      ),
-    },
-  ];
-
   if (authLoading || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-[#eef5ff]">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-700 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-2 sm:p-4">
-      {/* Welcome banner */}
-      <section className="nqs-portal-hero relative overflow-hidden rounded-2xl bg-[#082A55] bg-gradient-to-br from-[#082A55] to-[#0B3A75] p-6 text-white shadow-sm sm:p-8">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-200">Citizen Portal</p>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              Welcome, {citizenName}
-            </h1>
-            <p className="mt-2 text-sm text-blue-100">
-              Track your queue, manage appointments, and apply for National ID services.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 self-start rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold text-blue-100 backdrop-blur">
-            {refreshing ? 'Updating…' : `Mogadishu time ${formatMogadishuTime()}`}
-          </div>
-        </div>
-      </section>
-
-      {/* Current appointment */}
-      <section className={cardClass}>
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="flex items-center gap-2 text-lg font-black text-slate-900 dark:text-white">
-            <HiOutlineClipboardDocumentList className="h-5 w-5 text-blue-700 dark:text-blue-300" />
-            Current Appointment
-          </h2>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-            {currentAppointments.length} record{currentAppointments.length === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        {currentAppointments.length ? (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {currentAppointments.map((ticket) => (
-              <article key={ticket.id || ticket.ref} className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-[#1d355f] dark:bg-[#061225]/60">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-                      <HiOutlineTicket className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">Ticket Reference</p>
-                      <p className="font-mono text-xl font-black text-blue-700 dark:text-blue-300">{ticket.ref}</p>
-                    </div>
-                  </div>
-                  <span className={statusBadge(ticket.currentStatus)}>{ticket.currentStatus}</span>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <InfoItem label="Citizen Name" value={ticket.citizenDisplayName || citizenName} />
-                  <InfoItem label="Service Type" value={ticket.serviceName} />
-                  <InfoItem label="Center" value={ticket.centerName} />
-                  <InfoItem label="Appointment Date" value={formatDate(ticket.appointmentDate)} />
-                  <InfoItem label="Appointment Time" value={ticket.appointmentTime || 'Not scheduled'} />
-                  <InfoItem label="Queue Number" value={queueNumberOf(ticket, ticket.ref === activeTicket?.ref ? trackData : null)} />
-                </div>
-
-                <div className="mt-5">
-                  <button
-                    type="button"
-                    onClick={() => handleViewTicket(ticket)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700 sm:w-auto"
-                  >
-                    <HiOutlineEye className="h-4 w-4" />
-                    View Details
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 p-8 text-center dark:border-blue-500/30 dark:bg-blue-500/5">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-md shadow-blue-900/20">
-              <HiOutlineCalendarDays className="h-8 w-8" />
+    <div className="nqs-citizen-portal min-h-screen bg-[#eef5ff] text-[#06194A]">
+      <div className="mx-auto max-w-[1500px] space-y-5 p-4 sm:p-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr] lg:items-center">
+            <div className="flex items-center gap-5">
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-lg shadow-blue-100">
+                <FaUserCircle className="text-5xl" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-500">Welcome back,</p>
+                <h1 className="text-3xl font-black leading-tight text-[#06194A]">{citizenName}</h1>
+                <p className="mt-1 text-base font-semibold text-slate-600">Citizen Dashboard</p>
+              </div>
             </div>
-            <h3 className="mt-5 text-2xl font-black text-slate-900 dark:text-white">No Active Appointment</h3>
-            <p className="mx-auto mt-3 max-w-lg text-base font-semibold text-slate-700 dark:text-slate-300">
-              You do not have any active National ID appointment.
-            </p>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600 dark:text-slate-400">
-              Book your appointment to receive your queue number and appointment schedule.
-            </p>
-            <Link
-              to="/dashboard/user/services"
-              className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-7 py-3.5 text-base font-black text-white shadow-lg shadow-blue-600/25 transition hover:-translate-y-0.5 hover:bg-blue-700"
-            >
-              <HiOutlinePlus className="h-5 w-5" />
-              Book Appointment
-            </Link>
+
+            <div className="grid gap-4 md:grid-cols-[190px_1fr] md:items-center">
+              <div className="hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-3 shadow-inner md:block">
+                <div className="rounded-lg border border-blue-200 bg-white/80 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-700 text-xs font-black text-white">NQS</span>
+                    <span className="text-xs font-black text-blue-900">NQS National ID</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-[40px_1fr] gap-2">
+                    <span className="h-10 rounded-md bg-blue-100" />
+                    <span className="space-y-1.5">
+                      <span className="block h-2 rounded bg-blue-100" />
+                      <span className="block h-2 rounded bg-blue-100" />
+                      <span className="block h-2 w-2/3 rounded bg-blue-100" />
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 border-l border-slate-200 pl-0 md:pl-5">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white">
+                  <FaShieldAlt className="text-2xl" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-[#06194A]">Your Identity, Our Priority</h2>
+                  <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
+                    Manage your National ID requests, appointments, and queue status from one place.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-      </section>
+        </section>
 
-      {/* Appointment history */}
-      <section className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-lg font-black text-slate-900 dark:text-white">Appointment History</h2>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 dark:bg-white/10 dark:text-slate-300">
-            {appointmentHistory.length} record{appointmentHistory.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        <DataTable
-          columns={historyColumns}
-          data={appointmentHistory}
-          searchPlaceholder="Search by ticket, service, or center..."
-          emptyTitle="No past appointments yet"
-          emptyText="Completed, cancelled, and expired appointments will appear here permanently."
-        />
-      </section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-700">
+                <FaUserCircle />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Citizen Summary</p>
+                <h2 className="text-xl font-black text-[#06194A]">Account and National ID overview</h2>
+              </div>
+            </div>
+            <span className={nationalIdStatusBadge(nationalIdStatus)}>
+              {formatNationalIdProcessStatus(nationalIdStatus)}
+            </span>
+          </div>
 
-      {/* Details modal */}
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ModalDetail label="Full Name" value={citizenName} to="/profile" />
+            <ModalDetail label="National ID Number" value={nationalIdNumber} to="/profile" />
+            <ModalDetail
+              label="National ID Status"
+              to="/dashboard/user/appointments"
+              value={(
+                <span className={nationalIdStatusBadge(nationalIdStatus)}>
+                  {formatNationalIdProcessStatus(nationalIdStatus)}
+                </span>
+              )}
+            />
+            <ModalDetail label="Marital Status" value={formatMaritalStatus(citizenSummary.maritalStatus || citizen.maritalStatus || activeTicket?.registrationDetails?.maritalStatus)} to="/profile" />
+            <ModalDetail label="Account Status" value={formatAccountStatus(citizenSummary.accountStatus || citizen.status)} to="/profile" />
+            <ModalDetail label="Registration Date" value={formatIssuedDate(citizenSummary.registrationDate || citizen.createdAt)} to="/profile" />
+            <ModalDetail label="Issue Date" value={formatIssuedDate(issueDate)} to="/profile" />
+            <ModalDetail label="Expiry Date" value={formatIssuedDate(expiryDate)} to="/profile" />
+            <ModalDetail label="District / Center" value={currentCenter} to="/centers" />
+          </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <StatCard icon={<FaClipboardList />} label="Total Requests" value={stats.total} helper="All time" to="/dashboard/user/appointments" />
+          <StatCard icon={<FaCheckCircle />} label="Completed Requests" value={stats.completed} helper="All time" tone="green" to="/dashboard/user/appointments?status=Completed" />
+          <StatCard icon={<FaClock />} label="Pending Requests" value={stats.pending} helper="Awaiting action" tone="amber" to="/dashboard/user/appointments?status=Pending" />
+          <StatCard icon={<FaShieldAlt />} label="Rejected Requests" value={stats.rejected} helper="Needs attention" tone="amber" to="/dashboard/user/appointments?status=Cancelled" />
+          <StatCard
+            icon={<FaCalendarAlt />}
+            label="Active Appointment"
+            value={stats.active}
+            helper={dashboardTicket ? dashboardTicket.ref : 'No active appointment'}
+            tone="purple"
+            to={dashboardTicket ? undefined : '/dashboard/user/appointments'}
+            onClick={dashboardTicket ? () => handleViewTicket(dashboardTicket) : undefined}
+          />
+          <StatCard icon={<FaSyncAlt />} label="Replacement Requests" value={stats.replacements} helper="Lost ID requests" tone="blue" to="/dashboard/user/appointments?type=replace_lost_id" />
+        </section>
+      </div>
+
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="Appointment Details"
-        className="max-w-2xl border border-slate-200 bg-white dark:border-[#1d355f] dark:bg-[#071a33]"
+        title="NQ Ticket Details"
+        className="max-w-4xl overflow-hidden border border-slate-200 bg-white"
       >
         {selectedTicket && (
-          <div className="space-y-5 p-2">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-700 dark:text-blue-300">Reference Number</p>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="font-mono text-2xl font-black text-slate-900 dark:text-white">{selectedTicket.ref}</p>
-                <span className={statusBadge(selectedTicket.currentStatus)}>{selectedTicket.currentStatus}</span>
+          <div className="space-y-5 p-1">
+            <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-[#0B3A75] to-[#2563eb] p-5 text-white">
+              <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-100">National ID Appointment Ticket</p>
+                  <p className="mt-3 font-mono text-3xl font-black text-white sm:text-4xl">{selectedTicket.ref}</p>
+                  <p className="mt-2 text-sm font-semibold text-blue-100">
+                    {selectedTicket.citizenDisplayName || citizenName}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white p-3">
+                  <QRCodeSVG value={selectedTicket.ref} size={132} level="M" includeMargin />
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 text-left sm:grid-cols-2">
-              <InfoItem label="Citizen Name" value={selectedTicket.citizenDisplayName || citizenName} />
-              <InfoItem label="Ticket Reference" value={selectedTicket.ref} />
-              <InfoItem label="Service Type" value={selectedTicket.serviceName} />
-              <InfoItem label="Center" value={selectedTicket.centerName} />
-              <InfoItem label="Appointment Date" value={formatDate(selectedTicket.appointmentDate)} />
-              <InfoItem label="Appointment Time" value={selectedTicket.appointmentTime || 'Not scheduled'} />
-              <InfoItem label="Queue Number" value={queueNumberOf(selectedTicket, selectedTicket.ref === activeTicket?.ref ? trackData : null)} />
-              <InfoItem label="Appointment Status" value={selectedTicket.currentStatus} />
-              <InfoItem label="Center Address" value={selectedTicket.centerAddress} />
-              <InfoItem label="Center Phone" value={selectedTicket.centerPhone} />
+              <ModalDetail label="Citizen Name" value={selectedTicket.citizenDisplayName || citizenName} />
+              <ModalDetail label="Phone Number" value={selectedTicket.citizenPhone} />
+              <ModalDetail label="Marital Status" value={formatMaritalStatus(selectedTicket.registrationDetails?.maritalStatus || citizen.maritalStatus)} />
+              <ModalDetail label="National ID Number" value={selectedTicket.nationalIdNumber || citizen.nationalId || 'Not issued yet'} />
+              <ModalDetail label="Ticket Reference" value={selectedTicket.ref} />
+              <ModalDetail label="Queue Number" value={queueNumberOf(selectedTicket, selectedTicket.ref === activeTicket?.ref ? trackData : null)} />
+              <ModalDetail label="Service Type" value={selectedTicket.serviceName} />
+              <ModalDetail label="Appointment Status" value={selectedTicket.currentStatus} />
+              <ModalDetail label="Appointment Date" value={formatLongDate(selectedTicket.appointmentDate)} />
+              <ModalDetail label="Appointment Time" value={selectedTicket.appointmentTime || 'Not scheduled'} />
+              <ModalDetail label="Center Name" value={selectedTicket.centerName} />
+              <ModalDetail label="Center Phone" value={selectedTicket.centerPhone} />
+              <ModalDetail label="Center Address" value={selectedTicket.centerAddress} wide />
             </div>
+
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white">
+                  <FaPhoneAlt />
+                </div>
+                <div>
+                  <h3 className="font-black text-[#0B3A75]">Important information</h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Bring your original documents and arrive 15 minutes before your appointment. Show this ticket reference or QR code at the selected center.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {selectedTicket.currentStatus === 'Cancelled' && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-                <p className="text-xs font-black uppercase tracking-wide text-red-600 dark:text-red-300">Cancellation Reason</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {selectedTicket.cancellationReason || 'No cancellation reason was provided.'}
-                </p>
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+                <p className="text-xs font-black uppercase tracking-wide text-red-600">Cancellation Reasons</p>
+                {getCancellationReasonList(selectedTicket).length ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {getCancellationReasonList(selectedTicket).map((reason) => (
+                      <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-black text-red-700">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm font-semibold">No cancellation reason was provided.</p>
+                )}
+                {selectedTicket.cancelledAt && (
+                  <p className="mt-3 text-sm font-semibold">Cancelled on {formatLongDate(selectedTicket.cancelledAt)}</p>
+                )}
+                {selectedTicket.cancellationNotes && (
+                  <p className="mt-2 text-sm font-semibold">Admin note: {selectedTicket.cancellationNotes}</p>
+                )}
               </div>
             )}
             {selectedTicket.currentStatus === 'Completed' && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
-                <p className="text-xs font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Completion Date</p>
-                <p className="mt-1 text-sm font-semibold">{formatDate(selectedTicket.completedAt)}</p>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-700">Completion Date</p>
+                <p className="mt-1 text-sm font-semibold">{formatLongDate(selectedTicket.completedAt)}</p>
               </div>
             )}
           </div>

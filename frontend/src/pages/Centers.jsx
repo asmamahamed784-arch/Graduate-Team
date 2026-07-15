@@ -258,7 +258,7 @@ function Centers() {
 
                     <div className="flex flex-col gap-2 lg:w-44">
                       <Link
-                        to="/services/new-id-registration"
+                        to="/dashboard/user/new-id-registration"
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0B3A75] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#092B5A]"
                       >
                         Book Appointment
@@ -353,7 +353,7 @@ function Centers() {
                       </div>
                     </div>
                     <Link
-                      to="/services/new-id-registration"
+                      to="/dashboard/user/new-id-registration"
                       className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#0B3A75] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#092B5A]"
                     >
                       Book Appointment

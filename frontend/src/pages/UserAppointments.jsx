@@ -57,9 +57,9 @@ const queueNumberOf = (ticket) => {
 
 const getResubmitPath = (ticket) => {
   const type = ticket?.requestType || ticket?.type;
-  if (type === 'update_information') return `/services/update-information?resubmit=${encodeURIComponent(ticket.id || ticket._id)}`;
-  if (type === 'replace_lost_id' || type === 'lost_replacement') return `/services/replace-lost-id?resubmit=${encodeURIComponent(ticket.id || ticket._id)}`;
-  return `/services/new-id-registration?resubmit=${encodeURIComponent(ticket?.id || ticket?._id)}`;
+  if (type === 'update_information') return `/dashboard/user/update-information?resubmit=${encodeURIComponent(ticket.id || ticket._id)}`;
+  if (type === 'replace_lost_id' || type === 'lost_replacement') return `/dashboard/user/replace-lost-id?resubmit=${encodeURIComponent(ticket.id || ticket._id)}`;
+  return `/dashboard/user/new-id-registration?resubmit=${encodeURIComponent(ticket?.id || ticket?._id)}`;
 };
 
 const normalizeTicket = (ticket) => ({
@@ -84,6 +84,17 @@ const statusBadge = (status = 'Pending') => {
   if (status === 'Scheduled') return `${base} bg-indigo-100 text-indigo-700`;
   if (status === 'Resubmitted') return `${base} bg-purple-100 text-purple-700`;
   return `${base} bg-amber-100 text-amber-700`;
+};
+
+const getCancellationReasonList = (item = {}) => {
+  const reasons = Array.isArray(item.cancellationReasons) ? item.cancellationReasons : [];
+  const additional = String(item.additionalCancellationReason || '').trim();
+  const filtered = reasons
+    .filter((reason) => reason && reason !== 'Other')
+    .concat(reasons.includes('Other') && additional ? [additional] : []);
+
+  if (filtered.length) return filtered;
+  return item.cancellationReason ? [item.cancellationReason] : [];
 };
 
 const formatDate = (value) => {
@@ -244,7 +255,7 @@ const UserAppointments = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc] text-[#06194A]">
+    <div className="nqs-user-appointments min-h-screen bg-[#f5f8fc] text-[#06194A]">
       <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Citizen Portal</p>
@@ -305,26 +316,26 @@ const UserAppointments = () => {
 
                       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <Link
-                          to={`/track?ref=${encodeURIComponent(ticket.ref)}`}
+                          to={`/dashboard/user/track?ref=${encodeURIComponent(ticket.ref)}`}
                           className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-3 text-sm font-black text-white hover:bg-blue-800"
                         >
                           <FaRoute />
                           Track Queue
                         </Link>
-                        <ActionButton onClick={() => openDetails(ticket)} className="border border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+                        <ActionButton onClick={() => openDetails(ticket)} className="nqs-outline-action border border-blue-200 bg-white text-blue-700">
                           <FaEye />
                           View Details
                         </ActionButton>
-                        <ActionButton onClick={() => openDetails(ticket)} className="border border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+                        <ActionButton onClick={() => openDetails(ticket)} className="nqs-outline-action border border-blue-200 bg-white text-blue-700">
                           <FaQrcode />
                           View Ticket / QR
                         </ActionButton>
-                        <ActionButton onClick={() => handleDownloadTicket(ticket)} className="border border-blue-200 bg-white text-blue-700 hover:bg-blue-50">
+                        <ActionButton onClick={() => handleDownloadTicket(ticket)} className="nqs-outline-action border border-blue-200 bg-white text-blue-700">
                           <FaDownload />
                           Download Ticket
                         </ActionButton>
                         {canCancel && (
-                          <ActionButton onClick={() => handleCancelAppointment(ticket)} className="border border-red-200 bg-white text-red-600 hover:bg-red-50">
+                          <ActionButton onClick={() => handleCancelAppointment(ticket)} className="nqs-danger-outline border border-red-200 bg-white text-red-600">
                             <FaTimesCircle />
                             Cancel
                           </ActionButton>
@@ -339,7 +350,7 @@ const UserAppointments = () => {
                 <FaIdCard className="mx-auto text-4xl text-blue-200" />
                 <h3 className="mt-4 text-xl font-black text-[#06194A]">No current appointment</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">Book a National ID service to receive your queue ticket.</p>
-                <Link to="/services/new-id-registration" className="mt-5 inline-flex rounded-lg bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
+                <Link to="/dashboard/user/new-id-registration" className="mt-5 inline-flex rounded-lg bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
                   Book Appointment
                 </Link>
               </div>
@@ -355,7 +366,7 @@ const UserAppointments = () => {
             </div>
             {appointmentHistory.length ? (
               <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full min-w-[1220px] text-left text-sm">
+                <table className="w-full min-w-[1060px] text-left text-sm">
                   <thead className="bg-slate-100 text-xs font-black uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-4 py-3">Citizen Name</th>
@@ -382,24 +393,24 @@ const UserAppointments = () => {
                         <td className="px-4 py-3"><span className={statusBadge(ticket.currentStatus)}>{ticket.currentStatus}</span></td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
-                            <ActionButton onClick={() => openDetails(ticket)} className="border border-blue-200 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50">
+                            <ActionButton onClick={() => openDetails(ticket)} className="nqs-outline-action border border-blue-200 bg-white px-3 py-2 text-blue-700">
                               <FaEye />
                               View Details
                             </ActionButton>
-                            <ActionButton onClick={() => openDetails(ticket)} className="border border-blue-200 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50">
+                            <ActionButton onClick={() => openDetails(ticket)} className="nqs-outline-action border border-blue-200 bg-white px-3 py-2 text-blue-700">
                               <FaQrcode />
                               View Ticket / QR
                             </ActionButton>
-                            <Link to={`/track?ref=${encodeURIComponent(ticket.ref)}`} className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700 hover:bg-blue-50">
+                            <Link to={`/dashboard/user/track?ref=${encodeURIComponent(ticket.ref)}`} className="nqs-outline-action inline-flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-black text-blue-700">
                               <FaRoute />
                               Track Queue
                             </Link>
-                            <ActionButton onClick={() => handleDownloadTicket(ticket)} className="border border-blue-200 bg-white px-3 py-2 text-blue-700 hover:bg-blue-50">
+                            <ActionButton onClick={() => handleDownloadTicket(ticket)} className="nqs-outline-action border border-blue-200 bg-white px-3 py-2 text-blue-700">
                               <FaDownload />
                               Download Ticket
                             </ActionButton>
                             {ticket.currentStatus === 'Cancelled' && (
-                              <Link to={getResubmitPath(ticket)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white hover:bg-emerald-700">
+                              <Link to={getResubmitPath(ticket)} className="nqs-success-action inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-black text-white hover:bg-emerald-700">
                                 <FaRedo />
                                 Resubmit Appointment
                               </Link>
@@ -437,6 +448,25 @@ const UserAppointments = () => {
               <InfoItem label="Queue Number" value={selectedTicket.queueNumber} />
               <InfoItem label="Current Status" value={selectedTicket.currentStatus} />
             </div>
+            {selectedTicket.currentStatus === 'Cancelled' && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-red-600">Cancellation Reasons</p>
+                {getCancellationReasonList(selectedTicket).length ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {getCancellationReasonList(selectedTicket).map((reason) => (
+                      <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-black text-red-700">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm font-semibold text-red-900">No cancellation reason was provided.</p>
+                )}
+                {selectedTicket.cancellationNotes && (
+                  <p className="mt-3 text-sm font-semibold text-red-900">Admin note: {selectedTicket.cancellationNotes}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Modal>

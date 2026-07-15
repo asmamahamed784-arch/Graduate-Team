@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
 import {
   FaBuilding,
@@ -8,11 +8,11 @@ import {
   FaPhoneAlt,
   FaPlus,
   FaSave,
+  FaSearch,
   FaTimes,
   FaTrashAlt
 } from 'react-icons/fa';
 import { apiClient } from '../api/apiClient';
-import DataTable from '../components/ui/DataTable';
 
 const BANAADIR_DISTRICTS = [
   'Hodan',
@@ -119,6 +119,8 @@ const CenterManagement = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [search, setSearch] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('');
   const [closedDateInput, setClosedDateInput] = useState('');
   const [specialDateInput, setSpecialDateInput] = useState('');
 
@@ -137,6 +139,20 @@ const CenterManagement = () => {
   useEffect(() => {
     loadCenters();
   }, []);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const byDistrict = districtFilter
+      ? centers.filter((center) => center.district === districtFilter)
+      : centers;
+    if (!term) return byDistrict;
+    return byDistrict.filter((center) => (
+      center.name?.toLowerCase().includes(term) ||
+      center.district?.toLowerCase().includes(term) ||
+      center.address?.toLowerCase().includes(term) ||
+      center.phone?.toLowerCase().includes(term)
+    ));
+  }, [centers, districtFilter, search]);
 
   const setSchedule = (patch) => {
     setForm((current) => ({
@@ -246,10 +262,10 @@ const CenterManagement = () => {
     try {
       const payload = buildPayload();
       if (editing) {
-        await apiClient.put(`/api/centers/${editing}`, payload);
+        await apiClient.put(`/api/centers/update/${editing}`, payload);
         toast.success('Center schedule updated.');
       } else {
-        await apiClient.post('/api/centers', payload);
+        await apiClient.post('/api/centers/create', payload);
         toast.success('Center added.');
       }
       await loadCenters();
@@ -262,85 +278,13 @@ const CenterManagement = () => {
   const handleDelete = async (center) => {
     if (!window.confirm(`Delete ${center.name}?`)) return;
     try {
-      await apiClient.delete(`/api/centers/${center._id || center.id}`);
+      await apiClient.delete(`/api/centers/delete/${center._id || center.id}`);
       toast.success('Center deleted.');
       await loadCenters();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete center.');
     }
   };
-
-  const columns = [
-    {
-      header: 'Center',
-      accessor: 'name',
-      render: (center) => (
-        <div>
-          <div className="font-black text-slate-950 dark:text-white">{center.name}</div>
-          <div className="mt-1 max-w-sm truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{center.address}</div>
-        </div>
-      )
-    },
-    { header: 'District', accessor: 'district', render: (center) => center.district || 'Banaadir' },
-    {
-      header: 'Phone',
-      accessor: 'phone',
-      render: (center) => (
-        <span className="inline-flex items-center gap-2">
-          <FaPhoneAlt className="text-blue-600 dark:text-blue-300" /> {center.phone || 'Not set'}
-        </span>
-      )
-    },
-    { header: 'Counters', accessor: 'counters', render: (center) => center.counters || 1 },
-    {
-      header: 'Working Days',
-      accessor: 'workingDays',
-      sortValue: (center) => normalizeSchedule(center.schedule || {}).workingDays.join(', '),
-      render: (center) => <span className="text-xs font-semibold">{normalizeSchedule(center.schedule || {}).workingDays.join(', ')}</span>
-    },
-    {
-      header: 'Time',
-      accessor: 'hours',
-      render: (center) => {
-        const schedule = normalizeSchedule(center.schedule || {});
-        return `${schedule.startTime} - ${schedule.endTime}`;
-      }
-    },
-    {
-      header: 'Slot Capacity',
-      accessor: 'capacity',
-      render: (center) => {
-        const schedule = normalizeSchedule(center.schedule || {});
-        return `${schedule.maxBookingsPerSlot}/slot, ${schedule.maxAppointmentsPerDay}/day`;
-      }
-    },
-    {
-      header: 'Status',
-      accessor: 'status',
-      render: (center) => <span className={statusBadge(center.status)}>{center.status || 'Active'}</span>
-    },
-    {
-      header: 'Actions',
-      accessor: 'actions',
-      sortable: false,
-      render: (center) => (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => openEdit(center)}
-            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-100 dark:bg-blue-500/15 dark:text-blue-300"
-          >
-            <FaEdit /> Edit
-          </button>
-          <button
-            onClick={() => handleDelete(center)}
-            className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:bg-red-100 dark:bg-red-500/15 dark:text-red-300"
-          >
-            <FaTrashAlt /> Delete
-          </button>
-        </div>
-      )
-    }
-  ];
 
   if (loading && centers.length === 0) {
     return (
@@ -372,29 +316,97 @@ const CenterManagement = () => {
           </button>
         </section>
 
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_260px]">
+          <label className="relative">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by center, district, address, or phone"
+              className={`${inputClass} pl-11`}
+            />
+          </label>
+          <select
+            value={districtFilter}
+            onChange={(event) => setDistrictFilter(event.target.value)}
+            className={inputClass}
+          >
+            <option value="">All Districts</option>
+            {BANAADIR_DISTRICTS.map((district) => (
+              <option key={district} value={district}>{district}</option>
+            ))}
+          </select>
+        </section>
+
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <SummaryCard label="Active Centers" value={centers.filter((center) => center.status === 'Active').length} color="emerald" />
           <SummaryCard label="Inactive Centers" value={centers.filter((center) => center.status !== 'Active').length} color="red" />
           <SummaryCard label="Districts Covered" value={new Set(centers.map((center) => center.district).filter(Boolean)).size} color="blue" />
         </section>
 
-        <section>
-          <DataTable
-            columns={columns}
-            data={centers}
-            loading={loading}
-            searchPlaceholder="Search by center, district, address, or phone..."
-            toolbar={(
-              <button
-                onClick={openAdd}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-black text-white hover:bg-blue-800"
-              >
-                <FaPlus /> Add Center
-              </button>
-            )}
-            emptyTitle="No centers configured"
-            emptyText="Create at least one Banaadir National ID center to begin scheduling appointments."
-          />
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] text-left text-sm">
+              <thead className="bg-slate-100 text-xs font-black uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                <tr>
+                  <th className="px-4 py-3">Center</th>
+                  <th className="px-4 py-3">District</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Counters</th>
+                  <th className="px-4 py-3">Working Days</th>
+                  <th className="px-4 py-3">Time</th>
+                  <th className="px-4 py-3">Slot Capacity</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filtered.map((center) => {
+                  const schedule = normalizeSchedule(center.schedule || {});
+                  return (
+                    <tr key={center._id || center.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                      <td className="px-4 py-4">
+                        <div className="font-black text-slate-950 dark:text-white">{center.name}</div>
+                        <div className="mt-1 max-w-xs truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{center.address}</div>
+                      </td>
+                      <td className="px-4 py-4 font-semibold text-slate-700 dark:text-slate-300">{center.district || 'Banaadir'}</td>
+                      <td className="px-4 py-4 text-slate-600 dark:text-slate-300">
+                        <span className="inline-flex items-center gap-2"><FaPhoneAlt className="text-blue-600" /> {center.phone}</span>
+                      </td>
+                      <td className="px-4 py-4 font-black">{center.counters}</td>
+                      <td className="px-4 py-4 text-xs font-semibold text-slate-600 dark:text-slate-300">{schedule.workingDays.join(', ')}</td>
+                      <td className="px-4 py-4 font-semibold text-slate-700 dark:text-slate-300">{schedule.startTime} - {schedule.endTime}</td>
+                      <td className="px-4 py-4 text-slate-700 dark:text-slate-300">{schedule.maxBookingsPerSlot}/slot, {schedule.maxAppointmentsPerDay}/day</td>
+                      <td className="px-4 py-4"><span className={statusBadge(center.status)}>{center.status}</span></td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => openEdit(center)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300"
+                          >
+                            <FaEdit /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(center)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:bg-red-100 dark:bg-red-900/30 dark:text-red-300"
+                          >
+                            <FaTrashAlt /> Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                      No center matches your search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 

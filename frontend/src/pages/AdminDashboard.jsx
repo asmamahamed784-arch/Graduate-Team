@@ -15,20 +15,20 @@ import {
   Filler,
 } from 'chart.js';
 import {
-  HiOutlineUsers,
-  HiOutlineSquares2X2,
-  HiOutlineBuildingOffice2,
-  HiOutlineCalendarDays,
-  HiOutlineBolt,
-  HiOutlineServer,
-  HiOutlineCog6Tooth,
-  HiOutlineChartBar,
-  HiOutlineShieldCheck,
-  HiOutlineAdjustmentsHorizontal,
-  HiOutlineClipboardDocumentCheck,
-  HiOutlineQrCode,
-  HiOutlineArrowRight,
-} from 'react-icons/hi2';
+  FaUsers,
+  FaConciergeBell,
+  FaBuilding,
+  FaCalendarDay,
+  FaBolt,
+  FaServer,
+  FaCogs,
+  FaChartBar,
+  FaUserShield,
+  FaShieldAlt,
+  FaSlidersH,
+  FaClipboardCheck,
+  FaQrcode,
+} from 'react-icons/fa';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -43,23 +43,12 @@ const item = {
 
 const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-const statAccents = {
-  blue: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
-  emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-  indigo: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
-  amber: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
-  violet: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
-  teal: 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
-};
-
-const cardClass = 'rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#1d355f] dark:bg-[#071a33]';
-
 const AdminDashboard = () => {
   const { user, loading, adminStats, tickets } = useDashboard();
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
       </div>
     );
@@ -75,21 +64,22 @@ const AdminDashboard = () => {
   const adminName = user?.name || 'NQS Administrator';
 
   const statsCards = [
-    { label: 'Citizen Accounts', value: totalUsers.toString(), icon: HiOutlineUsers, to: '/citizen-management', accent: 'blue' },
-    { label: 'Active Services', value: activeServices.toString(), icon: HiOutlineSquares2X2, to: '/service-management', accent: 'emerald' },
-    { label: 'Banaadir Centers', value: serviceCenters.toString(), icon: HiOutlineBuildingOffice2, to: '/center-management', accent: 'indigo' },
-    { label: "Today's Tickets", value: todayAppointments.toString(), icon: HiOutlineCalendarDays, to: { pathname: '/admin-appointments', search: '?date=today' }, accent: 'amber' },
-    { label: 'Completion Rate', value: completionRate, icon: HiOutlineBolt, to: '/reports', accent: 'violet' },
-    { label: 'API Status', value: systemUptime, icon: HiOutlineServer, to: '/settings', accent: 'teal' },
+    { label: 'Citizen Accounts', value: totalUsers.toString(), icon: FaUsers, to: '/citizen-management', color: 'border-blue-500', iconBg: 'bg-blue-100 dark:bg-blue-900/40', iconColor: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Active Service', value: activeServices.toString(), icon: FaConciergeBell, to: '/service-management', color: 'border-green-500', iconBg: 'bg-green-100 dark:bg-green-900/40', iconColor: 'text-green-600 dark:text-green-400' },
+    { label: 'Banaadir Centers', value: serviceCenters.toString(), icon: FaBuilding, to: '/center-management', color: 'border-indigo-500', iconBg: 'bg-indigo-100 dark:bg-indigo-900/40', iconColor: 'text-indigo-600 dark:text-indigo-400' },
+    { label: "Today's Tickets", value: todayAppointments.toString(), icon: FaCalendarDay, to: { pathname: '/admin-appointments', search: '?date=today' }, color: 'border-amber-500', iconBg: 'bg-amber-100 dark:bg-amber-900/40', iconColor: 'text-amber-600 dark:text-amber-400' },
+    { label: 'Completed Rate', value: completionRate, icon: FaBolt, to: '/reports', color: 'border-yellow-500', iconBg: 'bg-yellow-100 dark:bg-yellow-900/40', iconColor: 'text-yellow-600 dark:text-yellow-400' },
+    { label: 'API Status', value: systemUptime, icon: FaServer, to: '/settings', color: 'border-teal-500', iconBg: 'bg-teal-100 dark:bg-teal-900/40', iconColor: 'text-teal-600 dark:text-teal-400' },
   ];
 
   const quickLinks = [
-    { label: 'Manage Services', desc: 'Review the active National ID service', icon: HiOutlineCog6Tooth, to: '/service-management' },
-    { label: 'Manage Centers', desc: 'Banaadir center locations & schedules', icon: HiOutlineBuildingOffice2, to: '/center-management' },
-    { label: 'View Reports', desc: 'Appointment and queue analytics', icon: HiOutlineChartBar, to: '/reports' },
-    { label: 'QR Verification', desc: 'Scan and verify appointment tickets', icon: HiOutlineQrCode, to: '/dashboard/admin/qr-scan' },
-    { label: 'Audit Logs', desc: 'Recent system actions', icon: HiOutlineShieldCheck, to: '/logs' },
-    { label: 'Settings', desc: 'Account and system options', icon: HiOutlineAdjustmentsHorizontal, to: '/settings' },
+    { label: 'Manage National ID Service', desc: 'Review the active National ID service', icon: FaCogs, to: '/service-management', bg: 'bg-blue-50 dark:bg-blue-900/20', iconColor: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Manage Centers', desc: 'Manage Banaadir center locations', icon: FaBuilding, to: '/center-management', bg: 'bg-green-50 dark:bg-green-900/20', iconColor: 'text-green-600 dark:text-green-400' },
+    { label: 'View Reports', desc: 'Appointment and queue numbers', icon: FaChartBar, to: '/reports', bg: 'bg-purple-50 dark:bg-purple-900/20', iconColor: 'text-purple-600 dark:text-purple-400' },
+    { label: 'QR Ticket Verification', desc: 'Scan and verify appointment tickets', icon: FaQrcode, to: '/dashboard/admin/qr-scan', bg: 'bg-blue-50 dark:bg-blue-900/20', iconColor: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Manage Users', desc: 'Citizen profiles and permissions', icon: FaUserShield, to: '/profile', bg: 'bg-amber-50 dark:bg-amber-900/20', iconColor: 'text-amber-600 dark:text-amber-400' },
+    { label: 'Activity Logs', desc: 'Recent system actions', icon: FaShieldAlt, to: '/logs', bg: 'bg-red-50 dark:bg-red-900/20', iconColor: 'text-red-600 dark:text-red-400' },
+    { label: 'Settings', desc: 'Account and system options', icon: FaSlidersH, to: '/settings', bg: 'bg-teal-50 dark:bg-teal-900/20', iconColor: 'text-teal-600 dark:text-teal-400' },
   ];
 
   const lastSevenDays = Array.from({ length: 7 }, (_, index) => {
@@ -110,12 +100,12 @@ const AdminDashboard = () => {
       {
         label: 'Appointments',
         data: weeklyCounts,
-        borderColor: 'rgba(37, 99, 235, 1)',
-        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+        borderColor: 'rgba(59, 130, 246, 1)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
         fill: true,
         tension: 0.4,
-        pointRadius: 4,
-        pointBackgroundColor: 'rgba(37, 99, 235, 1)',
+        pointRadius: 5,
+        pointBackgroundColor: 'rgba(59, 130, 246, 1)',
       },
     ],
   };
@@ -128,101 +118,93 @@ const AdminDashboard = () => {
     },
     scales: {
       x: {
-        ticks: { color: '#94a3b8', font: { size: 11 } },
+        ticks: { color: '#9ca3af', font: { size: 11 } },
         grid: { display: false },
       },
       y: {
-        ticks: { color: '#94a3b8', font: { size: 11 } },
-        grid: { color: 'rgba(148,163,184,0.15)' },
+        ticks: { color: '#9ca3af', font: { size: 11 } },
+        grid: { color: 'rgba(156,163,175,0.15)' },
       },
     },
   };
 
   return (
     <motion.div
-      className="mx-auto max-w-7xl space-y-5 p-2 sm:p-4"
+      className="min-h-screen bg-gray-50 p-2 dark:bg-gray-900 sm:p-3 lg:p-4"
       variants={container}
       initial="hidden"
       animate="show"
     >
-      {/* Welcome banner */}
-      <motion.div
-        variants={item}
-        className="nqs-portal-hero relative overflow-hidden rounded-2xl bg-[#082A55] bg-gradient-to-br from-[#082A55] to-[#0B3A75] p-6 text-white shadow-sm sm:p-8"
-      >
-        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-1/3 h-48 w-48 rounded-full bg-emerald-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto max-w-none space-y-3">
+        {/* Header */}
+        <motion.div variants={item} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-200">Administration</p>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">
-              Welcome back, {adminName}
-            </h1>
-            <p className="mt-2 text-sm text-blue-100">{today}</p>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Admin Dashboard</h1>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{today} - Admin: {adminName}</p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur">
+          <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500"></span>
             </span>
-            <span className="text-xs font-bold text-emerald-300">System Online</span>
+              <span className="text-xs font-medium text-green-600 dark:text-green-400">Online</span>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {statsCards.map((s) => (
-          <motion.div key={s.label} variants={item} className="h-full">
-            <Link
-              to={s.to}
-              className={`${cardClass} group flex h-full items-center gap-4 p-5 transition duration-300 hover:-translate-y-1 hover:shadow-lg`}
-            >
-              <div className={`flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl p-3 ${statAccents[s.accent]}`}>
-                <s.icon className="h-7 w-7" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">{s.value}</p>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{s.label}</p>
-              </div>
-              <HiOutlineArrowRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500 dark:text-slate-600" />
-            </Link>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Chart + Recent Activity */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <motion.div variants={item} className={`${cardClass} overflow-hidden lg:col-span-3`}>
-          <Link to="/reports" className="block h-full transition hover:bg-slate-50/60 dark:hover:bg-white/[0.02]">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5 dark:border-[#1d355f]">
-              <h2 className="text-base font-black text-slate-900 dark:text-white">Appointments This Week</h2>
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 dark:text-blue-300">
-                Full report <HiOutlineArrowRight className="h-3.5 w-3.5" />
-              </span>
-            </div>
-            <div className="h-56 p-4">
-              <Line data={chartData} options={chartOptions} />
-            </div>
-          </Link>
         </motion.div>
 
-        <motion.div variants={item} className={`${cardClass} overflow-hidden lg:col-span-2`}>
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5 dark:border-[#1d355f]">
-            <h2 className="flex items-center gap-2 text-base font-black text-slate-900 dark:text-white">
-              <HiOutlineShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              Recent Activity
-            </h2>
-            <Link to="/logs" className="text-xs font-bold text-blue-700 dark:text-blue-300">View all</Link>
-          </div>
-          <div className="p-4">
-            <ul className="space-y-1.5">
-              {recentLogs.length > 0 ? (
-                recentLogs.map((e, i) => {
-                  const actor = e.user || 'System';
-                  const details = e.details || e.ref || e.status || 'Queue activity';
-                  const timestamp = e.timestamp || e.time;
-                  return (
+        {/* Stat Cards */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {statsCards.map((s) => (
+            <motion.div
+              key={s.label}
+              variants={item}
+              className="h-full"
+            >
+              <Link
+                to={s.to}
+                className={`group flex h-full cursor-pointer items-center gap-3 rounded-lg border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:bg-gray-800 ${s.color}`}
+              >
+                <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md ${s.iconBg}`}>
+                  <s.icon className={`text-base ${s.iconColor}`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{s.value}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Middle Row: Chart + Recent Activity */}
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
+          {/* Chart */}
+          <motion.div variants={item} className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800 lg:col-span-3">
+            <Link to="/reports" className="block h-full cursor-pointer transition-all hover:bg-gray-50 hover:shadow-lg dark:hover:bg-gray-700/40">
+              <div className="border-b border-gray-200 px-4 py-2.5 dark:border-gray-700">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">Appointments This Week</h2>
+              </div>
+              <div className="h-52 p-3">
+                <Line data={chartData} options={chartOptions} />
+              </div>
+            </Link>
+          </motion.div>
+
+          {/* Recent Activity */}
+          <motion.div variants={item} className="overflow-hidden rounded-lg bg-white shadow-sm dark:bg-gray-800 lg:col-span-2">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2.5 dark:border-gray-700">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
+                <FaShieldAlt className="text-yellow-500" />
+                Recent Activity
+              </h2>
+            </div>
+            <div className="p-3">
+              <ul className="space-y-2">
+                {recentLogs.length > 0 ? (
+                  recentLogs.map((e, i) => {
+                    const actor = e.user || 'System';
+                    const details = e.details || e.ref || e.status || 'Queue activity';
+                    const timestamp = e.timestamp || e.time;
+                    return (
                     <motion.li
                       key={e.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -230,53 +212,49 @@ const AdminDashboard = () => {
                       transition={{ delay: 0.4 + i * 0.1 }}
                       className="list-none"
                     >
-                      <Link to="/logs" className="flex items-start gap-3 rounded-xl p-2 transition-colors hover:bg-slate-50 dark:hover:bg-white/5">
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-500/15">
-                          <HiOutlineClipboardDocumentCheck className="h-4 w-4 text-blue-600 dark:text-blue-300" />
+                      <Link to="/logs" className="-m-1.5 flex cursor-pointer items-start gap-2 rounded-lg p-1.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/60">
+                        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-gray-100 dark:bg-gray-700">
+                          <FaClipboardCheck className="text-xs text-blue-500" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs leading-snug text-slate-800 dark:text-slate-200">
-                            <span className="font-bold">{actor}</span>: {e.action}
-                          </p>
-                          <p className="mt-0.5 truncate text-[11px] text-slate-500 dark:text-slate-400">{details}</p>
-                          <p className="mt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                            {timestamp ? new Date(timestamp).toLocaleString() : 'Recent activity'}
-                          </p>
+                          <p className="text-xs leading-snug text-gray-800 dark:text-gray-200"><span className="font-semibold">{actor}</span>: {e.action}</p>
+                          <p className="mt-0.5 text-[11px] text-gray-400">{details}</p>
+                          <p className="mt-0.5 text-[10px] text-gray-400">{timestamp ? new Date(timestamp).toLocaleString() : 'Recent activity'}</p>
                         </div>
                       </Link>
                     </motion.li>
-                  );
-                })
-              ) : (
-                <p className="p-2 text-sm text-slate-500 dark:text-slate-400">No recent logs recorded.</p>
-              )}
-            </ul>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No recent logs recorded.</p>
+                )}
+              </ul>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Quick Links */}
+        <motion.div variants={item}>
+          <h2 className="mb-2 text-base font-semibold text-gray-900 dark:text-white">Quick Links</h2>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {quickLinks.map((link) => (
+              <Link
+                key={link.label}
+                to={link.to}
+                className={`${link.bg} group flex items-center gap-3 rounded-lg border border-gray-100 bg-white p-3 shadow-sm transition-all hover:shadow-md dark:border-gray-700 dark:bg-gray-800`}
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white shadow-sm transition-transform group-hover:scale-110 dark:bg-gray-700">
+                  <link.icon className={`text-base ${link.iconColor}`} />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white text-sm">{link.label}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{link.desc}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         </motion.div>
       </div>
-
-      {/* Quick links */}
-      <motion.div variants={item}>
-        <h2 className="mb-3 text-base font-black text-slate-900 dark:text-white">Quick Links</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {quickLinks.map((link) => (
-            <Link
-              key={link.label}
-              to={link.to}
-              className={`${cardClass} group flex items-center gap-4 p-4 transition duration-300 hover:-translate-y-0.5 hover:shadow-md`}
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-md shadow-blue-900/20 transition-transform group-hover:scale-105">
-                <link.icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-black text-slate-900 dark:text-white">{link.label}</p>
-                <p className="truncate text-xs text-slate-500 dark:text-slate-400">{link.desc}</p>
-              </div>
-              <HiOutlineArrowRight className="ml-auto h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-blue-500 dark:text-slate-600" />
-            </Link>
-          ))}
-        </div>
-      </motion.div>
     </motion.div>
   );
 };

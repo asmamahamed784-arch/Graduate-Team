@@ -21,6 +21,52 @@ import {
   todayKey
 } from './appointments/appointmentShared';
 
+const BANAADIR_DISTRICTS = [
+  'Hodan',
+  'Howlwadaag',
+  'Wadajir',
+  'Dharkenley',
+  'Dayniile',
+  'Heliwaa',
+  'Yaqshiid',
+  'Kaaraan',
+  'Shibis',
+  'Boondheere',
+  'Xamar Weyne',
+  'Xamar Jajab',
+  'Waaberi',
+  'Wardhiigley',
+  'Abdulaziz',
+  'Shangaani',
+  'Kaxda',
+  'Garasbaaley'
+];
+
+const districtKey = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/\bdistrict\b/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+const DISTRICT_ALIASES = {
+  hamarweyne: 'Xamar Weyne',
+  hamarjajab: 'Xamar Jajab',
+  hawlwadaag: 'Howlwadaag',
+  waberi: 'Waaberi',
+  waaberi: 'Waaberi',
+  karaan: 'Kaaraan',
+  karan: 'Kaaraan',
+  banaadir: 'Hodan'
+};
+
+const normalizeDistrictValue = (value) => {
+  const key = districtKey(value);
+  return BANAADIR_DISTRICTS.find((district) => districtKey(district) === key) || DISTRICT_ALIASES[key] || '';
+};
+
+const getOriginalRegistration = (bookings = []) => (
+  bookings.find((ticket) => ticket.requestType === 'new_national_id') || null
+);
+
 const ReplaceLostId = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -32,12 +78,14 @@ const ReplaceLostId = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [ticket, setTicket] = useState(null);
+  const [existingRegistration, setExistingRegistration] = useState(null);
   const [resubmitTicket, setResubmitTicket] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [form, setForm] = useState({
     nationalIdNumber: user?.nationalId || '',
     fullName: user?.name || '',
     phone: user?.phone || '',
+    district: '',
     dateLost: '',
     placeLost: '',
     reason: '',
@@ -54,6 +102,11 @@ const ReplaceLostId = () => {
     () => centers.find((center) => (center._id || center.id) === form.centerId),
     [centers, form.centerId]
   );
+  const selectedDistrict = normalizeDistrictValue(form.district);
+  const filteredCenters = useMemo(
+    () => centers.filter((center) => normalizeDistrictValue(getDistrict(center)) === selectedDistrict),
+    [centers, selectedDistrict]
+  );
   const bookedSlots = form.date ? availability[form.date]?.bookedSlots || [] : [];
   const availableDateOptions = useMemo(
     () => Object.entries(availability)
@@ -66,12 +119,25 @@ const ReplaceLostId = () => {
   useEffect(() => {
     const loadOptions = async () => {
       try {
-        const [serviceRes, centerRes] = await Promise.all([
+        const [serviceRes, centerRes, bookingRes] = await Promise.all([
           apiClient.get('/api/services/list'),
-          apiClient.get('/api/centers/list')
+          apiClient.get('/api/centers/list'),
+          apiClient.get('/api/bookings/my')
         ]);
         setServices(serviceRes.data || []);
         setCenters(activeCenters(centerRes.data || []));
+        const original = getOriginalRegistration(bookingRes.data || []);
+        setExistingRegistration(original);
+        if (original && !resubmitId) {
+          const details = original.registrationDetails || {};
+          setForm((current) => ({
+            ...current,
+            nationalIdNumber: current.nationalIdNumber || user?.nationalId || '',
+            fullName: details.fullName || original.citizenName || current.fullName,
+            phone: details.phone || original.citizen?.phone || current.phone,
+            district: normalizeDistrictValue(details.district || original.district || original.center?.district) || current.district
+          }));
+        }
       } catch (error) {
         toast.error(error.response?.data?.message || 'Could not load replacement options.');
       } finally {
@@ -79,7 +145,7 @@ const ReplaceLostId = () => {
       }
     };
     loadOptions();
-  }, []);
+  }, [resubmitId, user?.nationalId]);
 
   useEffect(() => {
     if (!resubmitId || centers.length === 0) return;
@@ -102,6 +168,7 @@ const ReplaceLostId = () => {
           nationalIdNumber: details.nationalIdNumber || user?.nationalId || '',
           fullName: details.fullName || existing.citizenName || user?.name || '',
           phone: details.phone || existing.citizen?.phone || user?.phone || '',
+          district: normalizeDistrictValue(details.district || existing.district || existing.center?.district),
           dateLost: details.dateLost ? String(details.dateLost).slice(0, 10) : '',
           placeLost: details.placeLost || '',
           reason: details.reason || '',
@@ -167,6 +234,11 @@ const ReplaceLostId = () => {
       if (field === 'date') {
         next.timeSlot = '';
       }
+      if (field === 'district') {
+        next.centerId = '';
+        next.date = '';
+        next.timeSlot = '';
+      }
       if (field === 'centerId') {
         next.date = '';
         next.timeSlot = '';
@@ -179,6 +251,7 @@ const ReplaceLostId = () => {
     const required = [
       ['fullName', 'Full name is required.'],
       ['phone', 'Phone number is required.'],
+      ['district', 'Please select your district.'],
       ['dateLost', 'Date lost is required.'],
       ['placeLost', 'Place lost is required.'],
       ['reason', 'Reason is required.'],
@@ -189,6 +262,14 @@ const ReplaceLostId = () => {
     const missing = required.find(([field]) => !String(form[field] || '').trim());
     if (missing) {
       toast.error(missing[1]);
+      return false;
+    }
+    if (!selectedDistrict) {
+      toast.error('Please select your district.');
+      return false;
+    }
+    if (selectedCenter && normalizeDistrictValue(getDistrict(selectedCenter)) !== selectedDistrict) {
+      toast.error('The selected center does not belong to the selected district.');
       return false;
     }
     if (availability[form.date]?.status === 'closed') {
@@ -226,6 +307,7 @@ const ReplaceLostId = () => {
           nationalIdNumber: form.nationalIdNumber,
           fullName: form.fullName,
           phone: form.phone,
+          district: selectedDistrict,
           dateLost: form.dateLost,
           placeLost: form.placeLost,
           reason: form.reason,
@@ -301,6 +383,15 @@ const ReplaceLostId = () => {
           </section>
         )}
 
+        {existingRegistration && !resubmitTicket && !ticket && (
+          <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-200">Existing registration found</p>
+            <p className="mt-1 text-sm font-semibold">
+              This replacement request will be linked to ticket {existingRegistration.ref}.
+            </p>
+          </section>
+        )}
+
         {ticket ? (
           <section className={`${panelClass} grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]`}>
             <div className="rounded-2xl bg-white p-5">
@@ -326,14 +417,14 @@ const ReplaceLostId = () => {
                 <button onClick={handleDownload} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-amber-400">
                   <FiDownload /> Download Ticket
                 </button>
-                <Link to="/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#4189DD]/60 px-4 py-2.5 text-sm font-bold text-[#7CB8FF] hover:bg-[#4189DD]/10">
+                <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#4189DD]/60 px-4 py-2.5 text-sm font-bold text-[#7CB8FF] hover:bg-[#4189DD]/10">
                   <FiClock /> Check Queue Status
                 </Link>
               </div>
             </div>
           </section>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
             <section className={panelClass}>
               <div className="mb-5 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#4189DD]/15 text-[#7CB8FF]">
@@ -372,15 +463,27 @@ const ReplaceLostId = () => {
               <h2 className="mb-4 mt-6 text-lg font-black">Appointment Details</h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="sm:col-span-2">
+                  <span className={labelClass}>District Where You Live</span>
+                  <select value={form.district} onChange={(event) => updateForm('district', event.target.value)} className={inputClass}>
+                    <option value="">Select your district</option>
+                    {BANAADIR_DISTRICTS.map((district) => (
+                      <option key={district} value={district}>{district}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="sm:col-span-2">
                   <span className={labelClass}>Select Center</span>
-                  <select value={form.centerId} onChange={(event) => updateForm('centerId', event.target.value)} className={inputClass}>
-                    <option value="">Choose a Banaadir center</option>
-                    {centers.map((center) => (
+                  <select value={form.centerId} disabled={!selectedDistrict} onChange={(event) => updateForm('centerId', event.target.value)} className={inputClass}>
+                    <option value="">{selectedDistrict ? `Choose a ${selectedDistrict} center` : 'Select your district first'}</option>
+                    {filteredCenters.map((center) => (
                       <option key={center._id || center.id} value={center._id || center.id}>
                         {center.name}
                       </option>
                     ))}
                   </select>
+                  {selectedDistrict && filteredCenters.length === 0 && (
+                    <p className="mt-1.5 text-xs font-semibold text-amber-400">No active National ID centers found for {selectedDistrict}.</p>
+                  )}
                 </label>
                 <label>
                   <span className={labelClass}>Appointment Date</span>
@@ -413,24 +516,19 @@ const ReplaceLostId = () => {
               </div>
             </section>
 
-            {/* Form footer: compact summary + submit */}
-            <section className={panelClass}>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.2em]">Summary</h2>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                    <Info label="Service" value="Replace Lost ID" />
-                    <Info label="Center" value={selectedCenter?.name || 'Not selected'} />
-                    <Info label="District" value={selectedCenter ? getDistrict(selectedCenter) : 'Not selected'} />
-                    <Info label="Date" value={formatDate(form.date)} />
-                    <Info label="Time" value={form.timeSlot || 'Not selected'} />
-                  </div>
-                </div>
-                <button disabled={submitting} className="shrink-0 rounded-xl bg-amber-500 px-8 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
-                  {submitting ? 'Submitting...' : 'Create Replacement Appointment'}
-                </button>
+            <aside className={`${panelClass} h-fit`}>
+              <h2 className="text-lg font-black">Summary</h2>
+              <div className="mt-4 space-y-3">
+                <Info label="Service" value="Replace Lost National ID" />
+                <Info label="Center" value={selectedCenter?.name || 'Not selected'} />
+                <Info label="District" value={selectedDistrict || (selectedCenter ? getDistrict(selectedCenter) : 'Not selected')} />
+                <Info label="Date" value={formatDate(form.date)} />
+                <Info label="Time" value={form.timeSlot || 'Not selected'} />
               </div>
-            </section>
+              <button disabled={submitting} className="mt-5 w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
+                {submitting ? 'Submitting...' : 'Create Replacement Appointment'}
+              </button>
+            </aside>
           </form>
         )}
       </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiEye, FiEyeOff, FiLock, FiUser } from 'react-icons/fi';
 import { useAuth } from '../hooks';
@@ -24,7 +24,6 @@ const schema = yup.object().shape({
 
 export default function Register() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { register: registerUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +39,7 @@ export default function Register() {
     try {
       await registerUser(data.username, data.password);
       toast.success('Account created.');
-      navigate('/login', { state: location.state, replace: true });
+      navigate('/login');
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || 'Registration failed.');
     } finally {
@@ -56,9 +55,6 @@ export default function Register() {
             NQS
           </div>
           <h1 className="text-2xl font-black">Create Citizen Account</h1>
-          <p className="mt-2 text-sm font-semibold text-blue-100/80">
-            Register first, then sign in to enter the management system.
-          </p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -121,7 +117,7 @@ export default function Register() {
 
         <p className="mt-6 text-center text-sm text-blue-100">
           Already have an account?{' '}
-          <Link to="/login" state={location.state} className="font-black text-blue-300 hover:text-blue-100">
+          <Link to="/login" className="font-black text-blue-300 hover:text-blue-100">
             Sign In
           </Link>
         </p>

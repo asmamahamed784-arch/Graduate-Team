@@ -6,9 +6,9 @@ import {
   FaEdit,
   FaTimes,
   FaConciergeBell,
+  FaSearch,
 } from 'react-icons/fa';
 import { apiClient } from '../api/apiClient';
-import DataTable from '../components/ui/DataTable';
 
 const container = {
   hidden: { opacity: 0 },
@@ -34,6 +34,7 @@ const ServiceManagement = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [search, setSearch] = useState('');
 
   const loadServices = async () => {
     try {
@@ -76,10 +77,10 @@ const ServiceManagement = () => {
     }
     try {
       if (editing) {
-        await apiClient.put(`/api/services/${editing}`, form);
+        await apiClient.put(`/api/services/update/${editing}`, form);
         toast.success('Service updated.');
       } else {
-        await apiClient.post('/api/services', form);
+        await apiClient.post('/api/services/create', form);
         toast.success('Service added.');
       }
       await loadServices();
@@ -89,46 +90,10 @@ const ServiceManagement = () => {
     }
   };
 
-  const columns = [
-    { header: 'Name', accessor: 'name', render: (svc) => <span className="font-bold">{svc.name}</span> },
-    { header: 'Description', accessor: 'description', render: (svc) => <span className="line-clamp-2">{svc.description}</span> },
-    {
-      header: 'Category',
-      accessor: 'category',
-      render: (svc) => (
-        <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-          {svc.category || 'National ID'}
-        </span>
-      )
-    },
-    { header: 'Duration', accessor: 'duration', render: (svc) => `${svc.duration || 15} min` },
-    {
-      header: 'Status',
-      accessor: 'status',
-      render: (svc) => (
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-          svc.status !== 'Inactive'
-            ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
-            : 'bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300'
-        }`}>
-          {svc.status || 'Active'}
-        </span>
-      )
-    },
-    {
-      header: 'Actions',
-      accessor: 'actions',
-      sortable: false,
-      render: (svc) => (
-        <button
-          onClick={() => openEdit(svc)}
-          className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-500/15 dark:text-blue-300 dark:hover:bg-blue-500/25"
-        >
-          <FaEdit /> Edit
-        </button>
-      )
-    }
-  ];
+  const filtered = services.filter((s) =>
+    (s.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (s.category || '').toLowerCase().includes(search.toLowerCase())
+  );
 
   if (loading && services.length === 0) {
     return (
@@ -168,23 +133,77 @@ const ServiceManagement = () => {
           )}
         </motion.div>
 
-        <motion.div variants={item}>
-          <DataTable
-            columns={columns}
-            data={services}
-            loading={loading}
-            searchPlaceholder="Search services..."
-            toolbar={services.length === 0 ? (
-              <button
-                onClick={openAdd}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800"
-              >
-                <FaPlus /> Add Service
-              </button>
-            ) : null}
-            emptyTitle="No services configured"
-            emptyText="Add the National ID service to start accepting citizen appointments."
+        {/* Search */}
+        <motion.div variants={item} className="relative">
+          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search service..."
+            className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
           />
+        </motion.div>
+
+        {/* Table */}
+        <motion.div variants={item} className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <tr>
+                  {['Name', 'Description', 'Category', 'Duration', 'Status', 'Actions'].map((h) => (
+                    <th key={h} className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {filtered.map((svc, i) => (
+                  <motion.tr
+                    key={svc._id || svc.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: i * 0.04 }}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+                  >
+                    <td className="px-6 py-4 font-semibold text-gray-900 dark:text-white whitespace-nowrap">{svc.name}</td>
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300 max-w-xs truncate">{svc.description}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-medium">
+                        {svc.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{svc.duration} min</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        svc.status !== 'Inactive'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
+                          : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                      }`}>
+                        {svc.status || 'Active'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEdit(svc)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 rounded-lg transition-colors"
+                        >
+                          <FaEdit /> Edit
+                        </button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400 dark:text-gray-500">
+                      No service matches your search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </motion.div>
       </div>
 

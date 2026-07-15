@@ -230,7 +230,7 @@ const QRVerify = () => {
   ].filter((item) => item.value) : [];
 
   return (
-    <div className="min-h-screen pb-12 text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen pb-12 text-slate-100">
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -242,8 +242,8 @@ const QRVerify = () => {
             <FiCamera className="text-[#7CB8FF] text-xl" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">QR Scan</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Scan or enter a ticket reference to verify a National ID appointment</p>
+            <h1 className="text-2xl font-bold text-white">QR Scan</h1>
+            <p className="text-sm text-slate-400">Scan or enter a ticket reference to verify a National ID appointment</p>
           </div>
         </div>
       </motion.div>
@@ -253,9 +253,9 @@ const QRVerify = () => {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1, duration: 0.4 }}
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#4189DD]/20 dark:bg-[#071a33] dark:shadow-xl dark:shadow-black/20"
+          className="rounded-2xl border border-[#4189DD]/20 bg-slate-900/90 p-6 shadow-xl shadow-black/20"
         >
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Scan Ticket</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Scan Ticket</h2>
 
           <div
             className={`relative aspect-square max-h-72 rounded-xl bg-gray-900 dark:bg-gray-950 flex flex-col items-center justify-center mb-4 overflow-hidden ${
@@ -329,9 +329,9 @@ const QRVerify = () => {
           transition={{ delay: 0.15, duration: 0.4 }}
           className="space-y-6"
         >
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#4189DD]/20 dark:bg-[#071a33] dark:shadow-xl dark:shadow-black/20">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Enter Reference</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          <div className="rounded-2xl border border-[#4189DD]/20 bg-slate-900/90 p-6 shadow-xl shadow-black/20">
+            <h2 className="text-lg font-semibold text-white mb-4">Enter Reference</h2>
+            <p className="text-xs text-slate-400 mb-4">
               Enter the ticket reference printed on the QR ticket or shown in the confirmation email.
             </p>
             <div className="flex gap-3">
@@ -343,7 +343,7 @@ const QRVerify = () => {
                   onChange={(e) => setManualCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
                   placeholder="NQS-XXXX"
-                  className="w-full pl-10 pr-4 py-3 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 placeholder-slate-400 dark:bg-[#061225] dark:border-[#27476f] dark:text-slate-100 dark:placeholder-slate-500 font-mono"
+                  className="w-full pl-10 pr-4 py-3 text-sm bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-100 placeholder-slate-500 font-mono"
                 />
               </div>
               <button
@@ -369,7 +369,7 @@ const QRVerify = () => {
               }`}
             >
               <div className="flex items-center gap-4 mb-5">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-blue-200 bg-blue-50 text-lg font-black text-blue-700 dark:border-[#4189DD]/25 dark:bg-[#061225] dark:text-[#7CB8FF]">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[#4189DD]/25 bg-slate-950 text-lg font-black text-[#7CB8FF]">
                   {verificationResult.citizenPhoto ? (
                     <img
                       src={verificationResult.citizenPhoto}
@@ -387,11 +387,11 @@ const QRVerify = () => {
                     ) : (
                       <FiXCircle className="text-red-400" size={20} />
                     )}
-                    <h3 className="font-semibold text-slate-900 dark:text-white">
+                    <h3 className="font-semibold text-white">
                       {verificationResult.fullName || verificationResult.citizenName || verificationResult.reference}
                     </h3>
                   </div>
-                  <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">{verificationResult.reference}</p>
+                  <p className="mt-1 font-mono text-sm text-slate-400">{verificationResult.reference}</p>
                   <span
                     className={`mt-2 inline-flex px-2.5 py-0.5 text-xs font-semibold rounded-full ${statusBadgeClass}`}
                   >
@@ -413,12 +413,12 @@ const QRVerify = () => {
                     {resultDetails.map((item) => {
                       const Icon = item.icon;
                       return (
-                        <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-[#27476f] dark:bg-[#061225]/60">
-                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <div key={item.label} className="rounded-xl border border-slate-700 bg-slate-950/50 p-3">
+                          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                             <Icon size={14} />
                             <span>{item.label}</span>
                           </div>
-                          <p className="break-words font-semibold text-slate-900 dark:text-white">{item.value}</p>
+                          <p className="break-words font-semibold text-white">{item.value}</p>
                         </div>
                       );
                     })}
@@ -437,7 +437,7 @@ const QRVerify = () => {
                 )}
 
                 {verificationResult.found && (
-                <div className="grid gap-3 border-t border-slate-200 pt-4 dark:border-[#27476f] sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-3 border-t border-slate-700 pt-4 sm:grid-cols-2 xl:grid-cols-4">
                   <button
                     type="button"
                     onClick={() => handleTicketAction('verify')}
@@ -486,34 +486,34 @@ const QRVerify = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#4189DD]/20 dark:bg-[#071a33] dark:shadow-xl dark:shadow-black/20"
+        className="max-w-5xl overflow-hidden rounded-2xl border border-[#4189DD]/20 bg-slate-900/90 shadow-xl shadow-black/20"
       >
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-[#1d355f]">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Recent Checks</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Last 5 checks during this session</p>
+        <div className="px-6 py-4 border-b border-slate-800">
+          <h2 className="text-lg font-semibold text-white">Recent Checks</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Last 5 checks during this session</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 text-left dark:bg-[#0b2444]">
-                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
-                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Checked By</th>
+              <tr className="bg-slate-950/70 text-left">
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Reference</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Time</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Checked By</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#122c50]">
+            <tbody className="divide-y divide-slate-800">
               {recentVerifications.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                     No QR tickets checked in this session yet.
                   </td>
                 </tr>
               ) : (
                 recentVerifications.map((v) => (
-                  <tr key={v.id} className="transition-colors hover:bg-blue-50/50 dark:hover:bg-white/5">
-                    <td className="px-6 py-3 font-mono font-medium text-slate-800 dark:text-slate-200">{v.reference}</td>
-                    <td className="px-6 py-3 text-slate-500 dark:text-slate-400">{v.time}</td>
+                  <tr key={v.id} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-6 py-3 font-mono font-medium text-slate-200">{v.reference}</td>
+                    <td className="px-6 py-3 text-slate-400">{v.time}</td>
                     <td className="px-6 py-3">
                       <span
                         className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
@@ -526,7 +526,7 @@ const QRVerify = () => {
                         {v.status}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <td className="px-6 py-3 text-slate-300 flex items-center gap-1.5">
                       <FiUser size={13} className="text-slate-500" />
                       {v.verifiedBy}
                     </td>

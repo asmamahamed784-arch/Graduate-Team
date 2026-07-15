@@ -32,7 +32,7 @@ export const useDashboard = () => {
       if (isAdmin) {
         const statsRes = await apiClient.get('/api/reports/stats');
         setStats(statsRes.data || null);
-        const auditsRes = await apiClient.get('/api/audits');
+        const auditsRes = await apiClient.get('/api/logs/list');
         setLogs(auditsRes.data || []);
       } else {
         setStats(null);

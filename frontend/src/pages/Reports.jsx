@@ -74,6 +74,7 @@ const chartColors = ['#2563eb', '#059669', '#f59e0b', '#7c3aed', '#dc2626', '#08
 
 const initialFilters = {
   service: '',
+  district: '',
   center: '',
   status: '',
   requestType: '',
@@ -150,12 +151,26 @@ const citizenGender = (ticket) => {
 };
 
 const citizenDistrict = (ticket) => (
+  ticket.district ||
   ticket.registrationDetails?.district ||
   ticket.registrationDetails?.centerDistrict ||
   ticket.replacementDetails?.district ||
   ticket.updateDetails?.district ||
+  ticket.center?.district ||
   'Not provided'
 );
+
+const districtBreakdownRows = (rows) => Object.values(rows.reduce((map, ticket) => {
+  const district = citizenDistrict(ticket);
+  if (!map[district]) {
+    map[district] = { label: district, count: 0, waiting: 0, completed: 0, cancelled: 0 };
+  }
+  map[district].count += 1;
+  if (ticket.status === 'Waiting') map[district].waiting += 1;
+  if (ticket.status === 'Completed' || ticket.requestStatus === 'Completed') map[district].completed += 1;
+  if (ticket.status === 'Cancelled') map[district].cancelled += 1;
+  return map;
+}, {}));
 
 const roleName = (value) => String(value || '').replace('_', ' ');
 
@@ -175,6 +190,7 @@ const average = (values) => {
 
 const filterTickets = (tickets, filters) => tickets.filter((ticket) => {
   if (filters.service && serviceName(ticket) !== filters.service) return false;
+  if (filters.district && citizenDistrict(ticket) !== filters.district) return false;
   if (filters.center && centerName(ticket) !== filters.center) return false;
   if (filters.status && ticket.status !== filters.status) return false;
   if (filters.requestType && ticket.requestType !== filters.requestType) return false;
@@ -342,7 +358,7 @@ const Filters = ({ filters, setFilters, options, showRequestType = true }) => (
     <div className="mb-3 flex items-center gap-2 text-sm font-black text-[#0B3A75]">
       <FaFilter /> Filters
     </div>
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-7">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-8">
       <select
         value={filters.service}
         onChange={(event) => setFilters((current) => ({ ...current, service: event.target.value }))}
@@ -350,6 +366,14 @@ const Filters = ({ filters, setFilters, options, showRequestType = true }) => (
       >
         <option value="">All services</option>
         {options.services.map((service) => <option key={service} value={service}>{service}</option>)}
+      </select>
+      <select
+        value={filters.district}
+        onChange={(event) => setFilters((current) => ({ ...current, district: event.target.value, center: '' }))}
+        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+      >
+        <option value="">All districts</option>
+        {(options.districts || []).map((district) => <option key={district} value={district}>{district}</option>)}
       </select>
       <select
         value={filters.center}
@@ -457,6 +481,9 @@ const DistrictBreakdownTable = ({ rows }) => (
           <tr>
             <th className="px-4 py-3 font-black">District</th>
             <th className="px-4 py-3 font-black">Requests</th>
+            <th className="px-4 py-3 font-black">Waiting</th>
+            <th className="px-4 py-3 font-black">Completed</th>
+            <th className="px-4 py-3 font-black">Cancelled</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -464,10 +491,13 @@ const DistrictBreakdownTable = ({ rows }) => (
             <tr key={row.label} className="hover:bg-blue-50/50">
               <td className="px-4 py-3 font-semibold text-slate-900">{row.label}</td>
               <td className="px-4 py-3 font-black text-blue-700">{row.count}</td>
+              <td className="px-4 py-3 font-black text-amber-700">{row.waiting || 0}</td>
+              <td className="px-4 py-3 font-black text-emerald-700">{row.completed || 0}</td>
+              <td className="px-4 py-3 font-black text-red-700">{row.cancelled || 0}</td>
             </tr>
           )) : (
             <tr>
-              <td colSpan="2" className="px-4 py-8 text-center text-sm text-slate-500">No district records found.</td>
+              <td colSpan="5" className="px-4 py-8 text-center text-sm text-slate-500">No district records found.</td>
             </tr>
           )}
         </tbody>
@@ -573,6 +603,7 @@ const Reports = () => {
     const filteredTickets = filterTickets(tickets, filters);
     const statuses = [...new Set(tickets.map((ticket) => ticket.status).filter(Boolean))].sort();
     const centers = [...new Set(tickets.map(centerName).filter(Boolean))].sort();
+    const districts = [...new Set(tickets.map(citizenDistrict).filter(Boolean))].sort();
     const services = [...new Set(tickets.map(serviceName).filter(Boolean))].sort();
     const requestStatuses = [...new Set(tickets.map((ticket) => ticket.requestStatus).filter(Boolean))].sort();
     const pending = tickets.filter((ticket) => ticket.requestStatus === 'Pending').length;
@@ -582,7 +613,7 @@ const Reports = () => {
     const waitingTimes = tickets.map((ticket) => parseWaitMinutes(ticket.waitTime));
     const serviceTimes = tickets.map((ticket) => minutesBetween(ticket.calledAt, ticket.completedAt)).filter((value) => value !== null);
     const genderRows = mapToChartRows(makeCountMap(tickets, citizenGender));
-    const districtRows = mapToChartRows(makeCountMap(tickets, citizenDistrict));
+    const districtRows = districtBreakdownRows(tickets);
     const centerRows = mapToChartRows(makeCountMap(tickets, centerName));
     const serviceRows = analytics?.appointmentsByService?.map((row) => ({ label: row.service, count: row.count })) || mapToChartRows(makeCountMap(tickets, serviceName));
     const ageRows = mapToChartRows(makeCountMap(tickets, (ticket) => {
@@ -620,7 +651,7 @@ const Reports = () => {
 
     return {
       filteredTickets,
-      options: { statuses, centers, services, requestStatuses },
+      options: { statuses, centers, districts, services, requestStatuses },
       pending,
       completed,
       cancelled,

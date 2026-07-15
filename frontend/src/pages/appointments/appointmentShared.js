@@ -22,7 +22,7 @@ export const timeSlots = [
   '04:00 PM'
 ];
 
-export const updateFieldOptions = ['Name', "Mother's Name", 'Date of Birth', 'Address', 'Phone Number', 'Other'];
+export const updateFieldOptions = ['Name', "Mother's Name", 'Date of Birth', 'Address', 'Marital Status', 'Other'];
 
 export const todayKey = () => {
   const today = new Date();

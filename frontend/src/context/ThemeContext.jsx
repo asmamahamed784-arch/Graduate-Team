@@ -3,7 +3,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export const ThemeContext = createContext({
   theme: 'light',
-  isDark: false,
   toggleTheme: () => {}
 });
 
@@ -35,10 +34,8 @@ export const ThemeProvider = ({ children }) => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
   };
 
-  const isDark = theme === 'dark';
-
   return (
-    <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

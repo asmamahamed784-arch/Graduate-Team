@@ -34,7 +34,7 @@ import {
   todayKey
 } from './appointments/appointmentShared';
 
-const pageClass = 'nqs-new-id-page min-h-screen bg-[#F8FAFC] px-3 py-8 text-slate-950 sm:px-5 lg:px-6';
+const pageClass = 'nqs-new-id-page min-h-screen bg-[#F8FAFC] px-3 py-6 text-slate-950 sm:px-5 lg:px-6';
 const cardClass = 'nqs-new-id-card rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.07)] sm:p-6';
 const compactCardClass = 'nqs-new-id-receipt-row rounded-xl border border-blue-100 bg-[#F8FAFC] p-3';
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500';
@@ -88,7 +88,8 @@ const DISTRICT_ALIASES = {
   hawlwadaag: 'Howlwadaag',
   waberi: 'Waaberi',
   karan: 'Kaaraan',
-  karaan: 'Kaaraan'
+  karaan: 'Kaaraan',
+  banaadir: 'Hodan'
 };
 
 const normalizeDistrictValue = (value) => {
@@ -101,8 +102,9 @@ const editableFieldsForReason = (reason = '') => {
   if (value.includes('mother')) return new Set(['motherName']);
   if (value.includes('birth')) return new Set(['dateOfBirth']);
   if (value.includes('phone')) return new Set(['phone']);
+  if (value.includes('marital')) return new Set(['maritalStatus']);
   if (value.includes('name')) return new Set(['fullName']);
-  return new Set(['fullName', 'motherName', 'dateOfBirth', 'phone', 'gender', 'district', 'nearestLandmark', 'address', 'centerId', 'date', 'timeSlot']);
+  return new Set(['fullName', 'motherName', 'dateOfBirth', 'phone', 'gender', 'maritalStatus', 'district', 'nearestLandmark', 'address', 'centerId', 'date', 'timeSlot']);
 };
 
 const isRealBirthDate = (value) => {
@@ -148,6 +150,7 @@ const NewIdRegistration = () => {
     age: '',
     phone: user?.phone || '',
     gender: '',
+    maritalStatus: user?.maritalStatus || '',
     district: '',
     address: user?.address || '',
     nearestLandmark: '',
@@ -160,6 +163,11 @@ const NewIdRegistration = () => {
   const selectedCenter = useMemo(
     () => centers.find((center) => (center._id || center.id) === form.centerId),
     [centers, form.centerId]
+  );
+  const selectedDistrict = normalizeDistrictValue(form.district);
+  const filteredCenters = useMemo(
+    () => centers.filter((center) => normalizeDistrictValue(getDistrict(center)) === selectedDistrict),
+    [centers, selectedDistrict]
   );
   const bookedSlots = form.date ? availability[form.date]?.bookedSlots || [] : [];
   const availableDateOptions = useMemo(
@@ -174,6 +182,7 @@ const NewIdRegistration = () => {
     [resubmitTicket]
   );
   const canEditField = (field) => !editableFields || editableFields.has(field);
+  const hasIssuedNationalId = Boolean(user?.nationalId || ['ACTIVE', 'COMPLETED'].includes(user?.nationalIdStatus));
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -221,6 +230,7 @@ const NewIdRegistration = () => {
           age: details.age || calculateAge(details.dateOfBirth),
           phone: details.phone || existing.citizen?.phone || user?.phone || '',
           gender: details.gender || '',
+          maritalStatus: details.maritalStatus || '',
           district: normalizeDistrictValue(details.district),
           address: details.fullAddress || details.address || user?.address || '',
           nearestLandmark: details.nearestLandmark || '',
@@ -290,6 +300,11 @@ const NewIdRegistration = () => {
       if (field === 'date') {
         next.timeSlot = '';
       }
+      if (field === 'district') {
+        next.centerId = '';
+        next.date = '';
+        next.timeSlot = '';
+      }
       if (field === 'centerId') {
         next.date = '';
         next.timeSlot = '';
@@ -326,6 +341,9 @@ const NewIdRegistration = () => {
     if (!form.gender) errors.gender = 'Gender is required.';
     else if (!['Male', 'Female'].includes(form.gender)) errors.gender = 'Gender must be Male or Female.';
 
+    if (!form.maritalStatus) errors.maritalStatus = 'Please select your marital status.';
+    else if (!['SINGLE', 'MARRIED'].includes(form.maritalStatus)) errors.maritalStatus = 'Please select your marital status.';
+
     if (!district) errors.district = 'District is required.';
     else if (!normalizeDistrictValue(district)) errors.district = 'Please select your district from the official Banaadir district list.';
 
@@ -336,6 +354,9 @@ const NewIdRegistration = () => {
     else if (!addressCharsOnly(address)) errors.address = 'Full address can contain letters, numbers, spaces, and commas only.';
 
     if (!form.centerId) errors.centerId = 'Please select a center.';
+    else if (selectedCenter && normalizeDistrictValue(getDistrict(selectedCenter)) !== normalizeDistrictValue(form.district)) {
+      errors.centerId = 'The selected center does not belong to the selected district.';
+    }
     if (!form.date) errors.date = 'Please choose an appointment date.';
     else if (availability[form.date]?.status === 'closed') errors.date = 'This center is not available on this date.';
     else if (availability[form.date]?.status === 'full') errors.date = 'Appointments are full for this date. Please choose another date.';
@@ -387,6 +408,7 @@ const NewIdRegistration = () => {
       motherName: cleanSpacedText(form.motherName),
       phone: cleanText(form.phone),
       gender: form.gender,
+      maritalStatus: form.maritalStatus,
       district: cleanSpacedText(form.district),
       address: cleanSpacedText(form.address),
       nearestLandmark: cleanSpacedText(form.nearestLandmark),
@@ -412,6 +434,7 @@ const NewIdRegistration = () => {
           age: cleanForm.age,
           phone: cleanForm.phone,
           gender: cleanForm.gender,
+          maritalStatus: cleanForm.maritalStatus,
           district: cleanForm.district,
           address: cleanForm.address,
           fullAddress: cleanForm.address,
@@ -488,10 +511,34 @@ const NewIdRegistration = () => {
     );
   }
 
+  if (hasIssuedNationalId && !resubmitId && !ticket) {
+    return (
+      <div className={pageClass}>
+        <div className="mx-auto max-w-3xl">
+          <div className="rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
+            <FiShield className="mx-auto h-12 w-12 text-emerald-600" />
+            <h1 className="mt-4 text-2xl font-black text-slate-950">National ID already issued</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">
+              You already have a National ID. You cannot register for a new National ID. You may only update your information or request a replacement for a lost ID.
+            </p>
+            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+              <Link to="/dashboard/user/update-information" className="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
+                Update Information
+              </Link>
+              <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center rounded-xl border border-blue-200 px-5 py-3 text-sm font-black text-blue-700 hover:bg-blue-50">
+                Replace Lost ID
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={pageClass}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <Link to="/dashboard/user/services" className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-[#0B3A75]">
+        <Link to="/services" className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-[#0B3A75]">
           <FiArrowLeft /> Back to services
         </Link>
 
@@ -557,7 +604,7 @@ const NewIdRegistration = () => {
                 <button onClick={handleDownload} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
                   <FiDownload /> Download Ticket
                 </button>
-                <Link to="/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
                   <FiClock /> Check Queue Status
                 </Link>
               </div>
@@ -583,7 +630,7 @@ const NewIdRegistration = () => {
               <Info label="Status" value={existingTicket.status} />
             </div>
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-              <Link to="/track" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
+              <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
                 <FiClock /> Check Queue Status
               </Link>
               <button
@@ -596,7 +643,7 @@ const NewIdRegistration = () => {
             </div>
           </section>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
             <section className={cardClass}>
               {reviewMode ? (
                 <div>
@@ -632,6 +679,7 @@ const NewIdRegistration = () => {
                     <ReviewItem label="Date of Birth" value={formatDate(form.dateOfBirth)} />
                     <ReviewItem label="Age" value={form.age} />
                     <ReviewItem label="Gender" value={form.gender} />
+                    <ReviewItem label="Marital Status" value={form.maritalStatus === 'SINGLE' ? 'Single' : form.maritalStatus === 'MARRIED' ? 'Married' : ''} />
                     <ReviewItem label="Phone Number" value={form.phone} />
                     <ReviewItem label="District" value={form.district} />
                     <ReviewItem label="Full Address" value={form.address} />
@@ -682,6 +730,20 @@ const NewIdRegistration = () => {
                       </select>
                       {fieldErrors.gender && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.gender}</p>}
                     </label>
+                    <label className="block">
+                      <RequiredLabel label="Marital Status" />
+                      <select
+                        value={form.maritalStatus}
+                        disabled={!canEditField('maritalStatus')}
+                        onChange={(event) => updateForm('maritalStatus', event.target.value)}
+                        className={`${inputClass} ${fieldErrors.maritalStatus ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
+                      >
+                        <option value="">Select Marital Status</option>
+                        <option value="SINGLE">Single</option>
+                        <option value="MARRIED">Married</option>
+                      </select>
+                      {fieldErrors.maritalStatus && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.maritalStatus}</p>}
+                    </label>
                     <DistrictSelect value={form.district} error={fieldErrors.district} disabled={!canEditField('district')} onChange={(value) => updateForm('district', value)} />
                     <Field label="Nearest Landmark" required placeholder="KM4" icon={<FiNavigation />} value={form.nearestLandmark} error={fieldErrors.nearestLandmark} disabled={!canEditField('nearestLandmark')} onChange={(value) => updateForm('nearestLandmark', value)} />
                     <label className="sm:col-span-2">
@@ -717,17 +779,20 @@ const NewIdRegistration = () => {
                       <RequiredLabel label="Selected National ID Center" />
                       <select
                         value={form.centerId}
-                        disabled={!canEditField('centerId')}
+                        disabled={!canEditField('centerId') || !selectedDistrict}
                         onChange={(event) => updateForm('centerId', event.target.value)}
                         className={`${inputClass} ${fieldErrors.centerId ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
                       >
-                        <option value="">Choose a Banaadir center</option>
-                        {centers.map((center) => (
+                        <option value="">{selectedDistrict ? `Choose a ${selectedDistrict} center` : 'Select your district first'}</option>
+                        {filteredCenters.map((center) => (
                           <option key={center._id || center.id} value={center._id || center.id}>
                             {center.name}
                           </option>
                         ))}
                       </select>
+                      {selectedDistrict && filteredCenters.length === 0 && (
+                        <p className="mt-1 text-xs font-semibold text-amber-600">No active National ID centers found for {selectedDistrict}.</p>
+                      )}
                       {fieldErrors.centerId && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.centerId}</p>}
                     </label>
                     <label className="block">
@@ -770,50 +835,50 @@ const NewIdRegistration = () => {
               )}
             </section>
 
-            {/* Form footer: compact appointment summary + actions */}
-            <section className={cardClass}>
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">Booking summary</p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-                    <Info label="Service" value="New National ID" />
-                    <Info label="Center" value={selectedCenter?.name || 'Not selected'} />
-                    <Info label="District" value={selectedCenter ? getDistrict(selectedCenter) : 'Not selected'} />
-                    <Info label="Date" value={formatDate(form.date)} />
-                    <Info label="Time" value={form.timeSlot || 'Not selected'} />
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-                  {reviewMode ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setReviewMode(false);
-                        setConfirmedAccuracy(false);
-                      }}
-                      className="rounded-xl border border-blue-200 bg-white px-6 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-50"
-                    >
-                      Previous
-                    </button>
-                  ) : (
-                    <Link
-                      to="/dashboard/user/services"
-                      className="rounded-xl border border-blue-200 bg-white px-6 py-3 text-center text-sm font-black text-blue-700 transition hover:bg-blue-50"
-                    >
-                      Previous
-                    </Link>
-                  )}
-                  <button
-                    disabled={submitting || (reviewMode && !confirmedAccuracy)}
-                    className={`rounded-xl px-8 py-3 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
-                      reviewMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                  >
-                    {submitting ? 'Submitting...' : reviewMode ? (resubmitTicket ? 'Resubmit Appointment' : 'Confirm Appointment') : 'Next'}
-                  </button>
-                </div>
+            <aside className={`${cardClass} h-fit lg:sticky lg:top-24`}>
+              <div className="rounded-2xl border border-blue-100 bg-[#F8FAFC] p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">Government service receipt</p>
+                <h2 className="mt-2 text-2xl font-black text-[#0B3A75]">Booking Summary</h2>
+                <p className="mt-1 text-sm text-slate-600">Your selected appointment details.</p>
               </div>
-            </section>
+              <div className="mt-4 space-y-3">
+                <Info label="Service" value="New National ID Registration" />
+                <Info label="Center" value={selectedCenter?.name || 'Not selected'} />
+                <Info label="District" value={selectedCenter ? getDistrict(selectedCenter) : 'Not selected'} />
+                <Info label="Date" value={formatDate(form.date)} />
+                <Info label="Time" value={form.timeSlot || 'Not selected'} />
+                <Info label="Status" value={resubmitTicket ? 'Cancelled - correction required' : (reviewMode ? 'Ready for confirmation' : 'Draft')} />
+              </div>
+              <div className="mt-5 space-y-3">
+                <button
+                  disabled={submitting || (reviewMode && !confirmedAccuracy)}
+                  className={`w-full rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                    reviewMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
+                >
+                  {submitting ? 'Submitting...' : reviewMode ? (resubmitTicket ? 'Resubmit Appointment' : 'Confirm Appointment') : 'Next'}
+                </button>
+                {reviewMode ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReviewMode(false);
+                      setConfirmedAccuracy(false);
+                    }}
+                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                  >
+                    Previous
+                  </button>
+                ) : (
+                  <Link
+                    to="/services"
+                    className="block w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-center text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                  >
+                    Previous
+                  </Link>
+                )}
+              </div>
+            </aside>
           </form>
         )}
       </div>

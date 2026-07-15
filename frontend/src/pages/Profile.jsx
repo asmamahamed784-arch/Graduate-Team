@@ -173,14 +173,14 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12 text-slate-900 dark:text-white">
+    <div className="min-h-screen pb-12 text-white">
       {/* ─── Profile Header ──────────────────────────── */}
       <motion.div
         custom={0}
         variants={fadeUp}
         initial="hidden"
         animate="visible"
-        className="bg-[#0B3A75] rounded-2xl p-6 md:p-8 mb-6 text-white relative overflow-hidden border border-[#0B3A75] shadow-xl shadow-black/10 dark:bg-[#0b2444] dark:border-[#1d355f]"
+        className="bg-slate-900 rounded-2xl p-6 md:p-8 mb-6 text-white relative overflow-hidden border border-slate-800 shadow-xl shadow-black/10"
       >
         {/* Decorative circles */}
         <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -192,13 +192,13 @@ const Profile = () => {
             {initials}
           </div>
           <div className="text-center sm:text-left">
-            <h1 className="text-2xl font-bold text-white">{user?.name || 'NQS User'}</h1>
-            <p className="text-blue-200 text-sm">{user?.email || 'No email on file'}</p>
+            <h1 className="text-2xl font-bold">{user?.name || 'NQS User'}</h1>
+            <p className="text-slate-500 text-sm">{user?.email || 'No email on file'}</p>
             <div className="flex items-center justify-center sm:justify-start gap-3 mt-2">
               <span className="px-3 py-0.5 bg-blue-500/10 text-[#4189DD] rounded-full text-xs font-medium">
                 {user?.role || 'user'}
               </span>
-              <span className="text-xs text-blue-200">
+              <span className="text-xs text-slate-500">
                 <FiCalendar className="inline mr-1" size={12} />
                 Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'N/A'}
               </span>

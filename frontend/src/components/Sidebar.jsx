@@ -4,138 +4,61 @@ import { useAuth } from '../hooks';
 import {
   FiMenu, FiX, FiHome, FiBarChart2,
   FiSettings, FiClipboard, FiShield, FiCamera, FiBell,
-  FiGrid, FiSearch, FiUsers, FiLogOut, FiMapPin, FiLayers,
-  FiMonitor, FiUser, FiMail,
+  FiGrid, FiSearch, FiUsers, FiEdit3, FiRefreshCw
 } from 'react-icons/fi';
 
-/**
- * ERP navigation model. Each role only receives the sections and links it is
- * authorized to use (RBAC) — the API enforces the same roles server-side.
- */
-const navSections = {
+const navItems = {
   citizen: [
+    { to: '/', label: 'Home', icon: <FiHome /> },
+    { to: '/dashboard/user', label: 'Dashboard', icon: <FiGrid />, end: true },
     {
-      title: 'Overview',
-      items: [
-        { to: '/dashboard/user', label: 'Dashboard', icon: <FiGrid />, end: true },
+      to: '/dashboard/user/appointments',
+      label: 'My Requests',
+      icon: <FiClipboard />,
+      end: true,
+      children: [
+        { to: '/dashboard/user/new-id-registration', label: 'Book Appointment', icon: <FiClipboard /> },
+        { to: '/dashboard/user/update-information', label: 'Update Information', icon: <FiEdit3 /> },
+        { to: '/dashboard/user/replace-lost-id', label: 'Replace Lost ID', icon: <FiRefreshCw /> },
       ],
     },
-    {
-      title: 'My Services',
-      items: [
-        { to: '/dashboard/user/services', label: 'Services & Process', icon: <FiLayers /> },
-        { to: '/dashboard/user/appointments', label: 'My Appointments', icon: <FiClipboard /> },
-        { to: '/track', label: 'Check Queue Status', icon: <FiSearch /> },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { to: '/profile', label: 'Profile Settings', icon: <FiUser /> },
-        { to: '/', label: 'Public Website', icon: <FiHome /> },
-      ],
-    },
+    { to: '/dashboard/user/track', label: 'Check Queue Status', icon: <FiSearch /> },
+    { to: '/profile', label: 'Profile Settings', icon: <FiSettings /> },
   ],
   operator: [
-    {
-      title: 'Overview',
-      items: [
-        { to: '/dashboard/operator', label: 'Dashboard', icon: <FiGrid />, end: true },
-      ],
-    },
-    {
-      title: 'Queue Operations',
-      items: [
-        { to: '/queue-management', label: 'Queue Management', icon: <FiClipboard /> },
-        { to: '/dashboard/operator/qr-scan', label: 'QR Scan & Verify', icon: <FiCamera /> },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { to: '/profile', label: 'Profile Settings', icon: <FiUser /> },
-        { to: '/', label: 'Public Website', icon: <FiHome /> },
-      ],
-    },
+    { to: '/', label: 'Home', icon: <FiHome /> },
+    { to: '/dashboard/operator', label: 'Operator Dashboard', icon: <FiHome />, end: true },
+    { to: '/queue-management', label: 'Queue Management', icon: <FiClipboard /> },
+    { to: '/dashboard/operator/qr-scan', label: 'QR Scan', icon: <FiCamera /> },
   ],
   super_operator: [
-    {
-      title: 'Overview',
-      items: [
-        { to: '/dashboard/operator', label: 'Dashboard', icon: <FiGrid />, end: true },
-      ],
-    },
-    {
-      title: 'Queue Operations',
-      items: [
-        { to: '/queue-management', label: 'Queue Management', icon: <FiClipboard /> },
-        { to: '/dashboard/operator/qr-scan', label: 'QR Scan & Verify', icon: <FiCamera /> },
-      ],
-    },
-    {
-      title: 'Center Management',
-      items: [
-        { to: '/operator-management', label: 'Center Operators', icon: <FiUsers /> },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        { to: '/profile', label: 'Profile Settings', icon: <FiUser /> },
-        { to: '/', label: 'Public Website', icon: <FiHome /> },
-      ],
-    },
+    { to: '/', label: 'Home', icon: <FiHome /> },
+    { to: '/dashboard/operator', label: 'Operator Dashboard', icon: <FiHome />, end: true },
+    { to: '/queue-management', label: 'Queue Management', icon: <FiClipboard /> },
+    { to: '/dashboard/operator/qr-scan', label: 'QR Scan', icon: <FiCamera /> },
+    { to: '/operator-management', label: 'Center Operators', icon: <FiUsers /> },
   ],
   admin: [
-    {
-      title: 'Overview',
-      items: [
-        { to: '/dashboard/admin', label: 'Dashboard', icon: <FiGrid />, end: true },
-        { to: '/dashboard/admin/reports', label: 'Reports & Analytics', icon: <FiBarChart2 /> },
-      ],
-    },
-    {
-      title: 'Operations',
-      items: [
-        { to: '/admin-appointments', label: 'Appointments', icon: <FiClipboard /> },
-        { to: '/dashboard/admin/qr-scan', label: 'QR Scan & Verify', icon: <FiCamera /> },
-        { to: '/live', label: 'Live Queue Screen', icon: <FiMonitor /> },
-      ],
-    },
-    {
-      title: 'Management',
-      items: [
-        { to: '/service-management', label: 'Services', icon: <FiLayers /> },
-        { to: '/center-management', label: 'Centers', icon: <FiMapPin /> },
-        { to: '/operator-management', label: 'Operators', icon: <FiUsers /> },
-        { to: '/notifications', label: 'Notifications', icon: <FiBell /> },
-        { to: '/contact-messages', label: 'Contact Messages', icon: <FiMail /> },
-      ],
-    },
-    {
-      title: 'System',
-      items: [
-        { to: '/active-sessions', label: 'Active Sessions', icon: <FiShield /> },
-        { to: '/logs', label: 'Audit Logs', icon: <FiShield /> },
-        { to: '/settings', label: 'Settings', icon: <FiSettings /> },
-        { to: '/', label: 'Public Website', icon: <FiHome /> },
-      ],
-    },
+    { to: '/', label: 'Home', icon: <FiHome /> },
+    { to: '/dashboard/admin', label: 'Admin Dashboard', icon: <FiHome />, end: true },
+    { to: '/admin-appointments', label: 'Appointments', icon: <FiClipboard /> },
+    { to: '/operator-management', label: 'Operators', icon: <FiUsers /> },
+    { to: '/active-sessions', label: 'Active Sessions', icon: <FiShield /> },
+    { to: '/dashboard/admin/reports', label: 'Reports', icon: <FiBarChart2 /> },
+    { to: '/service-management', label: 'Manage Services', icon: <FiSettings /> },
+    { to: '/center-management', label: 'Manage Centers', icon: <FiSettings /> },
+    { to: '/dashboard/admin/qr-scan', label: 'QR Scan', icon: <FiCamera /> },
+    { to: '/notifications', label: 'Notifications', icon: <FiBell /> },
+    { to: '/logs', label: 'Activity Logs', icon: <FiShield /> },
+    { to: '/settings', label: 'Settings', icon: <FiSettings /> },
   ],
-};
-
-const roleLabels = {
-  citizen: 'Citizen Portal',
-  operator: 'Operator Console',
-  super_operator: 'Senior Operator Console',
-  admin: 'Administration',
 };
 
 const Sidebar = () => {
   const [open, setOpen] = useState(false);
-  const { user, role, logout } = useAuth();
-  const sections = navSections[role || 'citizen'] || [];
-  const name = user?.name || user?.username || 'User';
+  const { role } = useAuth();
+  const items = navItems[role || 'citizen'] || [];
+  const isCitizen = role === 'citizen';
 
   return (
     <>
@@ -147,79 +70,73 @@ const Sidebar = () => {
       >
         {open ? <FiX size={24} /> : <FiMenu size={24} />}
       </button>
-
       {/* Sidebar */}
       <nav
         className={`
-          fixed left-0 top-0 z-40 flex h-screen w-64 flex-col bg-white text-slate-800 dark:bg-[#071a33] dark:text-slate-100
-          transform ${open ? 'translate-x-0' : '-translate-x-full'}
+          nqs-dashboard-sidebar
+          fixed left-0 top-0 z-40 flex h-screen w-64 flex-col overflow-hidden p-4
+          transform ${open ? 'translate-x-0' : '-translate-x-full'} 
           shadow-xl transition-transform duration-200 ease-in-out md:translate-x-0 md:shadow-none
-          border-r border-slate-200 dark:border-[#1d355f]
+          ${isCitizen
+            ? 'border-r border-blue-950/40 bg-[#06284f] text-white'
+            : 'border-r border-sky-200 bg-[#e8f5ff] text-slate-800 dark:border-[#1d355f] dark:bg-[#071a33] dark:text-slate-100'}
         `}
       >
-        {/* Brand */}
-        <div className="flex items-center space-x-3 border-b border-slate-200 p-4 dark:border-[#1d355f]">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#0B3A75] text-lg font-black text-white shadow-lg shadow-blue-600/15">
+        <div className="mb-6 flex items-center space-x-3 px-1">
+          <div className="h-10 w-10 bg-[#0B3A75] rounded-md flex items-center justify-center font-black text-lg text-white shadow-lg shadow-blue-600/15">
             N
           </div>
           <div>
-            <h2 className="text-base font-extrabold leading-none tracking-tight text-slate-950 dark:text-white">NQS National ID</h2>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-              {roleLabels[role] || 'Portal'}
-            </span>
+            <h2 className={`text-base font-extrabold tracking-tight leading-none ${isCitizen ? 'text-white' : 'text-slate-950 dark:text-white'}`}>NQS National ID</h2>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Banaadir Portal</span>
           </div>
         </div>
 
-        {/* Sections */}
-        <div className="flex-1 space-y-5 overflow-y-auto p-4">
-          {sections.map((section) => (
-            <div key={section.title}>
-              <p className="px-3 pb-2 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                {section.title}
-              </p>
-              <div className="space-y-0.5">
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.to + item.label}
-                    to={item.to}
-                    end={item.end}
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-150
-                       ${isActive
-                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25'
-                         : 'text-slate-700 hover:bg-blue-50 hover:text-[#0B3A75] dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white'}`
-                    }
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </NavLink>
-                ))}
-              </div>
+        <div className="flex flex-1 flex-col space-y-1 overflow-hidden">
+          {items.map((item) => (
+            <div key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                onClick={() => setOpen(false)}
+                className={({ isActive }) =>
+                  isCitizen
+                    ? `flex items-center space-x-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-150 hover:bg-blue-600/80 hover:text-white ${
+                      isActive ? 'bg-blue-600 text-white shadow-sm' : 'text-blue-50'
+                    }`
+                    : `flex items-center space-x-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-150 hover:bg-blue-50 hover:text-[#0B3A75] dark:hover:bg-white/10 dark:hover:text-white
+                   ${isActive ? 'bg-blue-50 text-[#0B3A75] shadow-sm dark:bg-white/10 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`
+                }
+              >
+                <span className="text-lg">{item.icon}</span>
+                <span>{item.label}</span>
+              </NavLink>
+
+              {item.children?.length > 0 && (
+                <div className={`ml-7 mt-1 space-y-1 border-l pl-3 ${isCitizen ? 'border-blue-300/30' : 'border-slate-200 dark:border-white/10'}`}>
+                  {item.children.map((child) => (
+                    <NavLink
+                      key={child.to}
+                      to={child.to}
+                      onClick={() => setOpen(false)}
+                      className={({ isActive }) =>
+                        isCitizen
+                          ? `flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition hover:bg-blue-600/70 hover:text-white ${
+                            isActive ? 'bg-blue-600/80 text-white' : 'text-blue-100'
+                          }`
+                          : `flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition hover:bg-blue-50 hover:text-[#0B3A75] dark:hover:bg-white/10 ${
+                            isActive ? 'bg-blue-50 text-[#0B3A75] dark:bg-white/10 dark:text-white' : 'text-slate-600 dark:text-slate-300'
+                          }`
+                      }
+                    >
+                      <span className="text-sm">{child.icon}</span>
+                      <span>{child.label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
-        </div>
-
-        {/* User footer */}
-        <div className="border-t border-slate-200 p-3 dark:border-[#1d355f]">
-          <div className="flex items-center gap-2.5 rounded-xl px-2 py-1.5">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
-              {name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-extrabold text-slate-900 dark:text-white">{name}</p>
-              <p className="truncate text-[10px] capitalize text-slate-500 dark:text-slate-400">{(role || 'citizen').replace('_', ' ')}</p>
-            </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-lg p-2 text-slate-500 transition hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
-              aria-label="Log out"
-              title="Log out"
-            >
-              <FiLogOut className="h-4 w-4" />
-            </button>
-          </div>
         </div>
       </nav>
     </>

@@ -1,10 +1,5 @@
 @import "tailwindcss";
 
-/* Tailwind v4 defaults dark: variants to the OS color scheme. The app has its
-   own Light/Dark toggle that sets the .dark class, so bind dark: to that class
-   or the toggle silently stops controlling most of the UI. */
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
   --color-primary-50: #f0f4f9;
   --color-primary-100: #dce6f2;
@@ -271,7 +266,7 @@ html.nqs-theme-dark .nqs-dashboard-surface {
   background: #061225 !important;
 }
 
-html.nqs-theme-dark .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-white"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F5F8FC]"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F8FAFC]"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-50"],
@@ -279,7 +274,7 @@ html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-emerald-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-orange-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-violet-50"],
-html.nqs-theme-dark .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-white"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F5F8FC]"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F8FAFC]"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-50"],
@@ -526,14 +521,14 @@ html.nqs-theme-dark .nqs-operator-dashboard .nqs-operator-link {
    This keeps every public page, dashboard page, form, card, and table readable
    when the global Dark/Light button is used. */
 html.nqs-theme-light body {
-  background: #f5f8fc;
-  color: #0f172a;
+  background: #dceeff;
+  color: #0b1f3a;
 }
 
 html.nqs-theme-light .nqs-public-surface,
 html.nqs-theme-light .nqs-dashboard-surface {
-  background: #f5f8fc !important;
-  color: #0f172a !important;
+  background: #dceeff !important;
+  color: #0b1f3a !important;
 }
 
 html.nqs-theme-light .nqs-public-surface [class*="bg-[#f5f8fc]"],
@@ -544,15 +539,15 @@ html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f5f8fc]"],
 html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F5F8FC]"],
 html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f3f6fb]"],
 html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F3F6FB]"] {
-  background: #f5f8fc !important;
+  background: #dceeff !important;
 }
 
-html.nqs-theme-light .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-white"],
 html.nqs-theme-light .nqs-public-surface [class*="bg-slate-50"],
-html.nqs-theme-light .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-white"],
 html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-50"] {
-  background: #ffffff !important;
-  border-color: #dbe7f3 !important;
+  background: #f1f8ff !important;
+  border-color: #b7d7f3 !important;
 }
 
 html.nqs-theme-light .nqs-public-surface h1,
@@ -575,21 +570,21 @@ html.nqs-theme-light .nqs-dashboard-surface span,
 html.nqs-theme-light .nqs-dashboard-surface li,
 html.nqs-theme-light .nqs-dashboard-surface td,
 html.nqs-theme-light .nqs-dashboard-surface th {
-  color: #0f172a;
+  color: #0b1f3a;
 }
 
-html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-blue-700"],
-html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-green-700"],
-html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-emerald-700"],
-html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-500"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-600"], html.nqs-theme-light .nqs-public-surface [class*="text-white"][class~="bg-red-700"],
-html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-blue-700"],
-html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-green-700"],
-html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-emerald-700"],
-html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-500"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-600"], html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class~="bg-red-700"],
-html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface button[class~="bg-blue-700"],
-html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface button[class~="bg-blue-700"],
-html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-500"], html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-600"], html.nqs-theme-light .nqs-public-surface a[class~="bg-blue-700"],
-html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-500"], html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-600"], html.nqs-theme-light .nqs-dashboard-surface a[class~="bg-blue-700"] {
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class*="bg-blue"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class*="bg-green"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class*="bg-emerald"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"][class*="bg-red"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class*="bg-blue"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class*="bg-green"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class*="bg-emerald"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"][class*="bg-red"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-blue"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-blue"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-blue"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-blue"] {
   color: #ffffff !important;
 }
 
@@ -619,7 +614,7 @@ html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f8fafc]"] {
   background: #061225 !important;
 }
 
-html.nqs-theme-dark .nqs-public-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-white"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-gray-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-50"],
@@ -627,7 +622,7 @@ html.nqs-theme-dark .nqs-public-surface [class*="bg-emerald-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-green-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-orange-50"],
 html.nqs-theme-dark .nqs-public-surface [class*="bg-violet-50"],
-html.nqs-theme-dark .nqs-dashboard-surface [class~="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-white"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-50"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-gray-50"],
 html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-blue-50"],
@@ -716,22 +711,22 @@ html.nqs-theme-dark .nqs-dashboard-surface [class*="text-green-700"] {
   color: #93c5fd !important;
 }
 
-html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-blue-700"],
-html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-blue-700"],
-html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-green-700"],
-html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-green-700"],
-html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-emerald-700"],
-html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-emerald-700"],
-html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-500"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-600"], html.nqs-theme-dark .nqs-public-surface button[class~="bg-red-700"],
-html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-500"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-600"], html.nqs-theme-dark .nqs-public-surface a[class~="bg-red-700"],
-html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-blue-700"],
-html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-blue-700"],
-html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-green-700"],
-html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-green-700"],
-html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-emerald-700"],
-html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-emerald-700"],
-html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-500"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-600"], html.nqs-theme-dark .nqs-dashboard-surface button[class~="bg-red-700"],
-html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-500"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-600"], html.nqs-theme-dark .nqs-dashboard-surface a[class~="bg-red-700"] {
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-blue"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-blue"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-green"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-green"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-red"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-red"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-blue"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-blue"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-green"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-green"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-red"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-red"] {
   color: #ffffff !important;
 }
 
@@ -953,13 +948,13 @@ html.nqs-theme-dark .nqs-faq-input::placeholder {
    leave mixed light/dark screens after the theme toggle changes. */
 :root,
 html.nqs-theme-light {
-  --nqs-bg: #f8fafc;
-  --nqs-card: #ffffff;
-  --nqs-card-soft: #eff6ff;
-  --nqs-text: #0f172a;
-  --nqs-muted: #475569;
-  --nqs-border: #dbeafe;
-  --nqs-input: #ffffff;
+  --nqs-bg: #dceeff;
+  --nqs-card: #f1f8ff;
+  --nqs-card-soft: #dff3f7;
+  --nqs-text: #0b1f3a;
+  --nqs-muted: #38546f;
+  --nqs-border: #b7d7f3;
+  --nqs-input: #edf7ff;
   --nqs-header: #0b3a75;
   --nqs-header-text: #ffffff;
   --nqs-primary: #2563eb;
@@ -1033,18 +1028,23 @@ main,
   background: var(--nqs-bg) !important;
 }
 
-/* Only the public navbar and footer keep the fixed navy government banner.
-   The dashboard sidebar (<nav>) and header (<header>) must follow the theme
-   toggle through their own Tailwind dark: classes, so they are NOT forced here. */
+nav,
+header,
+footer,
 .nqs-navbar,
-footer.nqs-footer {
+.nqs-header,
+.nqs-public-surface > nav,
+.nqs-dashboard-surface > nav {
   background-color: var(--nqs-header) !important;
   border-color: var(--nqs-border) !important;
   color: var(--nqs-header-text) !important;
 }
 
+nav *,
+header *,
+footer *,
 .nqs-navbar *,
-footer.nqs-footer * {
+.nqs-header * {
   color: var(--nqs-header-text) !important;
 }
 
@@ -1297,7 +1297,7 @@ html.nqs-theme-dark .nqs-dashboard-surface [class*="shadow"] {
 
 html.nqs-theme-light .nqs-public-surface [class*="shadow"],
 html.nqs-theme-light .nqs-dashboard-surface [class*="shadow"] {
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 12px 32px rgba(11, 58, 117, 0.12) !important;
 }
 
 html.nqs-theme-dark ::selection {
@@ -1307,30 +1307,42 @@ html.nqs-theme-dark ::selection {
 
 html.nqs-theme-light ::selection {
   background: #bfdbfe;
-  color: #0f172a;
+  color: #0b1f3a;
 }
 
 /* New National ID Registration form: official light government form skin. */
 .nqs-new-id-page,
-html.nqs-theme-dark .nqs-new-id-page,
 html.nqs-theme-light .nqs-new-id-page {
-  background: #f8fafc !important;
-  color: #0f172a !important;
+  background: #dceeff !important;
+  color: #0b1f3a !important;
+}
+
+html.nqs-theme-dark .nqs-new-id-page {
+  background: #071527 !important;
+  color: #ffffff !important;
 }
 
 .nqs-new-id-page .nqs-new-id-hero,
 .nqs-new-id-page .nqs-new-id-card,
 .nqs-new-id-page .nqs-new-id-receipt-row {
-  background: #ffffff !important;
-  border-color: #dbeafe !important;
-  color: #0f172a !important;
+  background: #f1f8ff !important;
+  border-color: #b7d7f3 !important;
+  color: #0b1f3a !important;
+}
+
+html.nqs-theme-dark .nqs-new-id-page .nqs-new-id-hero,
+html.nqs-theme-dark .nqs-new-id-page .nqs-new-id-card,
+html.nqs-theme-dark .nqs-new-id-page .nqs-new-id-receipt-row {
+  background: #0f2238 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
 }
 
 .nqs-new-id-page .nqs-new-id-receipt-row,
 .nqs-new-id-page [class~="bg-[#F8FAFC]"],
 .nqs-new-id-page [class~="bg-blue-50"],
 .nqs-new-id-page [class~="bg-emerald-50"] {
-  background: #f8fafc !important;
+  background: #dff3f7 !important;
 }
 
 .nqs-new-id-page h1,
@@ -1353,7 +1365,7 @@ html.nqs-theme-light .nqs-new-id-page {
 .nqs-new-id-page [class*="text-slate-950"],
 .nqs-new-id-page [class*="text-slate-900"],
 .nqs-new-id-page [class*="text-slate-800"] {
-  color: #0f172a !important;
+  color: #0b1f3a !important;
 }
 
 .nqs-new-id-page [class*="text-blue-700"] {
@@ -1367,9 +1379,17 @@ html.nqs-theme-light .nqs-new-id-page {
 .nqs-new-id-page input,
 .nqs-new-id-page select,
 .nqs-new-id-page textarea {
-  background: #ffffff !important;
-  border-color: #cbd5e1 !important;
-  color: #0f172a !important;
+  background: #edf7ff !important;
+  border-color: #b7d7f3 !important;
+  color: #0b1f3a !important;
+}
+
+html.nqs-theme-dark .nqs-new-id-page input,
+html.nqs-theme-dark .nqs-new-id-page select,
+html.nqs-theme-dark .nqs-new-id-page textarea {
+  background: #0b1d31 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
 }
 
 .nqs-new-id-page input:focus,
@@ -1402,122 +1422,1467 @@ html.nqs-theme-light .nqs-new-id-page {
   color: #ffffff !important;
 }
 
-/* ── Hero contract (must stay LAST) ──────────────────────────────────────
-   Navy hero sections (.nqs-portal-hero) own their colors in BOTH themes.
-   The theme guard layers above must never recolor them:
-   - all hero text is white
-   - glassy "bg-white/NN" chips stay translucent, never solid white
-   - .nqs-hero-card marks a white info panel inside a hero: dark text inside
-   - gradient headlines (bg-clip-text) stay transparent so the gradient shows
-   The html.nqs-theme-* prefixes match the guard's specificity so source
-   order (this block last) decides the winner. */
-html.nqs-theme-light .nqs-portal-hero h1,
-html.nqs-theme-light .nqs-portal-hero h2,
-html.nqs-theme-light .nqs-portal-hero h3,
-html.nqs-theme-light .nqs-portal-hero p,
-html.nqs-theme-light .nqs-portal-hero span,
-html.nqs-theme-light .nqs-portal-hero a,
-html.nqs-theme-light .nqs-portal-hero li,
-html.nqs-theme-dark .nqs-portal-hero h1,
-html.nqs-theme-dark .nqs-portal-hero h2,
-html.nqs-theme-dark .nqs-portal-hero h3,
-html.nqs-theme-dark .nqs-portal-hero p,
-html.nqs-theme-dark .nqs-portal-hero span,
-html.nqs-theme-dark .nqs-portal-hero a,
-html.nqs-theme-dark .nqs-portal-hero li,
-.nqs-portal-hero h1,
-.nqs-portal-hero h2,
-.nqs-portal-hero h3,
-.nqs-portal-hero p,
-.nqs-portal-hero span,
-.nqs-portal-hero a,
-.nqs-portal-hero li {
+html.nqs-theme-dark .nqs-new-id-page h1,
+html.nqs-theme-dark .nqs-new-id-page h2,
+html.nqs-theme-dark .nqs-new-id-page h3,
+html.nqs-theme-dark .nqs-new-id-page h4,
+html.nqs-theme-dark .nqs-new-id-page p,
+html.nqs-theme-dark .nqs-new-id-page label,
+html.nqs-theme-dark .nqs-new-id-page span,
+html.nqs-theme-dark .nqs-new-id-page li {
   color: #ffffff !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero [class*="text-emerald-300"],
-html.nqs-theme-dark .nqs-portal-hero [class*="text-emerald-300"],
-.nqs-portal-hero [class*="text-emerald-300"] {
-  color: #6ee7b7 !important;
+html.nqs-theme-dark .nqs-new-id-page [class*="text-slate-600"],
+html.nqs-theme-dark .nqs-new-id-page [class*="text-slate-700"] {
+  color: #cbd5e1 !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero [class*="bg-white/"],
-html.nqs-theme-dark .nqs-portal-hero [class*="bg-white/"],
-.nqs-portal-hero [class*="bg-white/"] {
-  background-color: rgb(255 255 255 / 0.12) !important;
+/* Citizen portal light mode: avoid plain hospital-white surfaces. */
+html.nqs-theme-light .nqs-citizen-layout,
+html.nqs-theme-light .nqs-citizen-layout main,
+html.nqs-theme-light .nqs-citizen-portal,
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-[#f5f8fc]"] {
+  background: #dceeff !important;
+  color: #0b1f3a !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero [class*="bg-clip-text"],
-html.nqs-theme-dark .nqs-portal-hero [class*="bg-clip-text"],
-.nqs-portal-hero [class*="bg-clip-text"] {
-  color: transparent !important;
-  -webkit-text-fill-color: transparent;
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-white"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-slate-50"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-blue-50"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-gray-50"],
+html.nqs-theme-light .nqs-citizen-portal [role="dialog"],
+html.nqs-theme-light .nqs-citizen-portal table,
+html.nqs-theme-light .nqs-citizen-portal tbody,
+html.nqs-theme-light .nqs-citizen-portal tr {
+  background-color: #f1f8ff !important;
+  border-color: #b7d7f3 !important;
 }
 
-/* White info panel inside a hero: solid white with dark, readable text. */
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card,
-.nqs-portal-hero .nqs-hero-card {
-  background-color: #ffffff !important;
-  border-color: #dbe7f3 !important;
+html.nqs-theme-light .nqs-citizen-portal thead,
+html.nqs-theme-light .nqs-citizen-portal thead tr,
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-blue-50/60"] {
+  background-color: #dff3f7 !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h1,
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h2,
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card h3,
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card p,
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card span,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h1,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h2,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card h3,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card p,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card span,
-.nqs-portal-hero .nqs-hero-card h1,
-.nqs-portal-hero .nqs-hero-card h2,
-.nqs-portal-hero .nqs-hero-card h3,
-.nqs-portal-hero .nqs-hero-card p,
-.nqs-portal-hero .nqs-hero-card span {
-  color: #0f172a !important;
+html.nqs-theme-light .nqs-citizen-portal h1,
+html.nqs-theme-light .nqs-citizen-portal h2,
+html.nqs-theme-light .nqs-citizen-portal h3,
+html.nqs-theme-light .nqs-citizen-portal h4,
+html.nqs-theme-light .nqs-citizen-portal p,
+html.nqs-theme-light .nqs-citizen-portal label,
+html.nqs-theme-light .nqs-citizen-portal span,
+html.nqs-theme-light .nqs-citizen-portal td,
+html.nqs-theme-light .nqs-citizen-portal th {
+  color: #0b1f3a !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
-.nqs-portal-hero .nqs-hero-card [class*="text-slate-500"] {
-  color: #64748b !important;
+html.nqs-theme-light .nqs-citizen-portal [class*="text-slate-600"],
+html.nqs-theme-light .nqs-citizen-portal [class*="text-slate-500"],
+html.nqs-theme-light .nqs-citizen-portal [class*="text-gray-600"],
+html.nqs-theme-light .nqs-citizen-portal [class*="text-gray-500"] {
+  color: #38546f !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"],
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"],
-.nqs-portal-hero .nqs-hero-card [class*="bg-slate-50"] {
-  background-color: #f8fafc !important;
+html.nqs-theme-light aside {
+  background-color: #e8f5ff !important;
+  border-color: #b7d7f3 !important;
 }
 
-/* Hero contract extension: an element carrying .nqs-hero-card (including a
-   white CTA link) and everything inside it uses dark text — this must come
-   after the hero white-text rules so it wins on source order. */
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card,
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card *,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card,
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card *,
-.nqs-portal-hero .nqs-hero-card,
-.nqs-portal-hero .nqs-hero-card * {
-  color: #0f172a !important;
+html.nqs-theme-light aside [class*="bg-white"],
+html.nqs-theme-light aside [class*="bg-blue-50"] {
+  background-color: #f1f8ff !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-slate-500"],
-.nqs-portal-hero .nqs-hero-card [class*="text-slate-500"] {
-  color: #64748b !important;
+/* --------------------------------------------------------------------------
+   NQS unified theme readability pass
+   Keep this block last. It gives the whole web system one clear Light/Dark
+   contract and fixes invisible text caused by mixed hard-coded Tailwind colors.
+-------------------------------------------------------------------------- */
+html.nqs-theme-light {
+  --nqs-bg: #dceeff;
+  --nqs-card: #f1f8ff;
+  --nqs-card-strong: #ffffff;
+  --nqs-card-soft: #dff3f7;
+  --nqs-text: #0b1f3a;
+  --nqs-heading: #06194a;
+  --nqs-muted: #38546f;
+  --nqs-border: #b7d7f3;
+  --nqs-input: #f8fbff;
+  --nqs-navbar-bg: #0b3a75;
+  --nqs-sidebar-bg: #0b3a75;
+  --nqs-primary: #2563eb;
+  --nqs-primary-hover: #1d4ed8;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-blue-7"],
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-blue-7"],
-.nqs-portal-hero .nqs-hero-card [class*="text-blue-7"] {
+html.nqs-theme-dark {
+  --nqs-bg: #020617;
+  --nqs-card: #071527;
+  --nqs-card-strong: #0f2238;
+  --nqs-card-soft: #0b1d31;
+  --nqs-text: #f8fafc;
+  --nqs-heading: #ffffff;
+  --nqs-muted: #cbd5e1;
+  --nqs-border: #1e3a5f;
+  --nqs-input: #0b1d31;
+  --nqs-navbar-bg: #061225;
+  --nqs-sidebar-bg: #061225;
+  --nqs-primary: #4189dd;
+  --nqs-primary-hover: #60a5fa;
+}
+
+html.nqs-theme-light,
+html.nqs-theme-light body,
+html.nqs-theme-light #root,
+html.nqs-theme-dark,
+html.nqs-theme-dark body,
+html.nqs-theme-dark #root {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface,
+html.nqs-theme-light .nqs-dashboard-surface,
+html.nqs-theme-light .nqs-citizen-layout,
+html.nqs-theme-light .nqs-citizen-layout main,
+html.nqs-theme-light .nqs-citizen-portal,
+html.nqs-theme-light .nqs-new-id-page,
+html.nqs-theme-light .nqs-faq-page,
+html.nqs-theme-light .nqs-about-page,
+html.nqs-theme-light .nqs-public-surface .nqs-auth-page,
+html.nqs-theme-dark .nqs-public-surface,
+html.nqs-theme-dark .nqs-dashboard-surface,
+html.nqs-theme-dark .nqs-citizen-layout,
+html.nqs-theme-dark .nqs-citizen-layout main,
+html.nqs-theme-dark .nqs-citizen-portal,
+html.nqs-theme-dark .nqs-new-id-page,
+html.nqs-theme-dark .nqs-faq-page,
+html.nqs-theme-dark .nqs-about-page,
+html.nqs-theme-dark .nqs-public-surface .nqs-auth-page {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="bg-white"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-slate-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-slate-100"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-gray-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-gray-100"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-blue-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-emerald-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-green-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-orange-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-violet-50"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#F5"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#f5"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#F8"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#f8"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#071"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-[#061"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-slate-900"],
+html.nqs-theme-light .nqs-public-surface [class*="bg-slate-950"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-white"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-100"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-gray-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-gray-100"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-blue-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-emerald-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-green-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-orange-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-violet-50"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F5"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f5"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#F8"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#f8"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#071"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-[#061"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-900"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="bg-slate-950"] {
+  background-color: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="bg-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-slate-100"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-gray-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-gray-100"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-green-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-violet-50"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F5"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#f5"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#F8"],
+html.nqs-theme-dark .nqs-public-surface [class*="bg-[#f8"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-slate-100"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-gray-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-gray-100"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-emerald-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-green-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-orange-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-violet-50"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F5"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f5"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#F8"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="bg-[#f8"] {
+  background-color: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface h1,
+html.nqs-theme-light .nqs-public-surface h2,
+html.nqs-theme-light .nqs-public-surface h3,
+html.nqs-theme-light .nqs-public-surface h4,
+html.nqs-theme-light .nqs-public-surface h5,
+html.nqs-theme-light .nqs-public-surface h6,
+html.nqs-theme-light .nqs-dashboard-surface h1,
+html.nqs-theme-light .nqs-dashboard-surface h2,
+html.nqs-theme-light .nqs-dashboard-surface h3,
+html.nqs-theme-light .nqs-dashboard-surface h4,
+html.nqs-theme-light .nqs-dashboard-surface h5,
+html.nqs-theme-light .nqs-dashboard-surface h6,
+html.nqs-theme-dark .nqs-public-surface h1,
+html.nqs-theme-dark .nqs-public-surface h2,
+html.nqs-theme-dark .nqs-public-surface h3,
+html.nqs-theme-dark .nqs-public-surface h4,
+html.nqs-theme-dark .nqs-public-surface h5,
+html.nqs-theme-dark .nqs-public-surface h6,
+html.nqs-theme-dark .nqs-dashboard-surface h1,
+html.nqs-theme-dark .nqs-dashboard-surface h2,
+html.nqs-theme-dark .nqs-dashboard-surface h3,
+html.nqs-theme-dark .nqs-dashboard-surface h4,
+html.nqs-theme-dark .nqs-dashboard-surface h5,
+html.nqs-theme-dark .nqs-dashboard-surface h6 {
+  color: var(--nqs-heading) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-public-surface p,
+html.nqs-theme-light .nqs-public-surface label,
+html.nqs-theme-light .nqs-public-surface li,
+html.nqs-theme-light .nqs-public-surface td,
+html.nqs-theme-light .nqs-public-surface th,
+html.nqs-theme-light .nqs-public-surface span,
+html.nqs-theme-light .nqs-dashboard-surface p,
+html.nqs-theme-light .nqs-dashboard-surface label,
+html.nqs-theme-light .nqs-dashboard-surface li,
+html.nqs-theme-light .nqs-dashboard-surface td,
+html.nqs-theme-light .nqs-dashboard-surface th,
+html.nqs-theme-light .nqs-dashboard-surface span,
+html.nqs-theme-dark .nqs-public-surface p,
+html.nqs-theme-dark .nqs-public-surface label,
+html.nqs-theme-dark .nqs-public-surface li,
+html.nqs-theme-dark .nqs-public-surface td,
+html.nqs-theme-dark .nqs-public-surface th,
+html.nqs-theme-dark .nqs-public-surface span,
+html.nqs-theme-dark .nqs-dashboard-surface p,
+html.nqs-theme-dark .nqs-dashboard-surface label,
+html.nqs-theme-dark .nqs-dashboard-surface li,
+html.nqs-theme-dark .nqs-dashboard-surface td,
+html.nqs-theme-dark .nqs-dashboard-surface th,
+html.nqs-theme-dark .nqs-dashboard-surface span {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-slate-"],
+html.nqs-theme-light .nqs-public-surface [class*="text-gray-"],
+html.nqs-theme-light .nqs-public-surface [class*="text-black"],
+html.nqs-theme-light .nqs-public-surface [class*="text-white"],
+html.nqs-theme-light .nqs-public-surface [class*="text-[#"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-slate-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-gray-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-black"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-white"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-[#"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-slate-"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-gray-"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-black"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-white"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-[#"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-slate-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-gray-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-black"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-white"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-[#"] {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-blue-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-blue-"] {
   color: #1d4ed8 !important;
 }
 
-html.nqs-theme-light .nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"],
-html.nqs-theme-dark .nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"],
-.nqs-portal-hero .nqs-hero-card [class*="text-emerald-7"] {
+html.nqs-theme-dark .nqs-public-surface [class*="text-blue-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-blue-"] {
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-green-"],
+html.nqs-theme-light .nqs-public-surface [class*="text-emerald-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-green-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-emerald-"] {
   color: #047857 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-green-"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-emerald-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-green-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-emerald-"] {
+  color: #86efac !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-red-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-red-"] {
+  color: #dc2626 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-red-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-red-"] {
+  color: #fca5a5 !important;
+}
+
+html.nqs-theme-light .nqs-public-surface [class*="text-amber-"],
+html.nqs-theme-light .nqs-public-surface [class*="text-orange-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-amber-"],
+html.nqs-theme-light .nqs-dashboard-surface [class*="text-orange-"] {
+  color: #b45309 !important;
+}
+
+html.nqs-theme-dark .nqs-public-surface [class*="text-amber-"],
+html.nqs-theme-dark .nqs-public-surface [class*="text-orange-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-amber-"],
+html.nqs-theme-dark .nqs-dashboard-surface [class*="text-orange-"] {
+  color: #fcd34d !important;
+}
+
+html.nqs-theme-light input,
+html.nqs-theme-light select,
+html.nqs-theme-light textarea,
+html.nqs-theme-dark input,
+html.nqs-theme-dark select,
+html.nqs-theme-dark textarea {
+  background-color: var(--nqs-input) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light input::placeholder,
+html.nqs-theme-light textarea::placeholder,
+html.nqs-theme-dark input::placeholder,
+html.nqs-theme-dark textarea::placeholder {
+  color: var(--nqs-muted) !important;
+  opacity: 0.85 !important;
+}
+
+html.nqs-theme-light table,
+html.nqs-theme-light tbody,
+html.nqs-theme-light tbody tr,
+html.nqs-theme-dark table,
+html.nqs-theme-dark tbody,
+html.nqs-theme-dark tbody tr {
+  background-color: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light thead,
+html.nqs-theme-light thead tr,
+html.nqs-theme-dark thead,
+html.nqs-theme-dark thead tr {
+  background-color: var(--nqs-card-soft) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-public-surface button[class*="bg-blue"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-blue"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-green"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-green"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-emerald"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-emerald"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-red"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-red"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-[#2563EB]"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-[#2563EB]"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-[#4189DD]"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-[#4189DD]"],
+html.nqs-theme-light .nqs-public-surface button[class*="bg-[#0B3A75]"],
+html.nqs-theme-light .nqs-public-surface a[class*="bg-[#0B3A75]"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-blue"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-blue"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-green"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-green"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-emerald"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-emerald"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-red"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-red"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-[#2563EB]"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-[#2563EB]"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-[#4189DD]"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-[#4189DD]"],
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-[#0B3A75]"],
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-[#0B3A75]"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-blue"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-blue"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-green"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-green"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-red"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-red"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-[#2563EB]"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-[#2563EB]"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-[#4189DD]"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-[#4189DD]"],
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-[#0B3A75]"],
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-[#0B3A75]"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-blue"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-blue"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-green"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-green"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-emerald"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-red"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-red"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-[#2563EB]"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-[#2563EB]"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-[#4189DD]"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-[#4189DD]"],
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-[#0B3A75]"],
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-[#0B3A75]"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-public-surface button[class*="bg-blue"] *,
+html.nqs-theme-light .nqs-public-surface a[class*="bg-blue"] *,
+html.nqs-theme-light .nqs-dashboard-surface button[class*="bg-blue"] *,
+html.nqs-theme-light .nqs-dashboard-surface a[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-public-surface button[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-public-surface a[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-dashboard-surface button[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-dashboard-surface a[class*="bg-blue"] * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-public-navbar,
+html.nqs-theme-dark .nqs-public-navbar,
+html.nqs-theme-light .nqs-dashboard-header,
+html.nqs-theme-dark .nqs-dashboard-header,
+html.nqs-theme-light .nqs-public-footer,
+html.nqs-theme-dark .nqs-public-footer {
+  background-color: var(--nqs-navbar-bg) !important;
+  border-color: #1e5aa0 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-public-navbar *,
+html.nqs-theme-dark .nqs-public-navbar *,
+html.nqs-theme-light .nqs-dashboard-header > :not(.nqs-profile-dropdown) *,
+html.nqs-theme-dark .nqs-dashboard-header > :not(.nqs-profile-dropdown) *,
+html.nqs-theme-light .nqs-public-footer *,
+html.nqs-theme-dark .nqs-public-footer * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar,
+html.nqs-theme-dark .nqs-dashboard-sidebar {
+  background: linear-gradient(180deg, var(--nqs-sidebar-bg), #06284f) !important;
+  border-color: #1e5aa0 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar *,
+html.nqs-theme-dark .nqs-dashboard-sidebar * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar a[class*="bg-blue-50"],
+html.nqs-theme-light .nqs-dashboard-sidebar a[class*="bg-white"],
+html.nqs-theme-dark .nqs-dashboard-sidebar a[class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-dashboard-sidebar a[class*="bg-white"] {
+  background-color: rgba(37, 99, 235, 0.55) !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown,
+html.nqs-theme-dark .nqs-profile-dropdown {
+  background-color: var(--nqs-card-strong) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown *,
+html.nqs-theme-dark .nqs-profile-dropdown * {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-light .nqs-profile-dropdown button[class*="text-red"] *,
+html.nqs-theme-dark .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-dark .nqs-profile-dropdown button[class*="text-red"] * {
+  color: #ef4444 !important;
+}
+
+html.nqs-theme-light .nqs-portal-hero,
+html.nqs-theme-dark .nqs-portal-hero,
+html.nqs-theme-light .nqs-portal-hero *,
+html.nqs-theme-dark .nqs-portal-hero * {
+  color: #ffffff !important;
+}
+
+/* Final NQS theme correction: keep every page readable in both modes. */
+html.nqs-theme-light {
+  --nqs-bg: #dbeafe;
+  --nqs-bg-soft: #eaf4ff;
+  --nqs-card: #eff7ff;
+  --nqs-card-soft: #e5f1ff;
+  --nqs-card-strong: #f8fbff;
+  --nqs-input: #ffffff;
+  --nqs-text: #06194a;
+  --nqs-muted: #334e68;
+  --nqs-border: #a9d1f5;
+  --nqs-navbar-bg: #0b3a75;
+  --nqs-sidebar-bg: #0b3a75;
+}
+
+html.nqs-theme-dark {
+  --nqs-bg: #020617;
+  --nqs-bg-soft: #071527;
+  --nqs-card: #071527;
+  --nqs-card-soft: #0b1d31;
+  --nqs-card-strong: #0f2238;
+  --nqs-input: #071527;
+  --nqs-text: #f8fafc;
+  --nqs-muted: #cbd5e1;
+  --nqs-border: #1e3a5f;
+  --nqs-navbar-bg: #0b3a75;
+  --nqs-sidebar-bg: #06284f;
+}
+
+html.nqs-theme-light body,
+html.nqs-theme-dark body,
+html.nqs-theme-light .nqs-public-surface,
+html.nqs-theme-dark .nqs-public-surface,
+html.nqs-theme-light .nqs-dashboard-surface,
+html.nqs-theme-dark .nqs-dashboard-surface,
+html.nqs-theme-light .nqs-citizen-portal,
+html.nqs-theme-dark .nqs-citizen-portal {
+  background-color: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-public-navbar,
+html.nqs-theme-dark .nqs-public-navbar,
+html.nqs-theme-light .nqs-dashboard-header,
+html.nqs-theme-dark .nqs-dashboard-header {
+  background: #0b3a75 !important;
+  border-color: #1e5aa0 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-public-navbar *,
+html.nqs-theme-dark .nqs-public-navbar *,
+html.nqs-theme-light .nqs-dashboard-header > :not(.nqs-profile-dropdown) *,
+html.nqs-theme-dark .nqs-dashboard-header > :not(.nqs-profile-dropdown) * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile),
+html.nqs-theme-dark .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile):hover,
+html.nqs-theme-dark .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile):hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) *,
+html.nqs-theme-dark .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar,
+html.nqs-theme-dark .nqs-dashboard-sidebar {
+  background: linear-gradient(180deg, #0b3a75 0%, #06284f 100%) !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar :is(h1, h2, h3, p, span, a, button, div),
+html.nqs-theme-dark .nqs-dashboard-sidebar :is(h1, h2, h3, p, span, a, button, div) {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar svg,
+html.nqs-theme-dark .nqs-dashboard-sidebar svg {
+  color: #ffffff !important;
+  stroke: currentColor !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-sidebar a[aria-current="page"],
+html.nqs-theme-dark .nqs-dashboard-sidebar a[aria-current="page"] {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown,
+html.nqs-theme-dark .nqs-profile-dropdown {
+  background-color: var(--nqs-card-strong) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown :is(p, span, a, button, svg),
+html.nqs-theme-dark .nqs-profile-dropdown :is(p, span, a, button, svg) {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-light .nqs-profile-dropdown button[class*="text-red"] *,
+html.nqs-theme-dark .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-dark .nqs-profile-dropdown button[class*="text-red"] * {
+  color: #ef4444 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-white"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-slate-50"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-blue-50"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-[#eef5ff]"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-[#f1f8ff]"],
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-[#f8fbff]"] {
+  background-color: var(--nqs-card-strong) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-white"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-slate-50"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-blue-50"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-[#eef5ff]"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-[#f1f8ff]"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-[#f8fbff]"] {
+  background-color: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal :is(h1, h2, h3, h4, p, label, td, th),
+html.nqs-theme-dark .nqs-citizen-portal :is(h1, h2, h3, h4, p, label, td, th) {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="text-slate-"],
+html.nqs-theme-light .nqs-citizen-portal [class*="text-gray-"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-slate-"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-gray-"] {
+  color: var(--nqs-muted) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="text-[#06194A]"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-[#06194A]"] {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal button[class*="bg-blue"],
+html.nqs-theme-light .nqs-citizen-portal a[class*="bg-blue"],
+html.nqs-theme-dark .nqs-citizen-portal button[class*="bg-blue"],
+html.nqs-theme-dark .nqs-citizen-portal a[class*="bg-blue"] {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal button[class*="bg-blue"] *,
+html.nqs-theme-light .nqs-citizen-portal a[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-citizen-portal button[class*="bg-blue"] *,
+html.nqs-theme-dark .nqs-citizen-portal a[class*="bg-blue"] * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-emerald"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-emerald"] {
+  background-color: #d1fae5 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="text-emerald"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-emerald"] {
+  color: #047857 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-amber"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-amber"] {
+  background-color: #fef3c7 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="text-amber"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-amber"] {
+  color: #b45309 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="bg-red"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="bg-red"] {
+  background-color: #fee2e2 !important;
+}
+
+html.nqs-theme-light .nqs-citizen-portal [class*="text-red"],
+html.nqs-theme-dark .nqs-citizen-portal [class*="text-red"] {
+  color: #dc2626 !important;
+}
+
+/* Header controls must stay readable above every dashboard theme. */
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-action,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-icon,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-profile,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-action,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-icon,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-profile {
+  background: rgba(6, 34, 79, 0.62) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-action:hover,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-icon:hover,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-profile:hover,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-action:hover,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-icon:hover,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-profile:hover {
+  background: rgba(37, 99, 235, 0.72) !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-action *,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-icon *,
+html.nqs-theme-light .nqs-dashboard-header .nqs-header-profile *,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-action *,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-icon *,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-header-profile * {
+  color: #ffffff !important;
+}
+
+/* Profile menu is a dropdown card, so it must not inherit white header text. */
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown {
+  background: #f8fbff !important;
+  border-color: #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown :is(p, span, a, button, svg, div),
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown :is(p, span, a, button, svg, div) *,
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown [class*="text-slate"],
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown [class*="text-gray"] {
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown :is(p, span, a, button, svg, div),
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown :is(p, span, a, button, svg, div) *,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown [class*="text-slate"],
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown [class*="text-gray"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown a:hover,
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown button:hover {
+  background-color: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown a:hover,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-light .nqs-dashboard-header .nqs-profile-dropdown button[class*="text-red"] *,
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown button[class*="text-red"],
+html.nqs-theme-dark .nqs-dashboard-header .nqs-profile-dropdown button[class*="text-red"] * {
+  color: #dc2626 !important;
+}
+
+/* Citizen My Requests page: fix pale table/buttons caused by broad theme rules. */
+html.nqs-theme-light .nqs-user-appointments {
+  background: #dbeafe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-user-appointments {
+  background: #020617 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments section,
+html.nqs-theme-light .nqs-user-appointments article,
+html.nqs-theme-light .nqs-user-appointments table,
+html.nqs-theme-light .nqs-user-appointments tbody,
+html.nqs-theme-light .nqs-user-appointments tr {
+  background-color: #f8fbff !important;
+  border-color: #93c5fd !important;
+}
+
+html.nqs-theme-dark .nqs-user-appointments section,
+html.nqs-theme-dark .nqs-user-appointments article,
+html.nqs-theme-dark .nqs-user-appointments table,
+html.nqs-theme-dark .nqs-user-appointments tbody,
+html.nqs-theme-dark .nqs-user-appointments tr {
+  background-color: #071527 !important;
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments thead,
+html.nqs-theme-light .nqs-user-appointments thead tr {
+  background-color: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-user-appointments thead,
+html.nqs-theme-dark .nqs-user-appointments thead tr {
+  background-color: #0f2238 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments :is(h1, h2, h3, h4, p, span, label, td, th),
+html.nqs-theme-light .nqs-user-appointments [class*="text-slate"],
+html.nqs-theme-light .nqs-user-appointments [class*="text-[#06194A]"],
+html.nqs-theme-light .nqs-user-appointments [class*="text-[#0B3A75]"] {
+  color: #06194a !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark .nqs-user-appointments :is(h1, h2, h3, h4, p, span, label, td, th),
+html.nqs-theme-dark .nqs-user-appointments [class*="text-slate"],
+html.nqs-theme-dark .nqs-user-appointments [class*="text-[#06194A]"],
+html.nqs-theme-dark .nqs-user-appointments [class*="text-[#0B3A75]"] {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments [class*="text-blue"],
+html.nqs-theme-dark .nqs-user-appointments [class*="text-blue"] {
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-outline-action,
+html.nqs-theme-dark .nqs-user-appointments .nqs-outline-action {
+  background: #f8fbff !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-outline-action *,
+html.nqs-theme-dark .nqs-user-appointments .nqs-outline-action * {
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-outline-action:hover,
+html.nqs-theme-dark .nqs-user-appointments .nqs-outline-action:hover {
+  background: #dbeafe !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-danger-outline,
+html.nqs-theme-dark .nqs-user-appointments .nqs-danger-outline {
+  background: #fff1f2 !important;
+  border-color: #fecaca !important;
+  color: #dc2626 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-danger-outline *,
+html.nqs-theme-dark .nqs-user-appointments .nqs-danger-outline * {
+  color: #dc2626 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-success-action,
+html.nqs-theme-dark .nqs-user-appointments .nqs-success-action {
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments .nqs-success-action *,
+html.nqs-theme-dark .nqs-user-appointments .nqs-success-action * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments [class*="bg-emerald"],
+html.nqs-theme-dark .nqs-user-appointments [class*="bg-emerald"] {
+  background-color: #d1fae5 !important;
+}
+
+html.nqs-theme-light .nqs-user-appointments [class*="text-emerald"],
+html.nqs-theme-dark .nqs-user-appointments [class*="text-emerald"] {
+  color: #047857 !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action,
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action {
+  background-color: #dbeafe !important;
+  border-color: #2563eb !important;
+  color: #1d4ed8 !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12) !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action *,
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action *,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action *,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action * {
+  color: #1d4ed8 !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action:hover,
+html.nqs-theme-light .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action:hover,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments button.nqs-outline-action:hover,
+html.nqs-theme-dark .nqs-dashboard-surface .nqs-citizen-portal .nqs-user-appointments a.nqs-outline-action:hover {
+  background-color: #bfdbfe !important;
+  border-color: #1d4ed8 !important;
+}
+
+/* Track Queue page: compact official layout with readable light/dark colors. */
+html.nqs-theme-light .nqs-track-queue {
+  background: #eaf4ff !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue {
+  background: #020b18 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-hero,
+html.nqs-theme-light .nqs-track-queue .track-card,
+html.nqs-theme-light .nqs-track-queue .track-side-card {
+  background: #f8fbff !important;
+  border-color: #bfdbfe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-hero,
+html.nqs-theme-dark .nqs-track-queue .track-card,
+html.nqs-theme-dark .nqs-track-queue .track-side-card {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-hero-copy {
+  background: #f8fbff !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-hero-copy {
+  background: #071527 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-badge {
+  background: #eff6ff !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-badge {
+  background: rgba(37, 99, 235, 0.14) !important;
+  border-color: #1e3a5f !important;
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-light .nqs-track-queue :is(h1, h2, h3, p, span, label, li, div),
+html.nqs-theme-light .nqs-track-queue [class*="text-slate"] {
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue :is(h1, h2, h3, p, span, label, li, div),
+html.nqs-theme-dark .nqs-track-queue [class*="text-slate"] {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-feature p:last-child {
+  color: #475569 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-feature p:last-child {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-hero-visual {
+  background: #0b3a75 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-hero-visual {
+  background: #020617 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-image-overlay {
+  background: linear-gradient(90deg, rgba(7, 21, 39, 0.86), rgba(7, 21, 39, 0.48), rgba(37, 99, 235, 0.08)) !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-image-overlay {
+  background: linear-gradient(90deg, rgba(2, 6, 23, 0.92), rgba(2, 6, 23, 0.58), rgba(15, 34, 56, 0.3)) !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-search-card,
+html.nqs-theme-dark .nqs-track-queue .track-search-card {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid #bfdbfe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-search-card :is(label, p, div, span),
+html.nqs-theme-dark .nqs-track-queue .track-search-card :is(label, p, div, span) {
+  color: #06194a !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-input-wrap,
+html.nqs-theme-dark .nqs-track-queue .track-input-wrap {
+  background: #ffffff !important;
+  border-color: #bfdbfe !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-input-wrap input,
+html.nqs-theme-dark .nqs-track-queue .track-input-wrap input {
+  color: #06194a !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-input-wrap input::placeholder,
+html.nqs-theme-dark .nqs-track-queue .track-input-wrap input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-submit,
+html.nqs-theme-dark .nqs-track-queue .track-submit {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-submit *,
+html.nqs-theme-dark .nqs-track-queue .track-submit * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-inner-card {
+  background: #ffffff !important;
+  border-color: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-inner-card {
+  background: #0f2238 !important;
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-stat-card {
+  min-height: 148px !important;
+  overflow: visible !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-stat-card {
+  min-height: 148px !important;
+  overflow: visible !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-stat-label,
+html.nqs-theme-light .nqs-track-queue .track-stat-helper {
+  color: #334155 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-stat-label,
+html.nqs-theme-dark .nqs-track-queue .track-stat-helper {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-stat-value,
+html.nqs-theme-dark .nqs-track-queue .track-stat-value {
+  color: #1d4ed8 !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-card :is(h2, p, span, li),
+html.nqs-theme-light .nqs-track-queue .track-side-card :is(h2, p, span, li) {
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-card :is(h2, p, span, li),
+html.nqs-theme-dark .nqs-track-queue .track-side-card :is(h2, p, span, li) {
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-icon {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-icon {
+  background: rgba(37, 99, 235, 0.22) !important;
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-light-button,
+html.nqs-theme-dark .nqs-track-queue .track-light-button {
+  background: #eff6ff !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-light-button *,
+html.nqs-theme-dark .nqs-track-queue .track-light-button * {
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-bar {
+  background: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-bar {
+  background: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step {
+  background: #ffffff !important;
+  border-color: #bfdbfe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-step {
+  background: #0f2238 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step.is-done {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-step.is-done {
+  background: rgba(5, 150, 105, 0.18) !important;
+  border-color: #059669 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step.is-active {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14) !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-step.is-active {
+  background: rgba(37, 99, 235, 0.22) !important;
+  border-color: #60a5fa !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-dot {
+  background: #f8fbff !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-dot {
+  background: #071527 !important;
+  border-color: #60a5fa !important;
+  color: #93c5fd !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step.is-done .track-progress-dot,
+html.nqs-theme-dark .nqs-track-queue .track-progress-step.is-done .track-progress-dot {
+  background: #059669 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step.is-active .track-progress-dot,
+html.nqs-theme-dark .nqs-track-queue .track-progress-step.is-active .track-progress-dot {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-title {
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-title {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-detail {
+  color: #334155 !important;
+}
+
+html.nqs-theme-dark .nqs-track-queue .track-progress-detail {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-light .nqs-track-queue .track-progress-step.is-active .track-progress-title,
+html.nqs-theme-dark .nqs-track-queue .track-progress-step.is-active .track-progress-title {
+  color: #1d4ed8 !important;
+}
+
+/* Admin Active Sessions: keep table readable in both themes. */
+html.nqs-theme-light .nqs-active-sessions {
+  background: #dbeafe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions {
+  background: #020617 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-card {
+  background: #f8fbff !important;
+  border-color: #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-card {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions :is(h1, p, span, td, th, div),
+html.nqs-theme-light .nqs-active-sessions [class*="text-slate"] {
+  color: #06194a !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions :is(h1, p, span, td, th, div),
+html.nqs-theme-dark .nqs-active-sessions [class*="text-slate"] {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-thead {
+  background: #dbeafe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-thead {
+  background: #0f2238 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-tbody {
+  border-color: #bfdbfe !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-tbody {
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-row {
+  background: #ffffff !important;
+  border-color: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-row {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-row:hover {
+  background: #eff6ff !important;
+}
+
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-row:hover {
+  background: #0f2238 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-active-username,
+html.nqs-theme-dark .nqs-active-sessions .nqs-active-username {
+  color: #1d4ed8 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-session-badge.is-active,
+html.nqs-theme-dark .nqs-active-sessions .nqs-session-badge.is-active {
+  background: #dcfce7 !important;
+  color: #047857 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-session-badge.is-inactive,
+html.nqs-theme-dark .nqs-active-sessions .nqs-session-badge.is-inactive {
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-invalidate-btn,
+html.nqs-theme-dark .nqs-active-sessions .nqs-invalidate-btn {
+  background: #ffffff !important;
+  border-color: #93c5fd !important;
+  color: #ef4444 !important;
+}
+
+html.nqs-theme-light .nqs-active-sessions .nqs-invalidate-btn *,
+html.nqs-theme-dark .nqs-active-sessions .nqs-invalidate-btn * {
+  color: #ef4444 !important;
+}
+
+/* Admin Appointments: readable district center cards and filters in light/dark. */
+html.nqs-theme-light .nqs-admin-appointments {
+  background: #dbeafe !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments {
+  background: #020617 !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-appointments-card {
+  background: #f8fbff !important;
+  border-color: #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-appointments-card {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments :is(h1, h2, h3, p, span, label, td, th, div),
+html.nqs-theme-light .nqs-admin-appointments [class*="text-slate"] {
+  color: #06194a !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments :is(h1, h2, h3, p, span, label, td, th, div),
+html.nqs-theme-dark .nqs-admin-appointments [class*="text-slate"] {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments input,
+html.nqs-theme-light .nqs-admin-appointments select {
+  background: #ffffff !important;
+  border-color: #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments input,
+html.nqs-theme-dark .nqs-admin-appointments select {
+  background: #020617 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments input::placeholder {
+  color: #cbd5e1 !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-request-tabs {
+  background: #eaf4ff !important;
+  border-color: #93c5fd !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-request-tabs {
+  background: #020617 !important;
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-request-tab {
+  background: #ffffff !important;
+  border: 1px solid #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-request-tab {
+  background: #071527 !important;
+  border: 1px solid #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-request-tab.is-active,
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-request-tab.is-active {
+  background: #4189dd !important;
+  border-color: #4189dd !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-request-tab.is-active *,
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-request-tab.is-active * {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-muted {
+  color: #334155 !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-muted {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-card {
+  background: #ffffff !important;
+  border-color: #93c5fd !important;
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-card {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-card:hover {
+  background: #eff6ff !important;
+  border-color: #2563eb !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-card:hover {
+  background: #0f2238 !important;
+  border-color: #60a5fa !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-district,
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-district,
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-count,
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-count {
+  color: #2563eb !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-count,
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-count {
+  background: #dbeafe !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-name {
+  color: #06194a !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-name {
+  color: #ffffff !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-center-helper {
+  color: #475569 !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-center-helper {
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-light .nqs-admin-appointments .nqs-admin-appointment-row {
+  background: #ffffff !important;
+  border-color: #dbeafe !important;
+}
+
+html.nqs-theme-dark .nqs-admin-appointments .nqs-admin-appointment-row {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
 }

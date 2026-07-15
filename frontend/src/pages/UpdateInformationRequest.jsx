@@ -14,6 +14,53 @@ import {
   updateFieldOptions
 } from './appointments/appointmentShared';
 
+const getOriginalRegistration = (bookings = []) => (
+  bookings.find((ticket) => ticket.requestType === 'new_national_id') || null
+);
+
+const nationalIdFromRegistration = (ticket, user) => (
+  user?.nationalId ||
+  ticket?.citizen?.nationalId ||
+  ticket?.registrationDetails?.nationalIdNumber ||
+  ticket?.nationalIdNumber ||
+  ''
+);
+
+const currentValueFromRegistration = (ticket, field, user) => {
+  const details = ticket?.registrationDetails || {};
+  const normalizedField = String(field || '').toLowerCase();
+
+  if (normalizedField === 'name' || normalizedField === 'full name') {
+    return details.fullName || ticket?.citizenName || user?.name || '';
+  }
+  if (normalizedField.includes('mother')) {
+    return details.motherName || '';
+  }
+  if (normalizedField.includes('birth')) {
+    return details.dateOfBirth || '';
+  }
+  if (normalizedField.includes('address')) {
+    return details.fullAddress || details.address || user?.address || '';
+  }
+  if (normalizedField.includes('phone')) {
+    return details.phone || ticket?.citizen?.phone || user?.phone || '';
+  }
+  if (normalizedField.includes('marital')) {
+    const value = details.maritalStatus || user?.maritalStatus || '';
+    if (value === 'SINGLE') return 'Single';
+    if (value === 'MARRIED') return 'Married';
+    return '';
+  }
+  return 'Not recorded in current record';
+};
+
+const hydrateChangesFromRegistration = (changes = [], ticket, user) => (
+  changes.map((change) => ({
+    ...change,
+    currentValue: currentValueFromRegistration(ticket, change.field, user) || change.currentValue || 'Not recorded in current record'
+  }))
+);
+
 const UpdateInformationRequest = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -22,6 +69,7 @@ const UpdateInformationRequest = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [request, setRequest] = useState(null);
+  const [existingRegistration, setExistingRegistration] = useState(null);
   const [resubmitRequest, setResubmitRequest] = useState(null);
   const [form, setForm] = useState({
     nationalIdNumber: user?.nationalId || '',
@@ -37,8 +85,24 @@ const UpdateInformationRequest = () => {
   useEffect(() => {
     const loadServices = async () => {
       try {
-        const res = await apiClient.get('/api/services/list');
-        setServices(res.data || []);
+        const [serviceRes, bookingRes] = await Promise.all([
+          apiClient.get('/api/services/list'),
+          apiClient.get('/api/bookings/my')
+        ]);
+        setServices(serviceRes.data || []);
+        const original = getOriginalRegistration(bookingRes.data || []);
+        setExistingRegistration(original);
+        if (original && !resubmitId) {
+          const details = original.registrationDetails || {};
+          const nationalIdNumber = nationalIdFromRegistration(original, user);
+          setForm((current) => ({
+            ...current,
+            nationalIdNumber: nationalIdNumber || current.nationalIdNumber,
+            fullName: details.fullName || original.citizenName || current.fullName,
+            phone: details.phone || original.citizen?.phone || current.phone,
+            changes: hydrateChangesFromRegistration(current.changes, original, user)
+          }));
+        }
       } catch (error) {
         toast.error(error.response?.data?.message || 'Could not load service information.');
       } finally {
@@ -46,7 +110,7 @@ const UpdateInformationRequest = () => {
       }
     };
     loadServices();
-  }, []);
+  }, [resubmitId, user]);
 
   useEffect(() => {
     if (!resubmitId) return;
@@ -75,11 +139,11 @@ const UpdateInformationRequest = () => {
         setResubmitRequest(existing);
         setRequest(null);
         setForm({
-          nationalIdNumber: details.nationalIdNumber || user?.nationalId || '',
+          nationalIdNumber: details.nationalIdNumber || nationalIdFromRegistration(existingRegistration, user) || '',
           fullName: details.fullName || existing.citizenName || user?.name || '',
           phone: details.phone || existing.citizen?.phone || user?.phone || '',
           selectedFields: details.selectedFields?.length ? details.selectedFields : changes.map((change) => change.field),
-          changes,
+          changes: hydrateChangesFromRegistration(changes, existingRegistration, user),
           notes: details.notes || ''
         });
       } catch (error) {
@@ -91,7 +155,7 @@ const UpdateInformationRequest = () => {
     return () => {
       mounted = false;
     };
-  }, [resubmitId, user?.name, user?.nationalId, user?.phone]);
+  }, [existingRegistration, resubmitId, user]);
 
   const updateForm = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -107,7 +171,15 @@ const UpdateInformationRequest = () => {
           : [...current.selectedFields, field],
         changes: exists
           ? current.changes.filter((change) => change.field !== field)
-          : [...current.changes, { field, currentValue: '', newValue: '', reason: '' }]
+          : [
+              ...current.changes,
+              {
+                field,
+                currentValue: currentValueFromRegistration(existingRegistration, field, user),
+                newValue: '',
+                reason: ''
+              }
+            ]
       };
     });
   };
@@ -123,8 +195,7 @@ const UpdateInformationRequest = () => {
 
   const validateForm = () => {
     const required = [
-      ['fullName', 'Full name is required.'],
-      ['phone', 'Phone number is required.']
+      ['fullName', 'Full name is required.']
     ];
     const missing = required.find(([field]) => !String(form[field] || '').trim());
     if (missing) {
@@ -136,10 +207,10 @@ const UpdateInformationRequest = () => {
       return false;
     }
     const incomplete = form.changes.find((change) => (
-      !change.currentValue.trim() || !change.newValue.trim() || !change.reason.trim()
+      !String(change.field || '').trim() || !String(change.newValue || '').trim() || !String(change.reason || '').trim()
     ));
     if (incomplete) {
-      toast.error('Each selected field needs current value, new value, and reason.');
+      toast.error('Each selected field needs a new value and reason.');
       return false;
     }
     return true;
@@ -163,7 +234,7 @@ const UpdateInformationRequest = () => {
           fullName: form.fullName,
           phone: form.phone,
           selectedFields: form.selectedFields,
-          changes: form.changes,
+          changes: hydrateChangesFromRegistration(form.changes, existingRegistration, user),
           notes: form.notes
         }
       };
@@ -220,6 +291,15 @@ const UpdateInformationRequest = () => {
           </section>
         )}
 
+        {existingRegistration && !resubmitRequest && !request && (
+          <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-200">Existing registration found</p>
+            <p className="mt-1 text-sm font-semibold">
+              This update request will be linked to ticket {existingRegistration.ref}.
+            </p>
+          </section>
+        )}
+
         {request ? (
           <section className={panelClass}>
             <div className="flex items-center gap-2 text-emerald-300">
@@ -233,8 +313,8 @@ const UpdateInformationRequest = () => {
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Info label="Request Type" value="Update Information Request" />
               <Info label="Status" value={request.requestStatus || 'Pending'} />
+              <Info label="National ID Number" value={form.nationalIdNumber || 'Not recorded yet'} />
               <Info label="Full Name" value={form.fullName} />
-              <Info label="Phone" value={form.phone} />
             </div>
             {request.existingRegistration?.found && (
               <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -261,10 +341,27 @@ const UpdateInformationRequest = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label="National ID Number (optional)" value={form.nationalIdNumber} onChange={(value) => updateForm('nationalIdNumber', value)} />
-              <Field label="Full Name" value={form.fullName} onChange={(value) => updateForm('fullName', value)} />
-              <Field label="Phone" value={form.phone} onChange={(value) => updateForm('phone', value)} />
+              <Field
+                label="National ID Number"
+                value={form.nationalIdNumber || 'Not recorded yet'}
+                onChange={() => {}}
+                readOnly
+                helper="Loaded from your existing National ID record."
+              />
+              <Field
+                label="Registered Full Name"
+                value={form.fullName}
+                onChange={() => {}}
+                readOnly
+                helper="Loaded from your previous registration."
+              />
             </div>
+
+            {!existingRegistration && (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-semibold text-amber-100">
+                No previous National ID registration was found on this account. Update requests can only be submitted after a New National ID Registration exists.
+              </div>
+            )}
 
             <div className="mt-6">
               <span className={labelClass}>Select fields to update</span>
@@ -291,8 +388,29 @@ const UpdateInformationRequest = () => {
                 <div key={change.field} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
                   <h3 className="mb-3 text-sm font-black text-[#7CB8FF]">{change.field}</h3>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <Field label="Current Value" value={change.currentValue} onChange={(value) => updateChange(change.field, 'currentValue', value)} />
-                    <Field label="New Value" value={change.newValue} onChange={(value) => updateChange(change.field, 'newValue', value)} />
+                    <Field
+                      label="Current Value"
+                      value={change.currentValue || currentValueFromRegistration(existingRegistration, change.field, user)}
+                      onChange={() => {}}
+                      readOnly
+                      helper="Read from your existing record."
+                    />
+                    {String(change.field || '').toLowerCase().includes('marital') ? (
+                      <label>
+                        <span className={labelClass}>New Value</span>
+                        <select
+                          value={change.newValue}
+                          onChange={(event) => updateChange(change.field, 'newValue', event.target.value)}
+                          className={inputClass}
+                        >
+                          <option value="">Select Marital Status</option>
+                          <option value="SINGLE">Single</option>
+                          <option value="MARRIED">Married</option>
+                        </select>
+                      </label>
+                    ) : (
+                      <Field label="New Value" value={change.newValue} onChange={(value) => updateChange(change.field, 'newValue', value)} />
+                    )}
                     <Field label="Reason" value={change.reason} onChange={(value) => updateChange(change.field, 'reason', value)} />
                   </div>
                 </div>
@@ -310,7 +428,7 @@ const UpdateInformationRequest = () => {
             </label>
 
             <div className="mt-5 flex justify-end">
-              <button disabled={submitting} className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
+              <button disabled={submitting || !existingRegistration} className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
                 {submitting ? 'Submitting...' : 'Submit Update Request'}
               </button>
             </div>
@@ -321,10 +439,16 @@ const UpdateInformationRequest = () => {
   );
 };
 
-const Field = ({ label, value, onChange }) => (
+const Field = ({ label, value, onChange, readOnly = false, helper = '' }) => (
   <label>
     <span className={labelClass}>{label}</span>
-    <input value={value} onChange={(event) => onChange(event.target.value)} className={inputClass} />
+    <input
+      value={value}
+      readOnly={readOnly}
+      onChange={(event) => onChange(event.target.value)}
+      className={`${inputClass} ${readOnly ? 'cursor-not-allowed bg-slate-100 font-bold text-slate-700' : ''}`}
+    />
+    {helper && <span className="mt-1 block text-[11px] font-semibold text-slate-500">{helper}</span>}
   </label>
 );
 

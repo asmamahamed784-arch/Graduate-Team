@@ -20,8 +20,7 @@ export const useAuth = () => {
 
   const hasRole = (allowedRoles) => {
     if (!role) return false;
-    const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
-    return roles.includes(role);
+    return allowedRoles.includes(role);
   };
 
   return {

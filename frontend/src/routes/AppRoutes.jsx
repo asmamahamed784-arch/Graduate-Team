@@ -1,7 +1,6 @@
 // src/routes/AppRoutes.jsx
 import React, { Suspense, lazy } from 'react';
 import { Link, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks';
 
 // Layouts
 import MainLayout from '../layouts/MainLayout';
@@ -15,8 +14,6 @@ import PublicRoute from './PublicRoute';
 // Lazy loading views
 const Home = lazy(() => import('../pages/Home.jsx'));
 const About = lazy(() => import('../pages/About.jsx'));
-const Features = lazy(() => import('../pages/Features.jsx'));
-const Pricing = lazy(() => import('../pages/Pricing.jsx'));
 const Services = lazy(() => import('../pages/Services.jsx'));
 const Centers = lazy(() => import('../pages/Centers.jsx'));
 const FAQ = lazy(() => import('../pages/FAQ.jsx'));
@@ -29,13 +26,11 @@ const LiveQueue = lazy(() => import('../pages/LiveQueue.jsx'));
 
 const UserDashboard = lazy(() => import('../pages/UserDashboard.jsx'));
 const UserAppointments = lazy(() => import('../pages/UserAppointments.jsx'));
-const CitizenServices = lazy(() => import('../pages/CitizenServices.jsx'));
 const OperatorDashboard = lazy(() => import('../pages/OperatorDashboard.jsx'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard.jsx'));
 const AdminAppointments = lazy(() => import('../pages/AdminAppointments.jsx'));
 const OperatorManagement = lazy(() => import('../pages/OperatorManagement.jsx'));
 const ActiveSessions = lazy(() => import('../pages/ActiveSessions.jsx'));
-const ContactMessages = lazy(() => import('../pages/ContactMessages.jsx'));
 
 const Login = lazy(() => import('../pages/Login.jsx'));
 const Register = lazy(() => import('../pages/Register.jsx'));
@@ -59,18 +54,6 @@ const Loader = () => (
   </div>
 );
 
-/**
- * Sends /dashboard to the correct portal for the logged-in role,
- * or to /login for anonymous visitors.
- */
-const DashboardRedirect = () => {
-  const { isAuthenticated, role } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (role === 'admin') return <Navigate to="/dashboard/admin" replace />;
-  if (role === 'operator' || role === 'super_operator') return <Navigate to="/dashboard/operator" replace />;
-  return <Navigate to="/dashboard/user" replace />;
-};
-
 const NotFound = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
     <h1 className="text-6xl font-bold text-blue-700 dark:text-blue-500 mb-4 animate-pulse">404</h1>
@@ -93,24 +76,19 @@ export const AppRoutes = () => {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
-          <Route path="/features" element={<Features />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/services" element={<Services />} />
           <Route path="/centers" element={<Centers />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/track" element={<TrackQueue />} />
         </Route>
 
-        {/* Citizen appointment pages require authentication and run inside the
-            management system (sidebar + header), not the public website. */}
+        {/* Citizen appointment pages require authentication */}
         <Route element={<ProtectedRoute allowedRoles={['citizen', 'admin']} />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="/booking" element={<Navigate to="/services/new-id-registration" replace />} />
-            <Route path="/services/new-id-registration" element={<NewIdRegistration />} />
-            <Route path="/services/update-information" element={<UpdateInformationRequest />} />
-            <Route path="/services/replace-lost-id" element={<ReplaceLostId />} />
-          </Route>
+          <Route path="/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
+          <Route path="/services" element={<Navigate to="/dashboard/user/services" replace />} />
+          <Route path="/services/new-id-registration" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
+          <Route path="/services/update-information" element={<Navigate to="/dashboard/user/update-information" replace />} />
+          <Route path="/services/replace-lost-id" element={<Navigate to="/dashboard/user/replace-lost-id" replace />} />
+          <Route path="/track" element={<Navigate to="/dashboard/user/track" replace />} />
         </Route>
 
         {/* Guest-only Auth Pages (redirects if logged in) */}
@@ -120,9 +98,6 @@ export const AppRoutes = () => {
             <Route path="/register" element={<Register />} />
           </Route>
         </Route>
-
-        {/* Role-aware dashboard entry point */}
-        <Route path="/dashboard" element={<DashboardRedirect />} />
 
         {/* Shared authenticated pages */}
         <Route element={<ProtectedRoute allowedRoles={['citizen', 'operator', 'super_operator', 'admin']} />}>
@@ -145,7 +120,12 @@ export const AppRoutes = () => {
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard/user" element={<UserDashboard />} />
             <Route path="/dashboard/user/appointments" element={<UserAppointments />} />
-            <Route path="/dashboard/user/services" element={<CitizenServices />} />
+            <Route path="/dashboard/user/services" element={<Services />} />
+            <Route path="/dashboard/user/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
+            <Route path="/dashboard/user/new-id-registration" element={<NewIdRegistration />} />
+            <Route path="/dashboard/user/update-information" element={<UpdateInformationRequest />} />
+            <Route path="/dashboard/user/replace-lost-id" element={<ReplaceLostId />} />
+            <Route path="/dashboard/user/track" element={<TrackQueue />} />
           </Route>
         </Route>
 
@@ -170,6 +150,7 @@ export const AppRoutes = () => {
             <Route path="/dashboard/admin" element={<AdminDashboard />} />
             <Route path="/dashboard/admin/qr-scan" element={<QRVerify />} />
             <Route path="/admin-appointments" element={<AdminAppointments />} />
+            <Route path="/admin-appointments/center" element={<AdminAppointments />} />
             <Route path="/active-sessions" element={<ActiveSessions />} />
             <Route path="/reports" element={<Navigate to="/dashboard/admin/reports" replace />} />
             <Route path="/dashboard/admin/reports" element={<Reports />} />
@@ -187,7 +168,6 @@ export const AppRoutes = () => {
             <Route path="/users-management" element={<Navigate to="/active-sessions" replace />} />
             <Route path="/citizens" element={<Navigate to="/active-sessions" replace />} />
             <Route path="/notifications" element={<NotificationManagement />} />
-            <Route path="/contact-messages" element={<ContactMessages />} />
             <Route path="/logs" element={<AntiCorruptionLogs />} />
             <Route path="/settings" element={<Settings />} />
           </Route>

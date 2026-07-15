@@ -400,41 +400,34 @@ const OperatorDashboard = () => {
       animate="show"
     >
       <div className="mx-auto max-w-none space-y-3">
-        <motion.div
-          variants={item}
-          className="nqs-portal-hero relative overflow-hidden rounded-2xl bg-[#082A55] bg-gradient-to-br from-[#082A55] to-[#0B3A75] p-6 text-white shadow-sm"
-        >
-          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-400/20 blur-3xl" />
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-200">Operator Console</p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight text-white sm:text-3xl">Operator Dashboard</h1>
-              <div className="mt-2 flex items-center gap-2 text-sm text-blue-100">
-                <FaBuilding className="text-blue-300" />
-                <span>{activeCenter}</span>
-                <span className="mx-1">|</span>
-                <span>{today}</span>
-              </div>
-              {error && <p className="mt-2 text-sm font-medium text-red-300">{error}</p>}
+        <motion.div variants={item} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-slate-950 dark:text-white sm:text-xl">Operator Dashboard</h1>
+            <div className="mt-1 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 sm:text-sm">
+              <FaBuilding className="text-blue-500" />
+              <span>{activeCenter}</span>
+              <span className="mx-1">|</span>
+              <span>{today}</span>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Link
-                to="/dashboard/operator/qr-scan"
-                className="nqs-hero-card flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-[#082A55] shadow-sm transition hover:bg-blue-50"
-              >
-                <FaQrcode className="text-sm" />
-                Scan QR Ticket
-              </Link>
-              <button
-                type="button"
-                onClick={handleCallNext}
-                disabled={Boolean(actionLoading) || stats.ticketsWaitingCount === 0}
-                className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <FaPhoneAlt className="text-sm" />
-                Call Next Ticket
-              </button>
-            </div>
+            {error && <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              to="/dashboard/operator/qr-scan"
+              className="flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-800 sm:text-sm"
+            >
+              <FaQrcode className="text-sm" />
+              Scan QR Ticket
+            </Link>
+            <button
+              type="button"
+              onClick={handleCallNext}
+              disabled={Boolean(actionLoading) || stats.ticketsWaitingCount === 0}
+              className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-slate-400 sm:text-sm"
+            >
+              <FaPhoneAlt className="text-sm" />
+              Call Next Ticket
+            </button>
           </div>
         </motion.div>
 
