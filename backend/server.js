@@ -1,152 +1,51 @@
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
-import { connectDB } from './config/db.js';
-import { errorHandler } from './middleware/errorMiddleware.js';
+const express = require('express');
+const dotenv = require('dotenv');
+const cors = require('cors');
+const morgan = require('morgan');
+const connectDB = require('./src/config/db');
 
-// Load route files
-import authRoutes from './routes/authRoutes.js';
-import serviceRoutes from './routes/serviceRoutes.js';
-import centerRoutes from './routes/centerRoutes.js';
-import bookingRoutes from './routes/bookingRoutes.js';
-import queueRoutes from './routes/queueRoutes.js';
-import notificationRoutes from './routes/notificationRoutes.js';
-import reportRoutes from './routes/reportRoutes.js';
-import auditRoutes from './routes/auditRoutes.js';
-import counterRoutes from './routes/counterRoutes.js';
-import announcementRoutes from './routes/announcementRoutes.js';
-import feedbackRoutes from './routes/feedbackRoutes.js';
-import documentRoutes from './routes/documentRoutes.js';
-import settingRoutes from './routes/settingRoutes.js';
-import activityRoutes from './routes/activityRoutes.js';
-import qrRoutes from './routes/qrRoutes.js';
-import contactRoutes from './routes/contactRoutes.js';
-import operatorRoutes from './routes/operatorRoutes.js';
-import operatorApiRoutes from './routes/operatorApiRoutes.js';
-import sessionRoutes from './routes/sessionRoutes.js';
-
-// Load config
+// Load env vars
 dotenv.config();
 
-// Connect to Database
+// Connect to database
 connectDB();
 
 const app = express();
-const server = http.createServer(app);
-const allowedOrigins = (process.env.FRONTEND_URL || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
 
-const isProduction = process.env.NODE_ENV === 'production';
-// Any localhost/127.0.0.1 port counts as a dev origin so local testing
-// works regardless of which host or port Vite ends up on.
-const isLocalOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-
-const isOriginAllowed = (origin) =>
-  !origin ||
-  allowedOrigins.length === 0 ||
-  allowedOrigins.includes(origin) ||
-  (!isProduction && isLocalOrigin(origin));
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (isOriginAllowed(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
-};
-
-// Socket.io initialization
-const io = new Server(server, {
-  cors: {
-    origin(origin, callback) {
-      if (isOriginAllowed(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
-});
-
-// Expose io object globally to access in controllers
-app.set('io', io);
-
-// Middleware
-app.use(cors(corsOptions));
+// Body parser
 app.use(express.json());
 
+// Enable CORS
+app.use(cors());
+
+// Dev logging middleware
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// Socket.io Real-time connection handler
-io.on('connection', (socket) => {
-  console.log(`🔌 New client connected: ${socket.id}`);
+// Custom Audit Logger
+const { auditLog } = require('./src/middlewares/logger');
+app.use(auditLog('API_REQUEST'));
 
-  // Room scoping: join by center to receive specific queue updates
-  socket.on('joinCenter', (centerId) => {
-    socket.join(centerId);
-    console.log(`🏢 Client joined center room: ${centerId}`);
-  });
+// Route files
+const authRoutes = require('./src/routes/authRoutes');
+const serviceRoutes = require('./src/routes/serviceRoutes');
+const appointmentRoutes = require('./src/routes/appointmentRoutes');
+const queueRoutes = require('./src/routes/queueRoutes');
 
-  // Room scoping: join by ticket reference to track a single ticket
-  socket.on('joinTicket', (ticketRef) => {
-    socket.join(ticketRef);
-    console.log(`🎫 Client tracking ticket: ${ticketRef}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`🔌 Client disconnected: ${socket.id}`);
-  });
-});
-
-// Mount routes
+// Mount routers
 app.use('/api/auth', authRoutes);
 app.use('/api/services', serviceRoutes);
-app.use('/api/centers', centerRoutes);
-app.use('/api/bookings', bookingRoutes);
+app.use('/api/appointments', appointmentRoutes);
 app.use('/api/queue', queueRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/audits', auditRoutes);
-app.use('/api/counters', counterRoutes);
-app.use('/api/announcements', announcementRoutes);
-app.use('/api/feedback', feedbackRoutes);
-app.use('/api/documents', documentRoutes);
-app.use('/api/settings', settingRoutes);
-app.use('/api/activities', activityRoutes);
-app.use('/api/qr', qrRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api/operators', operatorRoutes);
-app.use('/api/operator', operatorApiRoutes);
-app.use('/api/sessions', sessionRoutes);
 
-// Root route
+// Base route
 app.get('/', (req, res) => {
-  res.json({ message: 'NQS National ID Appointment API is running.' });
+  res.send('Digital Queue API is running...');
 });
 
-// Error handling middleware (must be registered last)
-app.use(errorHandler);
+const PORT = process.env.PORT || 5000;
 
-const PORT = process.env.PORT || 5001;
-
-server.listen(PORT, () => {
-  console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
-
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Stop the existing NQS backend process or set a different PORT in backend/.env.`);
-    process.exit(1);
-  }
-  throw error;
+app.listen(PORT, () => {
+  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
