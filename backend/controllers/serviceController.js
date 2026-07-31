@@ -1,21 +1,20 @@
-import mongoose from 'mongoose';
-import Service from '../models/Service.js';
-import AuditLog from '../models/AuditLog.js';
-import Ticket from '../models/Ticket.js';
+import prisma from '../config/prisma.js';
 import {
   NATIONAL_ID_CATEGORY,
   NATIONAL_ID_CORE_SERVICES,
   NATIONAL_ID_SERVICE_NAMES,
-  isNationalIdService
 } from '../utils/nqsScope.js';
 
 const ensureCoreNationalIdServices = async () => {
   await Promise.all(
-    NATIONAL_ID_CORE_SERVICES.map((service) => Service.updateOne(
-      { name: service.name, category: service.category },
-      { $setOnInsert: service },
-      { upsert: true }
-    ))
+    NATIONAL_ID_CORE_SERVICES.map(async (service) => {
+      const existing = await prisma.service.findFirst({
+        where: { name: service.name, category: service.category }
+      });
+      if (!existing) {
+        await prisma.service.create({ data: service });
+      }
+    })
   );
 };
 
@@ -25,10 +24,12 @@ const ensureCoreNationalIdServices = async () => {
 export const listServices = async (req, res) => {
   try {
     await ensureCoreNationalIdServices();
-    const services = await Service.find({
-      name: { $in: NATIONAL_ID_SERVICE_NAMES },
-      category: NATIONAL_ID_CATEGORY
-    }).sort({ name: 1 });
+    const services = await prisma.service.findMany({
+      where: {
+        category: NATIONAL_ID_CATEGORY
+      },
+      orderBy: { name: 'asc' }
+    });
     return res.json({ success: true, count: services.length, data: services });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -40,14 +41,11 @@ export const listServices = async (req, res) => {
 // @access  Public
 export const getServiceById = async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(404).json({ success: false, message: 'Service not found' });
-    }
-    const service = await Service.findById(req.params.id);
+    const service = await prisma.service.findUnique({ where: { id: req.params.id } });
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }
-    if (!isNationalIdService(service)) {
+    if (service.category !== NATIONAL_ID_CATEGORY) {
       return res.status(404).json({ success: false, message: 'Service is outside the NQS scope' });
     }
     return res.json({ success: true, data: service });
@@ -61,36 +59,46 @@ export const getServiceById = async (req, res) => {
 // @access  Private/Admin
 export const createService = async (req, res) => {
   try {
-    const { name, description, category, duration, requirements, priority } = req.body;
+    const { name, description, category = NATIONAL_ID_CATEGORY, duration, requirements, priority, status } = req.body;
+    const cleanName = String(name || '').trim();
+    const cleanDescription = String(description || '').trim();
 
-    if (!NATIONAL_ID_SERVICE_NAMES.includes(name) || category !== NATIONAL_ID_CATEGORY) {
-      return res.status(400).json({
-        success: false,
-        message: 'NQS supports National ID Registration, lost National ID replacement, and National ID information update only'
-      });
+    if (!cleanName) {
+      return res.status(400).json({ success: false, message: 'Service name is required' });
+    }
+    if (!cleanDescription) {
+      return res.status(400).json({ success: false, message: 'Service description is required' });
+    }
+    if (category !== NATIONAL_ID_CATEGORY) {
+      return res.status(400).json({ success: false, message: 'Service category must be National ID' });
     }
 
-    const serviceExists = await Service.findOne({ name });
+    const serviceExists = await prisma.service.findFirst({ where: { name: cleanName } });
     if (serviceExists) {
       return res.status(400).json({ success: false, message: 'Service name already exists' });
     }
 
-    const service = await Service.create({
-      name,
-      description,
-      category,
-      duration,
-      requirements,
-      priority
+    const service = await prisma.service.create({
+      data: {
+        name: cleanName,
+        description: cleanDescription,
+        category,
+        duration: Number(duration) || 15,
+        requirements,
+        priority: priority || 'Medium',
+        status: status || 'Active'
+      }
     });
 
     // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Create Service',
-      details: `Created new service: ${name}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Create Service',
+        details: `Created new service: ${cleanName}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     return res.status(201).json({ success: true, data: service });
@@ -104,34 +112,40 @@ export const createService = async (req, res) => {
 // @access  Private/Admin
 export const updateService = async (req, res) => {
   try {
-    const service = await Service.findById(req.params.id);
+    const service = await prisma.service.findUnique({ where: { id: req.params.id } });
 
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }
 
-    const nextName = req.body.name ?? service.name;
+    const nextName = String(req.body.name ?? service.name).trim();
     const nextCategory = req.body.category ?? service.category;
-    if (!NATIONAL_ID_SERVICE_NAMES.includes(nextName) || nextCategory !== NATIONAL_ID_CATEGORY) {
-      return res.status(400).json({
-        success: false,
-        message: 'NQS supports National ID Registration, lost National ID replacement, and National ID information update only'
-      });
+    if (!nextName) {
+      return res.status(400).json({ success: false, message: 'Service name is required' });
+    }
+    if (nextCategory !== NATIONAL_ID_CATEGORY) {
+      return res.status(400).json({ success: false, message: 'Service category must be National ID' });
     }
 
-    const updatedService = await Service.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const updatedService = await prisma.service.update({
+      where: { id: req.params.id },
+      data: {
+        ...req.body,
+        name: nextName,
+        category: nextCategory,
+        duration: Number(req.body.duration ?? service.duration) || service.duration
+      }
+    });
 
     // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Update Service',
-      details: `Updated service ID: ${service._id} (${service.name})`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Update Service',
+        details: `Updated service ID: ${service.id} (${service.name})`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     return res.json({ success: true, data: updatedService });
@@ -145,20 +159,20 @@ export const updateService = async (req, res) => {
 // @access  Private/Admin
 export const deleteService = async (req, res) => {
   try {
-    const service = await Service.findById(req.params.id);
+    const service = await prisma.service.findUnique({ where: { id: req.params.id } });
 
     if (!service) {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }
 
-    if (isNationalIdService(service)) {
+    if (NATIONAL_ID_SERVICE_NAMES.includes(service.name) && service.category === NATIONAL_ID_CATEGORY) {
       return res.status(400).json({
         success: false,
         message: 'Core National ID services are required and cannot be deleted'
       });
     }
 
-    const linkedTickets = await Ticket.countDocuments({ service: service._id });
+    const linkedTickets = await prisma.ticket.count({ where: { service: service.id } });
     if (linkedTickets > 0) {
       return res.status(400).json({
         success: false,
@@ -166,15 +180,17 @@ export const deleteService = async (req, res) => {
       });
     }
 
-    await Service.findByIdAndDelete(req.params.id);
+    await prisma.service.delete({ where: { id: req.params.id } });
 
     // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Delete Service',
-      details: `Deleted service name: ${service.name}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Delete Service',
+        details: `Deleted service name: ${service.name}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     return res.json({ success: true, message: 'Service removed.' });

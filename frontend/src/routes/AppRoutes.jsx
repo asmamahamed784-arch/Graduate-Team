@@ -22,6 +22,7 @@ const TrackQueue = lazy(() => import('../pages/TrackQueue.jsx'));
 const NewIdRegistration = lazy(() => import('../pages/NewIdRegistration.jsx'));
 const UpdateInformationRequest = lazy(() => import('../pages/UpdateInformationRequest.jsx'));
 const ReplaceLostId = lazy(() => import('../pages/ReplaceLostId.jsx'));
+const GenericServiceBooking = lazy(() => import('../pages/GenericServiceBooking.jsx'));
 const LiveQueue = lazy(() => import('../pages/LiveQueue.jsx'));
 
 const UserDashboard = lazy(() => import('../pages/UserDashboard.jsx'));
@@ -30,10 +31,14 @@ const OperatorDashboard = lazy(() => import('../pages/OperatorDashboard.jsx'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard.jsx'));
 const AdminAppointments = lazy(() => import('../pages/AdminAppointments.jsx'));
 const OperatorManagement = lazy(() => import('../pages/OperatorManagement.jsx'));
+const CenterOperatorDetail = lazy(() => import('../pages/CenterOperatorDetail.jsx'));
 const ActiveSessions = lazy(() => import('../pages/ActiveSessions.jsx'));
+const UserManagement = lazy(() => import('../pages/UserManagement.jsx'));
 
 const Login = lazy(() => import('../pages/Login.jsx'));
 const Register = lazy(() => import('../pages/Register.jsx'));
+const OtpVerification = lazy(() => import('../pages/OtpVerification.jsx'));
+const ResetPassword = lazy(() => import('../pages/ResetPassword.jsx'));
 
 const Reports = lazy(() => import('../pages/Reports.jsx'));
 const QueueManagement = lazy(() => import('../pages/QueueManagement.jsx'));
@@ -82,7 +87,7 @@ export const AppRoutes = () => {
         </Route>
 
         {/* Citizen appointment pages require authentication */}
-        <Route element={<ProtectedRoute allowedRoles={['citizen', 'admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['citizen', 'admin', 'super_admin']} />}>
           <Route path="/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
           <Route path="/services" element={<Navigate to="/dashboard/user/services" replace />} />
           <Route path="/services/new-id-registration" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
@@ -96,18 +101,23 @@ export const AppRoutes = () => {
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-otp" element={<OtpVerification />} />
+            <Route path="/forgot-password" element={<OtpVerification />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           </Route>
         </Route>
 
         {/* Shared authenticated pages */}
-        <Route element={<ProtectedRoute allowedRoles={['citizen', 'operator', 'super_operator', 'admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['citizen', 'operator', 'super_operator', 'center_manager', 'admin', 'super_admin', 'user_manager']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/profile" element={<Profile />} />
+            <Route path="/notifications" element={<NotificationManagement />} />
+            <Route path="/otp-verification" element={<OtpVerification />} />
           </Route>
         </Route>
 
         {/* Queue operations available to staff and admins */}
-        <Route element={<ProtectedRoute allowedRoles={['operator', 'super_operator', 'admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['operator', 'super_operator', 'center_manager', 'admin', 'super_admin']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/queue-management" element={<QueueManagement />} />
             <Route path="/qr-scan" element={<QRVerify />} />
@@ -121,6 +131,7 @@ export const AppRoutes = () => {
             <Route path="/dashboard/user" element={<UserDashboard />} />
             <Route path="/dashboard/user/appointments" element={<UserAppointments />} />
             <Route path="/dashboard/user/services" element={<Services />} />
+            <Route path="/dashboard/user/services/:serviceId/book" element={<GenericServiceBooking />} />
             <Route path="/dashboard/user/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
             <Route path="/dashboard/user/new-id-registration" element={<NewIdRegistration />} />
             <Route path="/dashboard/user/update-information" element={<UpdateInformationRequest />} />
@@ -130,32 +141,62 @@ export const AppRoutes = () => {
         </Route>
 
         {/* Operator / Staff Portal */}
-        <Route element={<ProtectedRoute allowedRoles={['operator', 'super_operator']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['operator', 'super_operator', 'center_manager']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/operator-dashboard" element={<OperatorDashboard />} />
             <Route path="/dashboard/operator" element={<OperatorDashboard />} />
             <Route path="/dashboard/operator/qr-scan" element={<QRVerify />} />
+            <Route path="/dashboard/operator/notifications" element={<NotificationManagement />} />
           </Route>
         </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_operator']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin', 'super_operator', 'center_manager']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/operator-management" element={<OperatorManagement />} />
+            <Route path="/admin/operators" element={<OperatorManagement />} />
+            <Route path="/dashboard/operator/staff" element={<OperatorManagement />} />
+          </Route>
+        </Route>
+
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin', 'super_operator', 'center_manager', 'operator']} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard/operator/center-schedule" element={<CenterManagement />} />
+          </Route>
+        </Route>
+
+        {/* User Management Role */}
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin', 'user_manager']} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/user-management" element={<UserManagement />} />
+            <Route path="/admin/users" element={<UserManagement />} />
+            <Route path="/citizen-management" element={<UserManagement />} />
+            <Route path="/users-management" element={<UserManagement />} />
+            <Route path="/citizens" element={<UserManagement />} />
           </Route>
         </Route>
 
         {/* System Administration Portal */}
-        <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard/admin" element={<AdminDashboard />} />
             <Route path="/dashboard/admin/qr-scan" element={<QRVerify />} />
+            <Route path="/dashboard/admin/operators/center/:centerKey" element={<CenterOperatorDetail />} />
+            <Route path="/dashboard/admin/operators/center/:centerKey/:panel" element={<CenterOperatorDetail />} />
             <Route path="/admin-appointments" element={<AdminAppointments />} />
+            <Route path="/admin/appointments" element={<AdminAppointments />} />
             <Route path="/admin-appointments/center" element={<AdminAppointments />} />
             <Route path="/active-sessions" element={<ActiveSessions />} />
+            <Route path="/active-sessions/:role" element={<ActiveSessions />} />
             <Route path="/reports" element={<Navigate to="/dashboard/admin/reports" replace />} />
             <Route path="/dashboard/admin/reports" element={<Reports />} />
             <Route path="/dashboard/admin/reports/applications" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/services/:serviceSlug" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/service-centers" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/service-centers/:centerId" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/service-centers/:centerId/:centerView" element={<Reports />} />
             <Route path="/dashboard/admin/reports/operators" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/queue" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/trends" element={<Reports />} />
             <Route path="/dashboard/admin/reports/citizens" element={<Reports />} />
             <Route path="/dashboard/admin/reports/citizens/all" element={<Reports />} />
             <Route path="/dashboard/admin/reports/citizens/male" element={<Reports />} />
@@ -164,11 +205,9 @@ export const AppRoutes = () => {
             <Route path="/dashboard/admin/reports/security" element={<Reports />} />
             <Route path="/service-management" element={<ServiceManagement />} />
             <Route path="/center-management" element={<CenterManagement />} />
-            <Route path="/citizen-management" element={<Navigate to="/active-sessions" replace />} />
-            <Route path="/users-management" element={<Navigate to="/active-sessions" replace />} />
-            <Route path="/citizens" element={<Navigate to="/active-sessions" replace />} />
-            <Route path="/notifications" element={<NotificationManagement />} />
+            <Route path="/admin/centers" element={<CenterManagement />} />
             <Route path="/logs" element={<AntiCorruptionLogs />} />
+            <Route path="/logs/:role" element={<AntiCorruptionLogs />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>

@@ -7,6 +7,7 @@ import {
   getBookingDetails,
   cancelBooking,
   resubmitBooking,
+  sendCorrectionFeedback,
   updateBookingStatus,
   updateRequestStatus
 } from '../controllers/bookingController.js';
@@ -25,24 +26,27 @@ router.route('/availability')
   .get(protect, authorize('citizen', 'admin'), getBookingAvailability);
 
 router.route('/admin/all')
-  .get(protect, authorize('admin', 'super_operator'), getAllBookings);
+  .get(protect, authorize('admin', 'super_operator', 'center_manager', 'operator'), getAllBookings);
 
 router.route('/admin/:id/status')
-  .put(protect, authorize('admin', 'super_operator'), updateBookingStatus);
+  .put(protect, authorize('admin', 'operator', 'super_operator', 'center_manager'), updateBookingStatus);
 
 router.route('/admin/:id/request-status')
-  .put(protect, authorize('admin', 'super_operator'), updateRequestStatus);
+  .put(protect, authorize('admin', 'operator', 'super_operator', 'center_manager'), updateRequestStatus);
+
+router.route('/admin/:id/correction')
+  .put(protect, authorize('admin', 'super_operator', 'center_manager'), sendCorrectionFeedback);
 
 router.route('/admin/:id/replacement-status')
-  .put(protect, authorize('admin', 'super_operator'), updateRequestStatus);
+  .put(protect, authorize('admin', 'operator', 'super_operator', 'center_manager'), updateRequestStatus);
 
 router.route('/:id/cancel')
-  .put(protect, authorize('citizen', 'admin'), cancelBooking);
+  .put(protect, authorize('citizen', 'admin', 'operator', 'super_operator', 'center_manager'), cancelBooking);
 
 router.route('/:id/resubmit')
   .put(protect, authorize('citizen'), resubmitBooking);
 
 router.route('/:refOrId')
-  .get(protect, authorize('citizen', 'operator', 'admin'), getBookingDetails);
+  .get(protect, authorize('citizen', 'operator', 'super_operator', 'center_manager', 'admin'), getBookingDetails);
 
 export default router;

@@ -8,9 +8,11 @@ import {
   FaClock,
   FaClipboardList,
   FaPhoneAlt,
+  FaRedo,
   FaShieldAlt,
   FaSyncAlt,
   FaUserCircle,
+  FaExclamationTriangle,
 } from 'react-icons/fa';
 import api from '../api/axiosInstance';
 import { useAuth } from '../hooks/useAuth';
@@ -176,6 +178,14 @@ const getCancellationReasonList = (item = {}) => {
   return item.cancellationReason ? [item.cancellationReason] : [];
 };
 
+const getResubmitPath = (ticket) => {
+  const type = ticket?.requestType || ticket?.type;
+  const id = encodeURIComponent(ticket?.id || ticket?._id || '');
+  if (type === 'update_information') return `/dashboard/user/update-information?resubmit=${id}`;
+  if (type === 'replace_lost_id' || type === 'lost_replacement') return `/dashboard/user/replace-lost-id?resubmit=${id}`;
+  return `/dashboard/user/new-id-registration?resubmit=${id}`;
+};
+
 const StatCard = ({ icon, label, value, helper, tone = 'blue', to, onClick }) => {
   const tones = {
     blue: 'bg-blue-50 text-blue-700',
@@ -242,6 +252,12 @@ const UserDashboard = () => {
   const citizen = profileUser || user || {};
   const dashboardTicket = activeTicket;
   const recentRequests = useMemo(() => sortByAppointmentDate(bookings).slice(0, 5), [bookings]);
+  const cancelledForResubmission = useMemo(
+    () => sortByAppointmentDate(bookings.filter((ticket) => (
+      ticket.currentStatus === 'Cancelled'
+    ))),
+    [bookings]
+  );
   const stats = useMemo(() => {
     const completed = bookings.filter((ticket) => ticket.currentStatus === 'Completed').length;
     const pending = bookings.filter((ticket) => CURRENT_STATUSES.has(ticket.currentStatus)).length;
@@ -268,14 +284,14 @@ const UserDashboard = () => {
     || latestTicketName
     || citizen.username
     || 'Citizen';
-  const hasIssuedNationalId = Boolean(citizenSummary.nationalIdNumber || citizen.nationalId || ['ACTIVE', 'COMPLETED'].includes(citizen.nationalIdStatus));
+  const hasIssuedNationalId = ['ACTIVE', 'COMPLETED', 'ISSUED'].includes(String(citizenSummary.nationalIdStatus || citizen.nationalIdStatus || '').toUpperCase());
   const profileProcessStatus = normalizeNationalIdProcessStatus(citizenSummary.nationalIdStatus || citizen.nationalIdStatus);
   const nationalIdStatus = hasIssuedNationalId
     ? 'COMPLETED'
     : stats.pending && profileProcessStatus === 'NOT_STARTED'
       ? 'WAITING'
       : profileProcessStatus;
-  const nationalIdNumber = citizenSummary.nationalIdNumber || citizen.nationalId || 'Not issued yet';
+  const nationalIdNumber = citizenSummary.nationalIdNumber || citizen.nationalId || 'Not assigned yet';
   const issueDate = citizenSummary.issueDate || citizen.cardIssueDate;
   const expiryDate = citizenSummary.expiryDate || citizen.cardExpiryDate;
   const currentCenter = citizenSummary.centerName
@@ -441,6 +457,85 @@ const UserDashboard = () => {
           />
           <StatCard icon={<FaSyncAlt />} label="Replacement Requests" value={stats.replacements} helper="Lost ID requests" tone="blue" to="/dashboard/user/appointments?type=replace_lost_id" />
         </section>
+
+        {cancelledForResubmission.length > 0 && (
+          <section className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                  <FaExclamationTriangle />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-red-600">Action Required</p>
+                  <h2 className="text-xl font-black text-[#06194A]">Correct and resubmit your appointment</h2>
+                </div>
+              </div>
+              <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+                {cancelledForResubmission.length} needs correction
+              </span>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              {cancelledForResubmission.map((ticket) => {
+                const reasons = getCancellationReasonList(ticket);
+                return (
+                  <article key={ticket.id || ticket.ref} className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-red-600">Cancelled request</p>
+                        <p className="mt-1 font-mono text-xl font-black text-[#06194A]">{ticket.ref}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-700">{ticket.serviceName}</p>
+                      </div>
+                      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-black text-red-700">Cancelled</span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <ModalDetail label="Citizen Name" value={ticket.citizenDisplayName || citizenName} />
+                      <ModalDetail label="Center" value={ticket.centerName} />
+                      <ModalDetail label="Appointment Date" value={formatLongDate(ticket.appointmentDate)} />
+                      <ModalDetail label="Appointment Time" value={ticket.appointmentTime || 'Not scheduled'} />
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-red-200 bg-white p-3">
+                      <p className="text-xs font-black uppercase tracking-wide text-red-600">Admin feedback</p>
+                      {reasons.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {reasons.map((reason) => (
+                            <span key={reason} className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
+                              {reason}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-slate-700">Please correct your information and resubmit.</p>
+                      )}
+                      {ticket.cancellationNotes && (
+                        <p className="mt-3 text-sm font-semibold text-slate-700">Admin note: {ticket.cancellationNotes}</p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => handleViewTicket(ticket)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-50"
+                      >
+                        View Details
+                      </button>
+                      <Link
+                        to={getResubmitPath(ticket)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700"
+                      >
+                        <FaRedo />
+                        Resubmit Appointment
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
 
       <Modal

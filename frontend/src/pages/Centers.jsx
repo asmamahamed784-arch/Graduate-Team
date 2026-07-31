@@ -75,7 +75,10 @@ function Centers() {
       );
     }
 
-    return [...list].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+    return [...list].sort((a, b) => (
+      String(a.district || '').localeCompare(String(b.district || '')) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
+    ));
   }, [centers, query]);
 
   const selectedCenter = useMemo(

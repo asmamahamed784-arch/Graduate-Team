@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ActiveSession {
+  id             String   @id @default(uuid())
+  user           String
+  tokenId        String   @unique
+  username       String
+  role           String
+  loginTime      DateTime @default(now())
+  lastActiveTime DateTime @default(now())
+  ipAddress      String   @default("127.0.0.1")
+  userAgent      String   @default("Unknown device")
+  status         String   @default("active")
+  loggedOutAt    DateTime?
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  user      String
+  action    String
+  details   String
+  timestamp DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  createdBy String
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  user      String
+  role      String
+  action    String
+  details   String
+  ipAddress String   @default("127.0.0.1")
+}
+
+model Center {
+  id                      String   @id @default(uuid())
+  workingDays             Json?
+  startTime               String   @default("08:00")
+  endTime                 String   @default("16:00")
+  breakTime               Json?
+  slotDuration            Int      @default(30)
+  maxBookingsPerSlot      Int      @default(5)
+  maxAppointmentsPerDay   Int      @default(100)
+  closedDays              Json?
+  closedDates             Json?
+  specialUnavailableDates Json?
+  isActive                Boolean  @default(true)
+  name                    String   @unique
+  address                 String
+  city                    String
+  district                String
+  phone                   String
+  counters                Int      @default(5)
+  capacity                Int      @default(100)
+  hours                   String   @default("08:00 AM - 05:00 PM")
+  status                  String   @default("Active")
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  fullName  String
+  email     String
+  phone     String
+  subject   String   @default("National ID Contact Message")
+  message   String
+  status    String   @default("New")
+  createdAt DateTime @default(now())
+}
+
+model CorrectionReason {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  reasonName String
+  fieldName  String?
+  category   String
+  isActive   Boolean  @default(true)
+}
+
+model Counter {
+  id         String @id @default(uuid())
+  center     String
+  lastNumber Int    @default(0)
+  prefix     String @default("NQS")
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  user       String
+  ticket     String?
+  name       String
+  fileUrl    String
+  status     String   @default("Pending")
+  uploadedAt DateTime @default(now())
+}
+
+model EmailLog {
+  id        String   @id @default(uuid())
+  recipient String
+  subject   String
+  content   String
+  status    String   @default("Sent")
+  sentAt    DateTime @default(now())
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  user      String
+  ticket    String?
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id                           String   @id @default(uuid())
+  user                         String?
+  title                        String
+  desc                         String
+  category                     String   @default("System")
+  notificationType             String   @default("")
+  referenceNumber              String   @default("")
+  requestType                  String   @default("")
+  relatedEntity                String?
+  relatedEntityType            String   @default("")
+  cancellationReason           String   @default("")
+  cancellationReasons          Json?
+  additionalCancellationReason String   @default("")
+  cancellationNotes            String   @default("")
+  cancellationDate             DateTime?
+  previousStatus               String   @default("")
+  newStatus                    String   @default("")
+  read                         Boolean  @default(false)
+  timestamp                    DateTime @default(now())
+}
+
+model QRScan {
+  id        String   @id @default(uuid())
+  ticketRef String
+  scannedBy String
+  scannedAt DateTime @default(now())
+  status    String   @default("Valid")
+  ipAddress String   @default("127.0.0.1")
+}
+
+model QueueHistory {
+  id          String   @id @default(uuid())
+  ticketRef   String
+  service     String
+  center      String
+  citizenName String
+  counter     String
+  waitTime    Int
+  serviceTime Int
+  status      String
+  date        String
+  completedAt DateTime @default(now())
+}
+
+model RequestCorrectionFeedback {
+  id               String   @id @default(uuid())
+  request          String
+  correctionReason String
+  admin            String
+  additionalNote   String   @default("")
+  resolved         Boolean  @default(false)
+  resolvedAt       DateTime?
+}
+
+model RequestCorrectionHistory {
+  id             String   @id @default(uuid())
+  request        String
+  fieldName      String
+  oldValue       String   @default("")
+  correctedValue String   @default("")
+  changedAt      DateTime @default(now())
+  changedBy      String
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+}
+
+model Service {
+  id           String  @id @default(uuid())
+  name         String  @unique
+  description  String
+  category     String  @default("General")
+  duration     Int     @default(15)
+  requirements Json?
+  priority     String  @default("Medium")
+  status       String  @default("Active")
+}
+
+model Setting {
+  id                   String  @id @default(uuid())
+  user                 String  @unique
+  darkMode             Boolean @default(false)
+  language             String  @default("en")
+  notificationsEnabled Boolean @default(true)
+  emailNotif           Boolean @default(true)
+  smsNotif             Boolean @default(false)
+  pushNotif            Boolean @default(true)
+  publicProfile        Boolean @default(true)
+  dataCollection       Boolean @default(false)
+}
+
+model SMSLog {
+  id        String   @id @default(uuid())
+  recipient String
+  message   String
+  status    String   @default("Sent")
+  sentAt    DateTime @default(now())
+}
+
+model OtpCode {
+  id          String    @id @default(uuid())
+  purpose     String
+  phone       String
+  user        String?
+  ticket      String?
+  codeHash    String
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  invalidated Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now())
+}
+
+model SystemConfig {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  value       String  @default("")
+  description String?
+}
+
+model Ticket {
+  id                   String   @id @default(uuid())
+  ref                  String   @unique
+  service              String
+  citizenName          String
+  citizen              String?
+  counter              String   @default("--")
+  waitTime             String   @default("15 min")
+  status               String   @default("Waiting")
+  center               String
+  district             String   @default("")
+  date                 String   @default("")
+  timeSlot             String?
+  requestType          String   @default("new_national_id")
+  requestStatus        String   @default("Pending")
+  nationalIdNumber     String   @default("")
+  cardSerialNumber     String   @default("")
+  cardStatus           String   @default("")
+  registrationDetails  Json?
+  replacementDetails   Json?
+  updateDetails        Json?
+  existingRegistration Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+}
+
+model Citizen {
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName             String    @default("")
+  firstName            String    @default("")
+  middleName           String    @default("")
+  lastName             String    @default("")
+  email                String?
+  phone                String    @default("")
+  nationalId           String    @default("")
+  nationalIdStatus     String    @default("NOT_STARTED")
+  cardSerialNumber     String    @default("")
+  cardStatus           String    @default("NOT_ISSUED")
+  cardIssueDate        DateTime?
+  cardExpiryDate       DateTime?
+  replacementCount     Int       @default(0)
+  approvedRegistration String?
+  photo                String    @default("")
+  dateOfBirth          String    @default("")
+  address              String    @default("")
+  district             String    @default("")
+  maritalStatus        String    @default("")
+  center               String?
+  cardHistory          Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+model AccountProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String    @default("")
+  email              String?
+  phone              String    @default("")
+  status             String    @default("active")
+  operatorType       String    @default("operator")
+  mustChangePassword Boolean   @default(false)
+  lastActiveAt       DateTime?
+  center             String?
+  assignedDistrict   String    @default("")
+  district           String    @default("")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model User {
+  id                   String   @id @default(uuid())
+  name                 String
+  firstName            String   @default("")
+  middleName           String   @default("")
+  lastName             String   @default("")
+  username             String   @unique
+  email                String?  @unique
+  phone                String   @default("")
+  nationalId           String   @default("")
+  nationalIdStatus     String   @default("NOT_STARTED")
+  cardSerialNumber     String   @default("")
+  cardStatus           String   @default("NOT_ISSUED")
+  cardIssueDate        DateTime?
+  cardExpiryDate       DateTime?
+  replacementCount     Int      @default(0)
+  cardHistory          Json?
+  approvedRegistration String?
+  photo                String   @default("")
+  dateOfBirth          String   @default("")
+  address              String   @default("")
+  password             String
+  role                 String   @default("citizen")
+  operatorType         String   @default("operator")
+  status               String   @default("active")
+  mustChangePassword   Boolean  @default(false)
+  lastActiveAt         DateTime?
+  center               String?
+  assignedDistrict     String   @default("")
+  district             String   @default("")
+  maritalStatus        String   @default("")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+  citizenProfile       Citizen?
+  accountProfile       AccountProfile?
+}

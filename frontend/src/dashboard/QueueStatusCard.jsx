@@ -41,7 +41,7 @@ const statCards = [
 export default function QueueStatusCard({
   centerName = 'Banaadir National ID Center',
   totalWaiting = 24,
-  currentServing = 'NQS-1018',
+  currentServing = 'REQ-1018',
   avgWaitTime = '14 min',
   countersActive = 8,
   countersTotal = 12,

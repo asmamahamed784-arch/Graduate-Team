@@ -56,7 +56,7 @@ const faqCategories = [
     items: [
       {
         q: 'How do I track my queue position?',
-        a: 'Open the Check Queue page and enter your NQS reference number, such as NQS-1023. The page shows your current position, estimated wait time, status, and counter information.',
+        a: 'Open the Check Queue page and enter your request reference number, such as REQ-1023. The page shows your current position, estimated wait time, status, and counter information.',
       },
       {
         q: 'What happens if I miss my turn?',

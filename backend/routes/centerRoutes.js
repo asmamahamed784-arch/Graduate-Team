@@ -2,25 +2,25 @@ import express from 'express';
 import {
   listCenters,
   getCenterById,
+  getAssignedCenter,
   createCenter,
   updateCenter,
   deleteCenter
 } from '../controllers/centerController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { optionalProtect, protect } from '../middleware/authMiddleware.js';
 import { authorize } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .get(listCenters)
+  .get(optionalProtect, listCenters)
   .post(protect, authorize('admin'), createCenter);
 
-// Alias kept for frontend callers that use /api/centers/list.
-// Must be registered before /:id so "list" is not treated as an ObjectId.
-router.get('/list', listCenters);
+router.get('/list', optionalProtect, listCenters);
+router.get('/assigned/me', protect, authorize('operator', 'super_operator', 'center_manager', 'citizen', 'admin'), getAssignedCenter);
 
 router.route('/:id')
-  .get(getCenterById)
+  .get(optionalProtect, getCenterById)
   .put(protect, authorize('admin'), updateCenter)
   .delete(protect, authorize('admin'), deleteCenter);
 

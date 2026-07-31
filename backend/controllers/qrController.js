@@ -1,11 +1,9 @@
 import QRCode from 'qrcode';
-import Ticket from '../models/Ticket.js';
-import QRScan from '../models/QRScan.js';
-import AuditLog from '../models/AuditLog.js';
-import Notification from '../models/Notification.js';
+import prisma from '../config/prisma.js';
 import { canAccessTicket } from '../utils/rbac.js';
+import { issueNationalIdForCompletedRegistration } from '../utils/nationalIdIssuer.js';
 
-const TICKET_REF_PATTERN = /^NQS-\d+$/i;
+const TICKET_REF_PATTERN = /^(REQ|NQS)-\d+$/i;
 
 const normalizeTicketRef = (value = '') => value.trim().toUpperCase();
 
@@ -13,14 +11,31 @@ const getQueueNumber = (ticketRef) => ticketRef?.split('-').pop() || '--';
 
 const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
-const populateTicket = (query) => query
-  .populate('service', 'name duration category')
-  .populate('center', 'name address city phone')
-  .populate('citizen', 'name email phone nationalId photo');
+const idFrom = (value) => {
+  if (!value) return value;
+  if (typeof value === 'object') return value.id || value._id || value;
+  return value;
+};
+
+const populateTicket = async (ticketRef) => {
+  const ticket = await prisma.ticket.findFirst({ where: { ref: ticketRef } });
+  if (!ticket) return null;
+  const [service, center, citizen] = await Promise.all([
+    ticket.service ? prisma.service.findUnique({ where: { id: ticket.service }, select: { id: true, name: true, duration: true, category: true } }) : null,
+    ticket.center ? prisma.center.findUnique({ where: { id: ticket.center }, select: { id: true, name: true, address: true, city: true, phone: true } }) : null,
+    ticket.citizen ? prisma.user.findUnique({ where: { id: ticket.citizen }, select: { id: true, name: true, email: true, phone: true, nationalId: true, photo: true, citizenProfile: { select: { nationalId: true } } } }) : null
+  ]);
+  return {
+    ...ticket,
+    service: service || ticket.service,
+    center: center || ticket.center,
+    citizen: citizen ? { ...citizen, nationalId: citizen.citizenProfile?.nationalId || citizen.nationalId } : ticket.citizen
+  };
+};
 
 const formatTicketPayload = (ticket, scanId = null, extra = {}) => ({
   scanId,
-  ticketId: ticket._id,
+  ticketId: ticket.id,
   ticketNumber: ticket.ref,
   ticketRef: ticket.ref,
   citizenName: ticket.citizen?.name || ticket.citizenName || 'Citizen',
@@ -80,18 +95,22 @@ const getScanResult = (ticket) => {
 
 const writeScanAudit = async ({ req, ticketRef, status, action = 'Verify QR Ticket' }) => {
   const [scan] = await Promise.all([
-    QRScan.create({
-      ticketRef,
-      scannedBy: req.user._id,
-      status,
-      ipAddress: req.ip || '127.0.0.1'
+    prisma.qRScan.create({
+      data: {
+        ticketRef,
+        scannedBy: req.user.id,
+        status,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     }),
-    AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action,
-      details: `${action}: ${ticketRef}. Result: ${status}`,
-      ipAddress: req.ip || '127.0.0.1'
+    prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action,
+        details: `${action}: ${ticketRef}. Result: ${status}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     })
   ]);
 
@@ -103,7 +122,7 @@ const emitTicketUpdate = (req, ticket) => {
   if (!io || !ticket) return;
 
   if (ticket.center) {
-    const centerId = ticket.center._id || ticket.center;
+    const centerId = idFrom(ticket.center);
     io.to(centerId.toString()).emit('queueUpdate', { centerId });
   }
 
@@ -123,7 +142,7 @@ export const generateQR = async (req, res) => {
     if (!TICKET_REF_PATTERN.test(text)) {
       return res.status(400).json({
         success: false,
-        message: 'QR codes can only be generated for valid NQS ticket references'
+        message: 'QR codes can only be generated for valid request references'
       });
     }
 
@@ -156,12 +175,12 @@ export const verifyQR = async (req, res) => {
       const scan = await writeScanAudit({ req, ticketRef, status: 'Invalid' });
       return res.status(400).json({
         success: false,
-        message: 'Invalid QR code. Only NQS ticket references can be scanned.',
-        data: { scanId: scan._id, ticketRef, status: 'Invalid' }
+        message: 'Invalid QR code. Only request references can be scanned.',
+        data: { scanId: scan.id, ticketRef, status: 'Invalid' }
       });
     }
 
-    const ticket = await populateTicket(Ticket.findOne({ ref: ticketRef }));
+    const ticket = await populateTicket(ticketRef);
     if (ticket && !canAccessTicket(req.user, ticket)) {
       return res.status(403).json({ success: false, message: 'You are not authorized to verify tickets for this center.' });
     }
@@ -172,7 +191,7 @@ export const verifyQR = async (req, res) => {
       return res.json({
         success: true,
         message: result.message,
-        data: formatTicketPayload(ticket, scan._id)
+        data: formatTicketPayload(ticket, scan.id)
       });
     }
 
@@ -180,10 +199,10 @@ export const verifyQR = async (req, res) => {
       success: false,
       message: result.message,
       data: {
-        scanId: scan._id,
+        scanId: scan.id,
         ticketRef,
         status: result.status,
-        ...(ticket ? formatTicketPayload(ticket, scan._id) : {})
+        ...(ticket ? formatTicketPayload(ticket, scan.id) : {})
       }
     });
   } catch (error) {
@@ -208,7 +227,7 @@ export const handleQRAction = async (req, res) => {
       await writeScanAudit({ req, ticketRef, status: 'Rejected', action: 'Reject Invalid QR Ticket' });
       return res.status(400).json({
         success: false,
-        message: 'Invalid QR code. Only NQS ticket references can be processed.'
+        message: 'Invalid QR code. Only request references can be processed.'
       });
     }
 
@@ -216,7 +235,7 @@ export const handleQRAction = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid QR action' });
     }
 
-    const ticket = await populateTicket(Ticket.findOne({ ref: ticketRef }));
+    const ticket = await populateTicket(ticketRef);
 
     if (ticket && !canAccessTicket(req.user, ticket)) {
       return res.status(403).json({ success: false, message: 'You are not authorized to update tickets for this center.' });
@@ -238,10 +257,10 @@ export const handleQRAction = async (req, res) => {
         success: false,
         message: result.message,
         data: {
-          scanId: scan._id,
+          scanId: scan.id,
           ticketRef,
           status: result.status,
-          ...(ticket ? formatTicketPayload(ticket, scan._id) : {})
+          ...(ticket ? formatTicketPayload(ticket, scan.id) : {})
         }
       });
     }
@@ -250,6 +269,8 @@ export const handleQRAction = async (req, res) => {
     let scanStatus = 'Verified';
     let message = 'Ticket verified successfully.';
     let actionStatus = 'Verified';
+    
+    let updateData = {};
 
     if (action === 'verify') {
       auditAction = 'QR Ticket Verified';
@@ -259,9 +280,8 @@ export const handleQRAction = async (req, res) => {
     }
 
     if (action === 'arrive') {
-      ticket.status = 'Being Served';
-      if (!ticket.calledAt) ticket.calledAt = new Date();
-      if (!ticket.counter) ticket.counter = 'Verification Desk';
+      updateData.status = 'Being Served';
+      if (!ticket.counter) updateData.counter = 'Verification Desk';
       auditAction = 'Mark Citizen Arrived';
       scanStatus = 'Arrived';
       message = 'Citizen marked as arrived.';
@@ -269,11 +289,10 @@ export const handleQRAction = async (req, res) => {
     }
 
     if (action === 'complete') {
-      ticket.status = 'Completed';
+      updateData.status = 'Completed';
       if (ticket.requestType !== 'new_national_id') {
-        ticket.requestStatus = 'Completed';
+        updateData.requestStatus = 'Completed';
       }
-      ticket.completedAt = new Date();
       auditAction = 'Complete Appointment From QR';
       scanStatus = 'Completed';
       message = 'Appointment marked as completed.';
@@ -281,9 +300,9 @@ export const handleQRAction = async (req, res) => {
     }
 
     if (action === 'cancel') {
-      ticket.status = 'Cancelled';
+      updateData.status = 'Cancelled';
       if (ticket.requestType !== 'new_national_id') {
-        ticket.requestStatus = 'Rejected';
+        updateData.requestStatus = 'Rejected';
       }
       auditAction = 'Cancel Appointment From QR';
       scanStatus = 'Cancelled';
@@ -291,28 +310,48 @@ export const handleQRAction = async (req, res) => {
       actionStatus = 'Cancelled';
     }
 
-    await ticket.save();
-    const updatedTicket = await populateTicket(Ticket.findById(ticket._id));
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: updateData
+    });
+    if (action === 'complete' && ticket.requestType === 'new_national_id') {
+      const nationalIdNumber = await issueNationalIdForCompletedRegistration(ticket);
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          nationalIdNumber,
+          registrationDetails: {
+            ...(ticket.registrationDetails || {}),
+            nationalIdNumber
+          },
+          requestStatus: 'Completed'
+        }
+      });
+    }
+    
+    const updatedTicket = await populateTicket(ticketRef);
     const scan = await writeScanAudit({ req, ticketRef, status: scanStatus, action: auditAction });
 
-    if (updatedTicket.citizen?._id) {
-      await Notification.create({
-        user: updatedTicket.citizen._id,
-        title: action === 'complete'
-          ? 'Appointment Completed'
-          : action === 'cancel'
-            ? 'Appointment Cancelled'
-            : action === 'arrive'
-              ? 'Arrival Recorded'
-              : 'Ticket Verified',
-        desc: action === 'complete'
-          ? `Your National ID appointment ${ticketRef} has been completed.`
-          : action === 'cancel'
-            ? `Your National ID appointment ${ticketRef} has been cancelled.`
-            : action === 'arrive'
-              ? `Your arrival for National ID ticket ${ticketRef} has been recorded.`
-              : `Your National ID ticket ${ticketRef} has been verified at the center.`,
-        category: 'Queue'
+    if (updatedTicket.citizen?.id) {
+      await prisma.notification.create({
+        data: {
+          user: updatedTicket.citizen.id,
+          title: action === 'complete'
+            ? 'Appointment Completed'
+            : action === 'cancel'
+              ? 'Appointment Cancelled'
+              : action === 'arrive'
+                ? 'Arrival Recorded'
+                : 'Ticket Verified',
+          desc: action === 'complete'
+            ? `Your National ID appointment ${ticketRef} has been completed.`
+            : action === 'cancel'
+              ? `Your National ID appointment ${ticketRef} has been cancelled.`
+              : action === 'arrive'
+                ? `Your arrival for National ID ticket ${ticketRef} has been recorded.`
+                : `Your National ID ticket ${ticketRef} has been verified at the center.`,
+          category: 'Queue'
+        }
       });
     }
 
@@ -321,7 +360,7 @@ export const handleQRAction = async (req, res) => {
     return res.json({
       success: true,
       message,
-      data: formatTicketPayload(updatedTicket, scan._id, { actionStatus })
+      data: formatTicketPayload(updatedTicket, scan.id, { actionStatus })
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

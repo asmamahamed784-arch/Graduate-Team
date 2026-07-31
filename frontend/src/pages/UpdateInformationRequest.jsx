@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiCheckCircle, FiEdit3 } from 'react-icons/fi';
 import { apiClient } from '../api/apiClient';
+import api from '../api/axiosInstance';
 import { useAuth } from '../hooks';
 import {
   UPDATE_INFO_SERVICE_NAME,
   findService,
+  formatSomaliPhone,
   inputClass,
   labelClass,
   pageShellClass,
@@ -14,16 +16,68 @@ import {
   updateFieldOptions
 } from './appointments/appointmentShared';
 
+const isCompletedRegistration = (ticket = {}) => {
+  const status = String(ticket.status || '').trim().toLowerCase();
+  const requestStatus = String(ticket.requestStatus || '').trim().toLowerCase();
+  return status === 'completed' || requestStatus === 'completed';
+};
+
+const isNewRegistrationRecord = (ticket = {}) => {
+  const requestType = String(ticket.requestType || ticket.type || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const serviceName = String(ticket.service?.name || ticket.serviceName || ticket.service || '').trim().toLowerCase();
+
+  if (['new_national_id', 'new_registration', 'national_id_registration'].includes(requestType)) return true;
+  if (requestType && requestType.includes('update')) return false;
+  if (requestType && (requestType.includes('lost') || requestType.includes('replace'))) return false;
+  if (serviceName.includes('update') || serviceName.includes('lost') || serviceName.includes('replacement')) return false;
+  return serviceName.includes('national id') && serviceName.includes('registration');
+};
+
 const getOriginalRegistration = (bookings = []) => (
-  bookings.find((ticket) => ticket.requestType === 'new_national_id') || null
+  bookings.find((ticket) => isNewRegistrationRecord(ticket) && isCompletedRegistration(ticket)) || null
+);
+
+const canResubmitTicket = (ticket = {}) => {
+  const status = String(ticket.status || '').trim().toLowerCase();
+  const requestStatus = String(ticket.requestStatus || '').trim().toLowerCase();
+  return Boolean(ticket.needsResubmission)
+    || ['cancelled', 'canceled', 'needs_correction', 'needs correction', 'correction required'].includes(status)
+    || ['resubmission required', 'needs_correction', 'needs correction', 'correction required'].includes(requestStatus);
+};
+
+const isOpenUpdateRequest = (ticket = {}) => {
+  const requestType = String(ticket.requestType || '').trim().toLowerCase();
+  const status = String(ticket.status || '').trim().toLowerCase();
+  const requestStatus = String(ticket.requestStatus || '').trim().toLowerCase();
+  return requestType === 'update_information' && (
+    ['pending', 'on hold', 'waiting', 'being served', 'in progress'].includes(status) ||
+    ['pending', 'under review', 'approved', 'in progress', 'resubmission required'].includes(requestStatus)
+  );
+};
+
+const pickFirstTextValue = (...values) => (
+  values.map((value) => String(value || '').trim()).find(Boolean) || ''
 );
 
 const nationalIdFromRegistration = (ticket, user) => (
-  user?.nationalId ||
-  ticket?.citizen?.nationalId ||
-  ticket?.registrationDetails?.nationalIdNumber ||
-  ticket?.nationalIdNumber ||
-  ''
+  pickFirstTextValue(
+    user?.nationalId,
+    user?.nationalIdNumber,
+    ticket?.citizen?.nationalId,
+    ticket?.citizen?.nationalIdNumber,
+    ticket?.existingRegistration?.nationalIdNumber,
+    ticket?.registrationDetails?.nationalIdNumber,
+    ticket?.registrationDetails?.issuedNationalId,
+    ticket?.updateDetails?.nationalIdNumber,
+    ticket?.replacementDetails?.nationalIdNumber,
+    ticket?.nationalIdRecord?.nationalIdNumber,
+    ticket?.nationalIdRecord?.number,
+    ticket?.citizenSummary?.nationalIdNumber,
+    ticket?.metadata?.nationalIdNumber,
+    ticket?.issuedNationalId,
+    ticket?.nationalId,
+    ticket?.nationalIdNumber
+  )
 );
 
 const currentValueFromRegistration = (ticket, field, user) => {
@@ -43,7 +97,7 @@ const currentValueFromRegistration = (ticket, field, user) => {
     return details.fullAddress || details.address || user?.address || '';
   }
   if (normalizedField.includes('phone')) {
-    return details.phone || ticket?.citizen?.phone || user?.phone || '';
+    return formatSomaliPhone(details.phone || ticket?.citizen?.phone || user?.phone);
   }
   if (normalizedField.includes('marital')) {
     const value = details.maritalStatus || user?.maritalStatus || '';
@@ -61,46 +115,100 @@ const hydrateChangesFromRegistration = (changes = [], ticket, user) => (
   }))
 );
 
+const normalizeUpdateComparableValue = (field = '', value = '') => {
+  const raw = String(value ?? '').trim();
+  const key = String(field || '').toLowerCase();
+
+  if (key.includes('phone')) return raw.replace(/\D/g, '');
+
+  if (key.includes('birth') || key.includes('date')) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return raw.replace(/\s+/g, '').toLowerCase();
+  }
+
+  return raw.replace(/\s+/g, ' ').toLowerCase();
+};
+
+const getUnchangedUpdateField = (changes = []) => changes.find((change) => {
+  const currentValue = normalizeUpdateComparableValue(change.field, change.currentValue);
+  const newValue = normalizeUpdateComparableValue(change.field, change.newValue);
+  return currentValue && newValue && currentValue === newValue;
+});
+
+const MARITAL_STATUS_OPTIONS = [
+  { value: 'SINGLE', label: 'Single' },
+  { value: 'MARRIED', label: 'Married' }
+];
+
+const MISTAKE_TYPE_OPTIONS = [
+  'Document type',
+  'Office Mistake',
+  'Mixed Mistake'
+];
+
+const normalizeMaritalStatusValue = (value = '') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'single') return 'SINGLE';
+  if (normalized === 'married') return 'MARRIED';
+  return '';
+};
+
+const getMaritalStatusOptions = (currentValue) => {
+  const currentStatus = normalizeMaritalStatusValue(currentValue);
+  return MARITAL_STATUS_OPTIONS.filter((option) => option.value !== currentStatus);
+};
+
 const UpdateInformationRequest = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const resubmitId = searchParams.get('resubmit');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [request, setRequest] = useState(null);
+  const [pendingUpdateRequest, setPendingUpdateRequest] = useState(null);
   const [existingRegistration, setExistingRegistration] = useState(null);
   const [resubmitRequest, setResubmitRequest] = useState(null);
+  const [profileUser, setProfileUser] = useState(user || null);
   const [form, setForm] = useState({
     nationalIdNumber: user?.nationalId || '',
     fullName: user?.name || '',
-    phone: user?.phone || '',
+    phone: formatSomaliPhone(user?.phone),
+    mistakeType: '',
     selectedFields: [],
     changes: [],
     notes: ''
   });
 
   const service = useMemo(() => findService(services, UPDATE_INFO_SERVICE_NAME), [services]);
+  const activeUser = profileUser || user || {};
 
   useEffect(() => {
     const loadServices = async () => {
       try {
-        const [serviceRes, bookingRes] = await Promise.all([
+        const [serviceRes, bookingRes, profileRes] = await Promise.all([
           apiClient.get('/api/services/list'),
-          apiClient.get('/api/bookings/my')
+          apiClient.get('/api/bookings/my'),
+          apiClient.get('/api/auth/profile')
         ]);
+        const profile = profileRes.data || user || {};
+        setProfileUser(profile);
         setServices(serviceRes.data || []);
         const original = getOriginalRegistration(bookingRes.data || []);
+        const openUpdate = (bookingRes.data || []).find((ticket) => isOpenUpdateRequest(ticket) && !canResubmitTicket(ticket));
+        setPendingUpdateRequest(openUpdate || null);
         setExistingRegistration(original);
         if (original && !resubmitId) {
           const details = original.registrationDetails || {};
-          const nationalIdNumber = nationalIdFromRegistration(original, user);
+          const nationalIdNumber = nationalIdFromRegistration(original, profile);
           setForm((current) => ({
             ...current,
             nationalIdNumber: nationalIdNumber || current.nationalIdNumber,
-            fullName: details.fullName || original.citizenName || current.fullName,
-            phone: details.phone || original.citizen?.phone || current.phone,
-            changes: hydrateChangesFromRegistration(current.changes, original, user)
+            fullName: details.fullName || original.citizenName || profile.name || current.fullName,
+            phone: formatSomaliPhone(details.phone || original.citizen?.phone || profile.phone || current.phone),
+            changes: hydrateChangesFromRegistration(current.changes, original, profile)
           }));
         }
       } catch (error) {
@@ -118,11 +226,16 @@ const UpdateInformationRequest = () => {
     let mounted = true;
     const loadResubmitRequest = async () => {
       try {
-        const res = await apiClient.get(`/api/bookings/${resubmitId}`);
+        const [res, profileRes] = await Promise.all([
+          apiClient.get(`/api/bookings/${resubmitId}`),
+          apiClient.get('/api/auth/profile')
+        ]);
+        const profile = profileRes.data || user || {};
+        setProfileUser(profile);
         const existing = res.data || {};
         if (!mounted) return;
-        if (existing.status !== 'Cancelled') {
-          toast.error('Only cancelled requests can be resubmitted.');
+        if (!canResubmitTicket(existing)) {
+          toast.error('Only requests that require correction can be resubmitted.');
           return;
         }
 
@@ -139,11 +252,12 @@ const UpdateInformationRequest = () => {
         setResubmitRequest(existing);
         setRequest(null);
         setForm({
-          nationalIdNumber: details.nationalIdNumber || nationalIdFromRegistration(existingRegistration, user) || '',
-          fullName: details.fullName || existing.citizenName || user?.name || '',
-          phone: details.phone || existing.citizen?.phone || user?.phone || '',
+          nationalIdNumber: details.nationalIdNumber || nationalIdFromRegistration(existingRegistration || existing, profile) || '',
+          fullName: details.fullName || existing.citizenName || profile.name || '',
+          phone: formatSomaliPhone(details.phone || existing.citizen?.phone || profile.phone),
+          mistakeType: details.mistakeType || '',
           selectedFields: details.selectedFields?.length ? details.selectedFields : changes.map((change) => change.field),
-          changes: hydrateChangesFromRegistration(changes, existingRegistration, user),
+          changes: hydrateChangesFromRegistration(changes, existingRegistration || existing, profile),
           notes: details.notes || ''
         });
       } catch (error) {
@@ -175,7 +289,7 @@ const UpdateInformationRequest = () => {
               ...current.changes,
               {
                 field,
-                currentValue: currentValueFromRegistration(existingRegistration, field, user),
+                currentValue: currentValueFromRegistration(existingRegistration, field, activeUser),
                 newValue: '',
                 reason: ''
               }
@@ -194,6 +308,8 @@ const UpdateInformationRequest = () => {
   };
 
   const validateForm = () => {
+    const sourceRegistration = existingRegistration || resubmitRequest;
+    const hydratedChanges = hydrateChangesFromRegistration(form.changes, sourceRegistration, activeUser);
     const required = [
       ['fullName', 'Full name is required.']
     ];
@@ -202,15 +318,27 @@ const UpdateInformationRequest = () => {
       toast.error(missing[1]);
       return false;
     }
+    if (!MISTAKE_TYPE_OPTIONS.includes(form.mistakeType)) {
+      toast.error('Please select type mistake.');
+      return false;
+    }
     if (form.changes.length === 0) {
       toast.error('Please select at least one field to update.');
       return false;
     }
-    const incomplete = form.changes.find((change) => (
-      !String(change.field || '').trim() || !String(change.newValue || '').trim() || !String(change.reason || '').trim()
+    const incomplete = hydratedChanges.find((change) => (
+      !String(change.field || '').trim()
+        || !String(change.currentValue || '').trim()
+        || !String(change.newValue || '').trim()
+        || !String(change.reason || '').trim()
     ));
     if (incomplete) {
-      toast.error('Each selected field needs a new value and reason.');
+      toast.error('Each selected field needs current value, new value, and reason.');
+      return false;
+    }
+    const unchanged = getUnchangedUpdateField(hydratedChanges);
+    if (unchanged) {
+      toast.error(`${unchanged.field} cannot be updated because the new value is the same as the current value.`);
       return false;
     }
     return true;
@@ -223,6 +351,10 @@ const UpdateInformationRequest = () => {
       return;
     }
     if (!validateForm()) return;
+    if (!resubmitId && pendingUpdateRequest) {
+      toast.error(`You already have a pending Update Information request (${pendingUpdateRequest.ref || 'open request'}). Please wait until it is reviewed.`);
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -233,22 +365,40 @@ const UpdateInformationRequest = () => {
           nationalIdNumber: form.nationalIdNumber,
           fullName: form.fullName,
           phone: form.phone,
+          mistakeType: form.mistakeType,
           selectedFields: form.selectedFields,
-          changes: hydrateChangesFromRegistration(form.changes, existingRegistration, user),
+          changes: hydrateChangesFromRegistration(form.changes, existingRegistration || resubmitRequest, activeUser),
           notes: form.notes
         }
       };
-      const resubmitRequestId = resubmitRequest?._id || resubmitRequest?.id;
-      const res = resubmitRequestId
-        ? await apiClient.put(`/api/bookings/${resubmitRequestId}/resubmit`, payload)
-        : await apiClient.post('/api/bookings', payload);
+      const resubmitRequestId = resubmitRequest?._id || resubmitRequest?.id || resubmitRequest?.ref || resubmitId;
+      if (!resubmitRequestId) {
+        const otpResponse = await api.post('/api/otp/request', {
+          purpose: 'update_information',
+          phone: form.phone
+        });
+        sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
+          purpose: 'update_information',
+          phone: otpResponse.data?.data?.phone || form.phone,
+          otpId: otpResponse.data?.data?.otpId,
+          finalRequest: {
+            method: 'post',
+            url: '/api/bookings',
+            payload
+          },
+          successPath: '/dashboard/user/appointments',
+          successMessage: 'Update request submitted successfully.'
+        }));
+        toast.success('OTP sent.');
+        navigate('/otp-verification?purpose=update_information');
+        return;
+      }
+
+      const res = await apiClient.put(`/api/bookings/${resubmitRequestId}/resubmit`, payload);
       setRequest(res.data || {});
       setResubmitRequest(null);
       toast.success(resubmitRequest ? 'Update request resubmitted successfully.' : 'Update request submitted successfully.');
     } catch (error) {
-      if ([400, 404].includes(error.response?.status)) {
-        return;
-      }
       toast.error(error.response?.data?.message || 'Could not submit the update request.');
     } finally {
       setSubmitting(false);
@@ -291,6 +441,15 @@ const UpdateInformationRequest = () => {
           </section>
         )}
 
+        {pendingUpdateRequest && !resubmitRequest && !request && (
+          <section className="rounded-2xl border border-amber-400/40 bg-amber-950/30 p-4 text-amber-100">
+            <p className="text-xs font-black uppercase tracking-wide text-amber-200">Update request already pending</p>
+            <p className="mt-1 text-sm font-semibold">
+              You already submitted Update Information request {pendingUpdateRequest.ref || ''}. Please wait until the Center or Admin reviews it.
+            </p>
+          </section>
+        )}
+
         {existingRegistration && !resubmitRequest && !request && (
           <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-200">Existing registration found</p>
@@ -300,7 +459,27 @@ const UpdateInformationRequest = () => {
           </section>
         )}
 
-        {request ? (
+        {!existingRegistration && !resubmitRequest && !request ? (
+          <section className={panelClass}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <FiEdit3 />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Book your first National ID appointment first</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Update Information is available only after you have submitted a New National ID Registration request.
+                </p>
+                <Link
+                  to="/dashboard/user/new-id-registration"
+                  className="mt-4 inline-flex rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800"
+                >
+                  Book Appointment
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : request ? (
           <section className={panelClass}>
             <div className="flex items-center gap-2 text-emerald-300">
               <FiCheckCircle />
@@ -313,8 +492,9 @@ const UpdateInformationRequest = () => {
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Info label="Request Type" value="Update Information Request" />
               <Info label="Status" value={request.requestStatus || 'Pending'} />
-              <Info label="National ID Number" value={form.nationalIdNumber || 'Not recorded yet'} />
+              <Info label="National ID Number" value={form.nationalIdNumber || 'Not issued yet'} />
               <Info label="Full Name" value={form.fullName} />
+              <Info label="Phone Number" value={form.phone} />
             </div>
             {request.existingRegistration?.found && (
               <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
@@ -343,7 +523,7 @@ const UpdateInformationRequest = () => {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field
                 label="National ID Number"
-                value={form.nationalIdNumber || 'Not recorded yet'}
+                value={form.nationalIdNumber || 'Not issued yet'}
                 onChange={() => {}}
                 readOnly
                 helper="Loaded from your existing National ID record."
@@ -355,6 +535,29 @@ const UpdateInformationRequest = () => {
                 readOnly
                 helper="Loaded from your previous registration."
               />
+              <Field
+                label="Registered Phone Number"
+                value={form.phone}
+                onChange={() => {}}
+                readOnly
+                helper="Loaded from your New National ID registration."
+              />
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label>
+                <span className={labelClass}>Select Type Mistake</span>
+                <select
+                  value={form.mistakeType}
+                  onChange={(event) => updateForm('mistakeType', event.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">Choose mistake type</option>
+                  {MISTAKE_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             {!existingRegistration && (
@@ -384,37 +587,44 @@ const UpdateInformationRequest = () => {
             </div>
 
             <div className="mt-4 space-y-3">
-              {form.changes.map((change) => (
-                <div key={change.field} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
-                  <h3 className="mb-3 text-sm font-black text-[#7CB8FF]">{change.field}</h3>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <Field
-                      label="Current Value"
-                      value={change.currentValue || currentValueFromRegistration(existingRegistration, change.field, user)}
-                      onChange={() => {}}
-                      readOnly
-                      helper="Read from your existing record."
-                    />
-                    {String(change.field || '').toLowerCase().includes('marital') ? (
-                      <label>
-                        <span className={labelClass}>New Value</span>
-                        <select
-                          value={change.newValue}
-                          onChange={(event) => updateChange(change.field, 'newValue', event.target.value)}
-                          className={inputClass}
-                        >
-                          <option value="">Select Marital Status</option>
-                          <option value="SINGLE">Single</option>
-                          <option value="MARRIED">Married</option>
-                        </select>
-                      </label>
-                    ) : (
-                      <Field label="New Value" value={change.newValue} onChange={(value) => updateChange(change.field, 'newValue', value)} />
-                    )}
-                    <Field label="Reason" value={change.reason} onChange={(value) => updateChange(change.field, 'reason', value)} />
+              {form.changes.map((change) => {
+                const currentValue = change.currentValue || currentValueFromRegistration(existingRegistration, change.field, activeUser);
+                const isMaritalStatusField = String(change.field || '').toLowerCase().includes('marital');
+                const maritalStatusOptions = getMaritalStatusOptions(currentValue);
+
+                return (
+                  <div key={change.field} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                    <h3 className="mb-3 text-sm font-black text-[#7CB8FF]">{change.field}</h3>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <Field
+                        label="Current Value"
+                        value={currentValue}
+                        onChange={() => {}}
+                        readOnly
+                        helper="Read from your existing record."
+                      />
+                      {isMaritalStatusField ? (
+                        <label>
+                          <span className={labelClass}>New Value</span>
+                          <select
+                            value={change.newValue}
+                            onChange={(event) => updateChange(change.field, 'newValue', event.target.value)}
+                            className={inputClass}
+                          >
+                            <option value="">Select new marital status</option>
+                            {maritalStatusOptions.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <Field label="New Value" value={change.newValue} onChange={(value) => updateChange(change.field, 'newValue', value)} />
+                      )}
+                      <Field label="Reason" value={change.reason} onChange={(value) => updateChange(change.field, 'reason', value)} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <label className="mt-4 block">
@@ -428,7 +638,7 @@ const UpdateInformationRequest = () => {
             </label>
 
             <div className="mt-5 flex justify-end">
-              <button disabled={submitting || !existingRegistration} className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
+              <button disabled={submitting || (!existingRegistration && !resubmitRequest)} className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
                 {submitting ? 'Submitting...' : 'Submit Update Request'}
               </button>
             </div>

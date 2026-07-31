@@ -2,32 +2,46 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiBell, FiCalendar, FiCheckCircle,
-  FiX, FiInbox, FiSend
+  FiX, FiInbox, FiSend, FiUserCheck
 } from 'react-icons/fi';
 import { useAuth, useNotification } from '../hooks';
+import { buildNotificationRoute } from '../utils/notificationRouting';
 
 const filterTabs = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
   { key: 'Appointments', label: 'Appointments' },
+  { key: 'Operator Approval', label: 'Operator Approval' },
   { key: 'System', label: 'System' },
 ];
 
 const typeColors = {
   Appointments: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
   Queue: 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400',
+  'Operator Approval': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   System: 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400',
 };
 
 const getCategoryIcon = (category) => {
   if (category === 'Appointments') return FiCalendar;
   if (category === 'Queue') return FiCheckCircle;
+  if (category === 'Operator Approval') return FiUserCheck;
   return FiBell;
 };
 
+const getNotificationMessage = (notification = {}) => notification.desc || notification.message || '';
+
 const NotificationManagement = () => {
-  const { isAdmin } = useAuth();
-  const { notifications, unreadCount, markAsRead, markAllRead, deleteNotification, sendNotification, toast } = useNotification();
+  const { user, isAdmin } = useAuth();
+  const {
+    notifications,
+    unreadCount,
+    markAllRead,
+    deleteNotification,
+    sendNotification,
+    openNotification,
+    toast
+  } = useNotification();
   const [activeFilter, setActiveFilter] = useState('all');
   const [compose, setCompose] = useState({
     title: '',
@@ -37,6 +51,7 @@ const NotificationManagement = () => {
     sendSms: true,
   });
   const [sending, setSending] = useState(false);
+  const [openingId, setOpeningId] = useState('');
 
   const filtered = notifications.filter((n) => {
     if (activeFilter === 'all') return true;
@@ -63,9 +78,18 @@ const NotificationManagement = () => {
     }
   };
 
+  const handleOpenNotification = async (notification) => {
+    const id = notification._id || notification.id;
+    setOpeningId(String(id || ''));
+    try {
+      await openNotification(notification);
+    } finally {
+      setOpeningId('');
+    }
+  };
+
   return (
     <div className="min-h-screen pb-12">
-      {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -103,126 +127,113 @@ const NotificationManagement = () => {
 
       {canSend && (
         <motion.form
-          onSubmit={handleSend}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-4xl mb-6 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-5"
+          onSubmit={handleSend}
+          className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <FiSend className="text-blue-700 dark:text-blue-400" />
-            <h2 className="font-semibold text-gray-900 dark:text-white">Send Message</h2>
+          <div className="mb-4 flex items-center gap-2">
+            <FiSend className="text-blue-600 dark:text-blue-400" />
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Send System Notification</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid gap-3 md:grid-cols-2">
             <input
               value={compose.title}
-              onChange={(e) => setCompose({ ...compose, title: e.target.value })}
+              onChange={(e) => setCompose((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="Title"
-              className="px-4 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
             />
             <select
               value={compose.category}
-              onChange={(e) => setCompose({ ...compose, category: e.target.value })}
-              className="px-4 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setCompose((prev) => ({ ...prev, category: e.target.value }))}
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
             >
-              <option>System</option>
-              <option>Appointments</option>
-              <option>Queue</option>
+              <option value="System">System</option>
+              <option value="Appointments">Appointments</option>
+              <option value="Queue">Queue</option>
             </select>
-            <button
-              type="submit"
-              disabled={sending}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
-            >
-              <FiSend size={15} />
-              {sending ? 'Sending...' : 'Send'}
-            </button>
           </div>
           <textarea
             value={compose.desc}
-            onChange={(e) => setCompose({ ...compose, desc: e.target.value })}
-            placeholder="Message"
+            onChange={(e) => setCompose((prev) => ({ ...prev, desc: e.target.value }))}
             rows={3}
-            className="mt-3 w-full px-4 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Message"
+            className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
           />
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-300">
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={compose.sendEmail} onChange={(e) => setCompose({ ...compose, sendEmail: e.target.checked })} />
-              Email record
-            </label>
-            <label className="inline-flex items-center gap-2">
-              <input type="checkbox" checked={compose.sendSms} onChange={(e) => setCompose({ ...compose, sendSms: e.target.checked })} />
-              SMS record
-            </label>
-          </div>
+          <button
+            type="submit"
+            disabled={sending}
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+          >
+            <FiSend size={14} />
+            {sending ? 'Sending...' : 'Send notification'}
+          </button>
         </motion.form>
       )}
 
-      {/* Filter Tabs */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.15 }}
-        className="flex gap-2 mb-6 overflow-x-auto pb-1"
-      >
+      <div className="mb-4 flex flex-wrap gap-2">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
+            type="button"
             onClick={() => setActiveFilter(tab.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-xl whitespace-nowrap transition-all ${
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               activeFilter === tab.key
-                ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
-                : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750'
+                ? 'bg-blue-700 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
             }`}
           >
             {tab.label}
-            {tab.key === 'unread' && unreadCount > 0 && (
-              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                activeFilter === 'unread' ? 'bg-white/20' : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400'
-              }`}>
-                {unreadCount}
-              </span>
-            )}
           </button>
         ))}
-      </motion.div>
+      </div>
 
-      {/* Notification List */}
-      <div className="space-y-3 max-w-4xl">
+      <div className="space-y-3">
         <AnimatePresence mode="popLayout">
           {filtered.length === 0 ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700"
+              className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center dark:border-gray-700 dark:bg-gray-800"
             >
-              <FiInbox className="mx-auto text-4xl text-gray-300 dark:text-gray-600 mb-3" />
+              <FiInbox className="mx-auto mb-3 text-3xl text-gray-300 dark:text-gray-600" />
               <p className="text-gray-500 dark:text-gray-400 font-medium">No notifications</p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">New updates will appear here.</p>
             </motion.div>
           ) : (
             filtered.map((n) => {
               const Icon = getCategoryIcon(n.category);
+              const route = buildNotificationRoute(n, user);
+              const message = getNotificationMessage(n);
+              const id = n._id || n.id;
+              const isOpening = openingId && String(id) === openingId;
               return (
                 <motion.div
-                  key={n._id || n.id}
+                  key={id}
                   layout
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 40, scale: 0.95 }}
                   transition={{ duration: 0.3 }}
-                  onClick={() => markAsRead(n._id || n.id)}
+                  onClick={() => handleOpenNotification(n)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleOpenNotification(n);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all group ${
                     n.read
                       ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                       : 'bg-blue-50/60 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/50 shadow-sm'
                   } hover:shadow-md`}
                 >
-                  {/* Icon */}
                   <div className={`p-2.5 rounded-xl shrink-0 ${typeColors[n.category] || typeColors.System}`}>
                     <Icon size={18} />
                   </div>
 
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       {!n.read && (
@@ -235,18 +246,27 @@ const NotificationManagement = () => {
                       </h3>
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2">
-                      {n.desc}
+                      {message}
                     </p>
                     <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5">
-                      {n.timestamp ? new Date(n.timestamp).toLocaleString() : 'Just now'}
+                      {n.timestamp || n.createdAt ? new Date(n.timestamp || n.createdAt).toLocaleString() : 'Just now'}
                     </p>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleOpenNotification(n);
+                      }}
+                      className="mt-3 inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200 dark:hover:bg-blue-900/70"
+                    >
+                      {isOpening ? 'Opening...' : route ? 'Open related page' : 'Open'}
+                    </button>
                   </div>
 
-                  {/* Delete */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      deleteNotification(n._id || n.id);
+                      deleteNotification(id);
                     }}
                     className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-all shrink-0"
                     aria-label="Delete notification"

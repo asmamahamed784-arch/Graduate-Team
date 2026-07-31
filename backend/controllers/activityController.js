@@ -1,18 +1,23 @@
-import ActivityLog from '../models/ActivityLog.js';
-import QRScan from '../models/QRScan.js';
-import Ticket from '../models/Ticket.js';
+import prisma from '../config/prisma.js';
+import { canAccessTicket } from '../utils/rbac.js';
 
 // @desc    Get UI activity logs
 // @route   GET /api/activities
 // @access  Private/Admin
 export const listActivityLogs = async (req, res) => {
   try {
-    const list = await ActivityLog.find({})
-      .populate('user', 'name role')
-      .sort({ timestamp: -1 })
-      .limit(100);
+    const list = await prisma.activityLog.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: 100
+    });
+    const userIds = [...new Set(list.map((item) => item.user).filter(Boolean))];
+    const users = userIds.length
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, role: true } })
+      : [];
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const data = list.map((item) => ({ ...item, user: usersById.get(item.user) || item.user }));
 
-    return res.json({ success: true, count: list.length, data: list });
+    return res.json({ success: true, count: data.length, data });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -25,7 +30,16 @@ export const verifyQRScan = async (req, res) => {
   try {
     const { ticketRef } = req.body;
 
-    const ticket = await Ticket.findOne({ ref: ticketRef }).populate('service center');
+    const ticket = await prisma.ticket.findFirst({ where: { ref: ticketRef } });
+    if (ticket && !canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to verify tickets for this center.' });
+    }
+    const [service, center] = ticket
+      ? await Promise.all([
+          prisma.service.findUnique({ where: { id: ticket.service } }),
+          prisma.center.findUnique({ where: { id: ticket.center } })
+        ])
+      : [null, null];
 
     let status = 'Invalid';
     if (ticket) {
@@ -36,11 +50,13 @@ export const verifyQRScan = async (req, res) => {
       }
     }
 
-    const scan = await QRScan.create({
-      ticketRef,
-      scannedBy: req.user._id,
-      status,
-      ipAddress: req.ip || '127.0.0.1'
+    const scan = await prisma.qRScan.create({
+      data: {
+        ticketRef,
+        scannedBy: req.user.id,
+        status,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     if (status === 'Valid') {
@@ -48,10 +64,10 @@ export const verifyQRScan = async (req, res) => {
         success: true,
         message: 'Ticket checked.',
         data: {
-          scanId: scan._id,
+          scanId: scan.id,
           ticketRef: ticket.ref,
-          service: ticket.service.name,
-          center: ticket.center.name,
+          service: service?.name || 'National ID Registration',
+          center: center?.name || 'Banaadir National ID Center',
           status: ticket.status
         }
       });
@@ -59,7 +75,7 @@ export const verifyQRScan = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Ticket check returned status: ${status}`,
-        data: { scanId: scan._id, status }
+        data: { scanId: scan.id, status }
       });
     }
   } catch (error) {

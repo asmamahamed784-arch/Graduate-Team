@@ -19,15 +19,15 @@ function App() {
     <AuthProvider>
       <LanguageProvider>
         <ThemeProvider>
-          <NotificationProvider>
-            <QueueProvider>
-              <ToastProvider>
-                <Router>
+          <Router>
+            <NotificationProvider>
+              <QueueProvider>
+                <ToastProvider>
                   <AppRoutes />
-                </Router>
-              </ToastProvider>
-            </QueueProvider>
-          </NotificationProvider>
+                </ToastProvider>
+              </QueueProvider>
+            </NotificationProvider>
+          </Router>
         </ThemeProvider>
       </LanguageProvider>
     </AuthProvider>

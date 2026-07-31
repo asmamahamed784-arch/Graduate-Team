@@ -1,78 +1,79 @@
-# NQS — National Queue System (National ID)
+# NQS - National Queue System (National ID)
 
-A full-stack web system for booking National ID appointments and managing live service queues across Banaadir centers. Citizens book appointments and track queue tickets in real time; operators serve counters; admins manage centers, services, reports, and audits.
+A full-stack web system for booking National ID appointments and managing live service queues across Banaadir centers. Citizens book appointments and track queue tickets; operators serve center queues; admins manage centers, services, reports, and audits.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | React 19, Vite, Tailwind CSS 4, React Router 7, Socket.IO client, i18next, Chart.js |
-| Backend | Node.js, Express 4, Socket.IO, JWT auth, Nodemailer |
-| Database | MongoDB (Mongoose 8) |
+| Frontend | React, Vite, Tailwind CSS, React Router, Socket.IO client |
+| Backend | Node.js, Express, Socket.IO, JWT auth, Nodemailer |
+| Database | PostgreSQL using `pg` |
 
 ## Project Structure
 
-```
+```text
 Graduate-Team/
-├── backend/            # Express REST API + Socket.IO server
-│   ├── config/         # Database connection
-│   ├── controllers/    # Route handlers (business logic)
-│   ├── middleware/     # Auth (JWT), roles, error handling
-│   ├── models/         # Mongoose schemas
-│   ├── routes/         # API route definitions (mounted in server.js)
-│   ├── services/       # Email / SMS log services
-│   ├── utils/          # Seeder, RBAC helpers, scope rules
-│   ├── docs/           # API docs + Postman collection
-│   └── server.js       # App entry point
-├── frontend/           # React SPA (Vite)
-│   ├── public/         # Static assets
-│   └── src/
-│       ├── api/        # Axios instance + response-envelope wrapper
-│       ├── auth/       # JWT token storage helpers
-│       ├── components/ # Reusable UI components
-│       ├── context/    # Auth, Queue, Notification providers
-│       ├── hooks/      # Custom hooks (useAuth, useQueue, ...)
-│       ├── layouts/    # Main / Auth / Dashboard layouts
-│       ├── pages/      # Route views (public, citizen, operator, admin)
-│       ├── routes/     # Router config + route guards
-│       └── utils/      # Shared helpers (ticket PDF, ...)
-├── scripts/            # Verification / maintenance scripts
-└── DEPLOYMENT.md       # Production deployment guide
+  backend/            Express REST API + Socket.IO server
+    config/           PostgreSQL connection
+    controllers/      Route handlers and business logic
+    middleware/       Auth, roles, and error handling
+    models/           PostgreSQL document models
+    routes/           API routes
+    services/         Email and SMS log services
+    utils/            Seeder, RBAC helpers, scope rules
+    docs/             API documentation
+    server.js         Backend entry point
+  frontend/           React SPA
+  scripts/            Verification and maintenance scripts
+  DEPLOYMENT.md       Deployment guide
 ```
 
 ## Getting Started
 
-Prerequisites: Node.js 20+, a running MongoDB instance (local service or Atlas).
+Prerequisites: Node.js 20+ and PostgreSQL.
 
 ```bash
-# 1. Install everything (root tooling + backend + frontend)
 npm run install:all
+```
 
-# 2. Configure the backend
-#    Copy backend/.env.example to backend/.env and fill in MONGO_URI + JWT_SECRET
-#    (SMTP settings are optional in development)
+Copy `backend/.env.example` to `backend/.env` and set:
 
-# 3. Seed the database with demo data (services, centers, users, tickets)
-npm run seed:full
+```env
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/nqs
+POSTGRES_SSL=false
+JWT_SECRET=your_secret
+PORT=5001
+FRONTEND_URL=http://localhost:5173
+```
 
-# 4. Run backend + frontend together
+Seed core data:
+
+```bash
+node backend/utils/seed.js
+```
+
+Run the full system:
+
+```bash
 npm run dev
 ```
 
-Open http://localhost:5173. The Vite dev server proxies `/api` and `/socket.io` to the backend on port 5001.
+Open `http://localhost:5173`. The Vite dev server proxies `/api` and `/socket.io` to the backend on port `5001`.
 
-You can also run each side separately: `npm run dev:backend` / `npm run dev:frontend`, or `npm run dev` inside `backend/` or `frontend/`.
+## Default Accounts
 
-### Seeded accounts (after `npm run seed:full`)
+After running the backend seed:
 
 | Role | Username | Password |
-|----------|------------|----------------|
+|------|----------|----------|
 | Admin | `admin` | `Admin@12345` |
 | Operator | `operator` | `Operator@123` |
-| Citizen | `amina` | `password123` |
+| Center Manager | `<district>center` | `Center@12345` |
+| Center Operator | `<district>operator` | `Operator@123` |
 
-`npm run seed` (without `:full`) only ensures the admin/operator accounts exist and leaves existing data untouched.
+Example center accounts: `hodancenter`, `hodanoperator`, `dayniilecenter`, `dayniileoperator`.
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for MongoDB Atlas, Render (backend), and Vercel (frontend) setup.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for PostgreSQL, Render backend, and Vercel frontend setup.

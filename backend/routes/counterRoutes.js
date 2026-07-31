@@ -11,11 +11,11 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 router.route('/')
-  .get(protect, authorize('operator', 'admin'), listCounters)
+  .get(protect, authorize('operator', 'super_operator', 'center_manager', 'admin'), listCounters)
   .post(protect, authorize('admin'), createCounter);
 
 router.route('/:id')
-  .put(protect, authorize('operator', 'admin'), updateCounter)
+  .put(protect, authorize('operator', 'super_operator', 'center_manager', 'admin'), updateCounter)
   .delete(protect, authorize('admin'), deleteCounter);
 
 export default router;

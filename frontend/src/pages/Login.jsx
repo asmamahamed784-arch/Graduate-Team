@@ -6,16 +6,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiEye, FiEyeOff, FiLock, FiUser } from 'react-icons/fi';
 import { useAuth } from '../hooks';
+import api from '../api/axiosInstance';
 
 const schema = yup.object().shape({
-  username: yup.string().min(3, 'Username must be at least 3 characters').required('Username is required'),
+  username: yup.string().min(3, 'Username or Phone must be at least 3 characters').required('Username or Phone is required'),
   password: yup.string().min(6, 'Password must be at least 6 characters').required('Password is required'),
 });
 
 const dashboardMap = {
   admin: '/dashboard/admin',
+  super_admin: '/dashboard/admin',
   operator: '/operator-dashboard',
   super_operator: '/operator-dashboard',
+  center_manager: '/operator-dashboard',
+  user_manager: '/user-management',
   citizen: '/dashboard/user',
 };
 
@@ -29,6 +33,7 @@ export default function Login() {
   const {
     register,
     handleSubmit,
+    getValues,
     setValue,
     formState: { errors },
   } = useForm({ resolver: yupResolver(schema) });
@@ -58,6 +63,20 @@ export default function Login() {
         localStorage.removeItem('nqs_remembered_username');
       }
 
+      if (user?.otpRequired) {
+        sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
+          purpose: 'login',
+          phone: user.phone,
+          otpId: user.otpId,
+          loginToken: user.loginToken,
+          role: user.role,
+          successMessage: 'Login verified.'
+        }));
+        toast.success('OTP sent to your phone.');
+        navigate('/verify-otp?purpose=login', { replace: true });
+        return;
+      }
+
       navigate(dashboardMap[user.role] || '/');
     } catch (error) {
       toast.error(error.response?.data?.message || error.message || 'Invalid username or password.');
@@ -66,8 +85,28 @@ export default function Login() {
     }
   };
 
-  const handleForgotPassword = () => {
-    toast.info('Password reset is not configured yet.');
+  const handleForgotPassword = async () => {
+    const currentUsername = getValues('username') || '';
+    const identifier = window.prompt('Enter your username or registered phone number', currentUsername);
+    if (!identifier) return;
+    setLoading(true);
+    try {
+      const otpResponse = await api.post('/api/otp/forgot-password/request', { identifier });
+      sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
+        purpose: 'forgot_password',
+        phone: otpResponse.data?.data?.phone || identifier,
+        otpId: otpResponse.data?.data?.otpId,
+        identifier,
+        userId: otpResponse.data?.data?.userId,
+        successMessage: 'OTP verified.'
+      }));
+      toast.success('OTP sent.');
+      navigate('/forgot-password?purpose=forgot_password');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not send OTP.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -83,7 +122,7 @@ export default function Login() {
         <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div>
             <label htmlFor="username" className="mb-2 block text-sm font-bold text-blue-100">
-              Username
+              Username or Phone
             </label>
             <div className="relative">
               <FiUser className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -91,7 +130,7 @@ export default function Login() {
                 id="username"
                 type="text"
                 autoComplete="username"
-                placeholder="Username"
+                placeholder="Username or 618318172"
                 {...register('username')}
                 className={`w-full rounded-xl border bg-white px-12 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 ${
                   errors.username ? 'border-red-400' : 'border-transparent'

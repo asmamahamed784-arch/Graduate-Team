@@ -209,7 +209,7 @@ const TrackQueue = () => {
                         value={refInput}
                         onChange={(event) => setRefInput(event.target.value.toUpperCase())}
                         onKeyDown={(event) => event.key === 'Enter' && handleSearch()}
-                        placeholder="Enter ticket reference (e.g. NQS-1023)"
+                        placeholder="Enter request reference (e.g. REQ-1023)"
                         className="min-w-0 flex-1 bg-transparent text-lg font-black outline-none"
                       />
                     </div>

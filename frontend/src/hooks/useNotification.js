@@ -19,7 +19,8 @@ export const useNotification = () => {
     markAllRead,
     deleteNotification,
     addNotification,
-    sendNotification
+    sendNotification,
+    openNotification
   } = context;
 
   // Premium Toast notifications with standard themes
@@ -79,6 +80,7 @@ export const useNotification = () => {
     deleteNotification,
     addNotification,
     sendNotification,
+    openNotification,
     toast: {
       success,
       error,

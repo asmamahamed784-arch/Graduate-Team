@@ -2,6 +2,8 @@ import express from 'express';
 import {
   registerUser,
   loginUser,
+  resendLoginOtp,
+  verifyLoginOtp,
   getUserProfile,
   updateUserProfile,
   changePassword,
@@ -15,11 +17,13 @@ const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/login/otp/verify', verifyLoginOtp);
+router.post('/login/otp/resend', resendLoginOtp);
 router.post('/logout', protect, logoutUser);
 router.route('/profile')
   .get(protect, getUserProfile)
-  .put(protect, authorize('citizen', 'operator', 'super_operator', 'admin'), updateUserProfile)
+  .put(protect, authorize('citizen', 'operator', 'super_operator', 'center_manager', 'admin'), updateUserProfile)
   .delete(protect, authorize('citizen', 'admin'), deleteUserAccount);
-router.put('/password', protect, authorize('citizen', 'operator', 'super_operator', 'admin'), changePassword);
+router.put('/password', protect, authorize('citizen', 'operator', 'super_operator', 'center_manager', 'admin'), changePassword);
 
 export default router;

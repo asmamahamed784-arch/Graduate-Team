@@ -8,11 +8,11 @@ import {
 } from 'react-icons/fi';
 
 const DEFAULT_TICKETS = [
-  { ref: 'NQS-1023', service: 'National ID Registration', position: 1, status: 'Being Served', waitTime: '2 min' },
-  { ref: 'NQS-1024', service: 'National ID Registration', position: 2, status: 'Next', waitTime: '5 min' },
-  { ref: 'NQS-1025', service: 'National ID Registration', position: 3, status: 'Waiting', waitTime: '12 min' },
-  { ref: 'NQS-1026', service: 'National ID Registration', position: 4, status: 'Waiting', waitTime: '18 min' },
-  { ref: 'NQS-1027', service: 'National ID Registration', position: 5, status: 'Waiting', waitTime: '24 min' },
+  { ref: 'REQ-1023', service: 'National ID Registration', position: 1, status: 'Being Served', waitTime: '2 min' },
+  { ref: 'REQ-1024', service: 'National ID Registration', position: 2, status: 'Next', waitTime: '5 min' },
+  { ref: 'REQ-1025', service: 'National ID Registration', position: 3, status: 'Waiting', waitTime: '12 min' },
+  { ref: 'REQ-1026', service: 'National ID Registration', position: 4, status: 'Waiting', waitTime: '18 min' },
+  { ref: 'REQ-1027', service: 'National ID Registration', position: 5, status: 'Waiting', waitTime: '24 min' },
 ];
 
 const statusConfig = {

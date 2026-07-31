@@ -22,7 +22,7 @@ export const timeSlots = [
   '04:00 PM'
 ];
 
-export const updateFieldOptions = ['Name', "Mother's Name", 'Date of Birth', 'Address', 'Marital Status', 'Other'];
+export const updateFieldOptions = ['Name', "Mother's Name", 'Date of Birth', 'Phone Number', 'Address', 'Marital Status', 'Other'];
 
 export const todayKey = () => {
   const today = new Date();
@@ -32,7 +32,43 @@ export const todayKey = () => {
   return `${year}-${month}-${day}`;
 };
 
-export const maxDateKey = (days = 30) => {
+export const isBeforeToday = (value) => Boolean(value && value < todayKey());
+
+export const slotToMinutes = (slot) => {
+  const raw = String(slot || '').trim();
+  if (!raw) return null;
+
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(raw);
+  if (match) {
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const period = match[3].toUpperCase();
+
+    if (period === 'PM' && hour < 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+
+    return (hour * 60) + minute;
+  }
+
+  const [hour, minute = '0'] = raw.split(':');
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
+  if (Number.isNaN(hourNumber) || Number.isNaN(minuteNumber)) return null;
+  return (hourNumber * 60) + minuteNumber;
+};
+
+export const currentTimeMinutes = () => {
+  const now = new Date();
+  return (now.getHours() * 60) + now.getMinutes();
+};
+
+export const isPastTimeSlot = (dateValue, slot) => {
+  if (!dateValue || dateValue !== todayKey()) return false;
+  const minutes = slotToMinutes(slot);
+  return minutes !== null && minutes <= currentTimeMinutes();
+};
+
+export const maxDateKey = (days = 365) => {
   const date = new Date();
   date.setDate(date.getDate() + days);
   const year = date.getFullYear();
@@ -48,6 +84,18 @@ export const formatDate = (value) => {
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 };
 
+export const formatSomaliPhone = (value) => {
+  const raw = String(value || '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('25261')) return `+${digits.slice(0, 12)}`;
+  if (digits.startsWith('061')) return `+252${digits.slice(1, 10)}`;
+  if (digits.startsWith('61')) return `+252${digits.slice(0, 9)}`;
+  return `+25261${digits.slice(0, 7)}`;
+};
+
+export const isValidSomaliPhone = (value) => /^\+25261\d{7}$/.test(formatSomaliPhone(value));
+
 export const isFridayDate = (value) => {
   if (!value) return false;
   const date = new Date(`${value}T00:00:00`);
@@ -62,6 +110,7 @@ export const calculateAge = (dateOfBirth) => {
   const dob = new Date(`${dateOfBirth}T00:00:00`);
   if (Number.isNaN(dob.getTime())) return '';
   const today = new Date();
+  if (dob > today) return '';
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
@@ -81,7 +130,10 @@ export const findService = (services, serviceName) => (
 );
 
 export const activeCenters = (centers) => (
-  centers.filter((center) => (!center.status || ['Active', 'Open'].includes(center.status)) && center.schedule?.isActive !== false)
+  centers.filter((center) => {
+    const status = String(center.status || 'Active').trim().toLowerCase();
+    return (!status || ['active', 'open'].includes(status)) && center.schedule?.isActive !== false;
+  })
 );
 
 export const pageShellClass = 'min-h-screen bg-[#F5F8FC] px-3 py-10 pt-28 text-slate-900 sm:px-5 lg:px-6';

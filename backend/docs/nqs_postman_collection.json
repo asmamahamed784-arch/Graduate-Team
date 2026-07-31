@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "84c8a2b5-559d-4e92-bc2f-a9cb62fe7694",
 		"name": "NQS Government Portal Backend",
-		"description": "Postman collection for testing the National Queue System (NQS) Node.js/Express/MongoDB REST API.",
+		"description": "Postman collection for testing the National Queue System (NQS) Node.js/Express/PostgreSQL REST API.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [

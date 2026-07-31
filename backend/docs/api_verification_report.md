@@ -5,7 +5,7 @@ Generated: 2026-06-08
 ## Summary
 
 - Backend restarted successfully on `http://localhost:5001`.
-- MongoDB connection confirmed by backend startup log.
+- PostgreSQL connection confirmed by backend startup log.
 - Full API verification script completed with zero failed endpoints.
 - Frontend Vite dev server started successfully on `http://127.0.0.1:5173`.
 - Frontend route probes returned HTTP 200 for all navigation routes listed below.

@@ -6,7 +6,7 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 router.get('/stats', protect, authorize('admin'), getDashboardStats);
-router.get('/operator-dashboard', protect, authorize('operator', 'super_operator', 'admin'), getOperatorDashboardStats);
+router.get('/operator-dashboard', protect, authorize('operator', 'super_operator', 'center_manager', 'admin'), getOperatorDashboardStats);
 router.get('/analytics', protect, authorize('admin'), getReportsAndAnalytics);
 
 export default router;

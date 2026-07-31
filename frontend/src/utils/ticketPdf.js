@@ -137,7 +137,7 @@ const buildPdf = ({ lines, qrImageHex }) => {
 };
 
 export const downloadTicketPdf = async (ticket) => {
-  const ref = ticket.ref || ticket.reference || 'NQS-TICKET';
+  const ref = ticket.ref || ticket.reference || 'REQ-TICKET';
   const lines = [
     `Reference: ${ref}`,
     `Service: ${ticket.service || 'N/A'}`,

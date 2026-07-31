@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
 /**
  * Reusable Card component.
@@ -12,23 +11,18 @@ import { motion } from 'framer-motion';
  * @returns {JSX.Element}
  */
 const Card = ({ title, children, className = '', variant = 'primary' }) => {
-  const bgClass = variant === 'secondary' ? 'bg-slate-50' : 'bg-white';
-  const borderClass = 'border border-slate-200';
+  const bgClass = variant === 'secondary' ? 'bg-[var(--nqs-card-soft)]' : 'bg-[var(--nqs-card)]';
+  const borderClass = 'border border-[var(--nqs-border)]';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      className={`rounded-xl shadow-sm ${bgClass} ${borderClass} ${className}`}
-    >
+    <div className={`rounded-lg shadow-sm ${bgClass} ${borderClass} ${className}`}>
       {title && (
-        <div className="px-6 py-4 border-b border-slate-200 text-lg font-semibold text-slate-900">
+        <div className="border-b border-[var(--nqs-border)] px-5 py-3 text-base font-semibold text-[var(--nqs-text)]">
           {title}
         </div>
       )}
-      <div className="p-6 text-slate-700">{children}</div>
-    </motion.div>
+      <div className="p-5 text-sm text-[var(--nqs-muted)]">{children}</div>
+    </div>
   );
 };
 

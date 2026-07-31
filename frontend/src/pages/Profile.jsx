@@ -5,11 +5,12 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import {
-  FiUser, FiMail, FiPhone, FiMapPin, FiCalendar, FiHash,
+  FiUser, FiPhone, FiMapPin, FiCalendar, FiHash,
   FiLock, FiEye, FiEyeOff, FiSave, FiStar, FiClock, FiCheckCircle
 } from 'react-icons/fi';
 import api from '../api/axiosInstance';
 import { useAuth } from '../hooks';
+import { formatSomaliPhone, isValidSomaliPhone } from './appointments/appointmentShared';
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -22,8 +23,7 @@ const fadeUp = {
 
 const profileSchema = yup.object().shape({
   fullName: yup.string().required('Full name is required'),
-  email: yup.string().email('Invalid email').required('Email is required'),
-  phone: yup.string().matches(/^\+?[\d\s-]{7,15}$/, 'Invalid phone number').required('Phone is required'),
+  phone: yup.string().required('Phone is required').test('somali-phone', 'Enter a valid Somali phone number.', (value) => isValidSomaliPhone(value)),
   nationalId: yup.string().optional(),
   dateOfBirth: yup.string().optional(),
   address: yup.string().optional(),
@@ -86,8 +86,7 @@ const Profile = () => {
     resolver: yupResolver(profileSchema),
     defaultValues: {
       fullName: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
+      phone: formatSomaliPhone(user?.phone),
       nationalId: '',
       dateOfBirth: '',
       address: '',
@@ -106,8 +105,7 @@ const Profile = () => {
   useEffect(() => {
     resetProfile({
       fullName: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
+      phone: formatSomaliPhone(user?.phone),
       nationalId: user?.nationalId || '',
       dateOfBirth: user?.dateOfBirth || '',
       address: user?.address || '',
@@ -142,8 +140,7 @@ const Profile = () => {
     try {
       const res = await api.put('/api/auth/profile', {
         name: values.fullName,
-        email: values.email,
-        phone: values.phone,
+        phone: formatSomaliPhone(values.phone),
         nationalId: values.nationalId,
         dateOfBirth: values.dateOfBirth,
         address: values.address,
@@ -193,7 +190,7 @@ const Profile = () => {
           </div>
           <div className="text-center sm:text-left">
             <h1 className="text-2xl font-bold">{user?.name || 'NQS User'}</h1>
-            <p className="text-slate-500 text-sm">{user?.email || 'No email on file'}</p>
+            <p className="text-slate-500 text-sm">{formatSomaliPhone(user?.phone) || 'No phone number added'}</p>
             <div className="flex items-center justify-center sm:justify-start gap-3 mt-2">
               <span className="px-3 py-0.5 bg-blue-500/10 text-[#4189DD] rounded-full text-xs font-medium">
                 {user?.role || 'user'}
@@ -232,14 +229,6 @@ const Profile = () => {
                 placeholder="Enter full name"
                 error={profileErrors.fullName}
                 {...regProfile('fullName')}
-              />
-              <InputField
-                icon={FiMail}
-                label="Email Address"
-                type="email"
-                placeholder="Enter email"
-                error={profileErrors.email}
-                {...regProfile('email')}
               />
               <InputField
                 icon={FiPhone}

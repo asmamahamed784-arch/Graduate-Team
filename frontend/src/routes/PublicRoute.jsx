@@ -21,8 +21,11 @@ export const PublicRoute = () => {
   if (isAuthenticated) {
     const dashboardMap = {
       admin: '/dashboard/admin',
+      super_admin: '/dashboard/admin',
       operator: '/dashboard/operator',
       super_operator: '/dashboard/operator',
+      center_manager: '/dashboard/operator',
+      user_manager: '/user-management',
       citizen: '/dashboard/user'
     };
     return <Navigate to={dashboardMap[role] || '/'} replace />;

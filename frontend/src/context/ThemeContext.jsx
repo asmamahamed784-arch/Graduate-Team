@@ -8,14 +8,13 @@ export const ThemeContext = createContext({
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = localStorage.getItem('nqs-theme') || localStorage.getItem('theme');
     if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
     return 'light';
   });
 
   useEffect(() => {
     const root = document.documentElement;
-    const body = document.body;
     const isDark = theme === 'dark';
 
     root.classList.toggle('dark', isDark);
@@ -24,9 +23,7 @@ export const ThemeProvider = ({ children }) => {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
 
-    body.classList.toggle('dark', isDark);
-    body.classList.toggle('nqs-theme-dark', isDark);
-    body.classList.toggle('nqs-theme-light', !isDark);
+    localStorage.setItem('nqs-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 

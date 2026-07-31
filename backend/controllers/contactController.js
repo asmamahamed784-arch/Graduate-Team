@@ -1,4 +1,4 @@
-import ContactMessage from '../models/ContactMessage.js';
+import prisma from '../config/prisma.js';
 import { sendNationalIdEmail } from '../services/emailService.js';
 
 export const submitContactMessage = async (req, res) => {
@@ -9,12 +9,14 @@ export const submitContactMessage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'All contact form fields are required' });
     }
 
-    const contactMessage = await ContactMessage.create({
-      fullName,
-      email,
-      phone,
-      message,
-      subject: 'National ID Contact Message'
+    const contactMessage = await prisma.contactMessage.create({
+      data: {
+        fullName,
+        email,
+        phone,
+        message,
+        subject: 'National ID Contact Message'
+      }
     });
 
     await sendNationalIdEmail({
@@ -39,7 +41,10 @@ export const submitContactMessage = async (req, res) => {
 
 export const listContactMessages = async (req, res) => {
   try {
-    const messages = await ContactMessage.find({}).sort({ createdAt: -1 }).limit(100);
+    const messages = await prisma.contactMessage.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
     return res.json({ success: true, count: messages.length, data: messages });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

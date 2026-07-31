@@ -1,62 +1,153 @@
-/* src/styles/theme.css */
-/* Modern government portal theme tokens */
+/* src/styles/theme.css
+   Single source of truth for NQS web light/dark theme tokens.
+   Primary action color: #2563EB
+*/
 
-:root {
-  /* Brand Palettes */
-  --color-primary-50: #f0f4f9;
-  --color-primary-100: #dce6f2;
-  --color-primary-200: #bfd1e6;
-  --color-primary-300: #93b2d6;
-  --color-primary-400: #608ec3;
-  --color-primary-500: #4189DD;
-  --color-primary-600: #2c5691;
-  --color-primary-700: #1a365d;
-  --color-primary-800: #10223e;
-  --color-primary-900: #0a1427;
+:root,
+html.nqs-theme-light,
+html:not(.nqs-theme-dark) {
+  /* Brand */
+  --color-primary: #2563EB;
+  --color-primary-hover: #1D4ED8;
+  --color-primary-soft: rgba(37, 99, 235, 0.12);
 
-  --color-secondary-50: #f0fdfa;
+  /* Surfaces */
+  --bg-app: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-secondary: #F1F5F9;
+  --bg-input: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(15, 23, 42, 0.45);
+
+  /* Text */
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --text-inverse: #FFFFFF;
+  --text-on-primary: #FFFFFF;
+
+  /* Borders & focus */
+  --border-light: #E2E8F0;
+  --border-focus: #2563EB;
+
+  /* Status (meaning only) */
+  --color-success: #16A34A;
+  --color-success-soft: #DCFCE7;
+  --color-danger: #DC2626;
+  --color-danger-soft: #FEE2E2;
+  --color-warning: #D97706;
+  --color-warning-soft: #FEF3C7;
+  --color-neutral: #64748B;
+  --color-neutral-soft: #F1F5F9;
+
+  /* Legacy aliases used across the app */
+  --color-primary-50: #EFF6FF;
+  --color-primary-100: #DBEAFE;
+  --color-primary-200: #BFDBFE;
+  --color-primary-300: #93C5FD;
+  --color-primary-400: #60A5FA;
+  --color-primary-500: #2563EB;
+  --color-primary-600: #1D4ED8;
+  --color-primary-700: #1E40AF;
+  --color-primary-800: #1E3A8A;
+  --color-primary-900: #172554;
+
+  --color-secondary-50: #F0FDFA;
   --color-secondary-500: #14B8A6;
-  --color-secondary-600: #0d9488;
-  --color-secondary-700: #0f766e;
+  --color-secondary-600: #0D9488;
+  --color-secondary-700: #0F766E;
 
-  --color-accent-50: #fef3c7;
+  --color-accent-50: #FEF3C7;
   --color-accent-500: #F59E0B;
-  --color-accent-600: #d97706;
-  --color-accent-700: #b45309;
+  --color-accent-600: #D97706;
+  --color-accent-700: #B45309;
 
-  /* Official portal surface tokens */
-  --bg-app: #dceeff;
-  --bg-card: #f1f8ff;
-  --text-main: #0b1f3a;
-  --text-muted: #38546f;
-  --border-light: #b7d7f3;
-  --border-focus: #4189DD;
-  
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --nqs-bg: var(--bg-app);
+  --nqs-card: var(--bg-card);
+  --nqs-card-strong: var(--bg-card);
+  --nqs-card-soft: var(--bg-secondary);
+  --nqs-text: var(--text-main);
+  --nqs-heading: var(--text-main);
+  --nqs-muted: var(--text-muted);
+  --nqs-border: var(--border-light);
+  --nqs-input: var(--bg-input);
+  --nqs-header: var(--bg-card);
+  --nqs-header-text: var(--text-main);
+  --nqs-navbar-bg: var(--bg-card);
+  --nqs-sidebar-bg: var(--bg-card);
+  --nqs-footer-bg: var(--bg-secondary);
+  --nqs-primary: var(--color-primary);
+  --nqs-primary-hover: var(--color-primary-hover);
+  --nqs-brand: var(--color-primary);
+  --nqs-success: var(--color-success);
+  --nqs-danger: var(--color-danger);
+  --nqs-warning: var(--color-warning);
 
-  --transition-smooth: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.08);
+
+  --transition-smooth: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  --radius-xl: 8px;
+  --radius-2xl: 8px;
 }
 
-/* Dark mode tokens used by the whole web app. */
 .dark,
-.nqs-theme-dark {
-  --bg-app: #061225;
-  --bg-card: #071a33;
-  --text-main: #f8fafc;
-  --text-muted: #cbd5e1;
-  --border-light: #1d355f;
-  --border-focus: #60a5fa;
+html.dark,
+html.nqs-theme-dark {
+  --color-primary: #2563EB;
+  --color-primary-hover: #3B82F6;
+  --color-primary-soft: rgba(37, 99, 235, 0.22);
 
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.28);
-  --shadow-md: 0 8px 20px -14px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 18px 36px -24px rgba(0, 0, 0, 0.65);
+  --bg-app: #0F172A;
+  --bg-card: #1E293B;
+  --bg-secondary: #334155;
+  --bg-input: #1E293B;
+  --bg-elevated: #1E293B;
+  --bg-overlay: rgba(2, 6, 23, 0.65);
+
+  --text-main: #F8FAFC;
+  --text-muted: #CBD5E1;
+  --text-inverse: #0F172A;
+  --text-on-primary: #FFFFFF;
+
+  --border-light: #475569;
+  --border-focus: #2563EB;
+
+  --color-success: #22C55E;
+  --color-success-soft: rgba(34, 197, 94, 0.16);
+  --color-danger: #F87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.16);
+  --color-warning: #FBBF24;
+  --color-warning-soft: rgba(251, 191, 36, 0.16);
+  --color-neutral: #94A3B8;
+  --color-neutral-soft: rgba(148, 163, 184, 0.16);
+
+  --nqs-bg: var(--bg-app);
+  --nqs-card: var(--bg-card);
+  --nqs-card-strong: var(--bg-card);
+  --nqs-card-soft: var(--bg-secondary);
+  --nqs-text: var(--text-main);
+  --nqs-heading: var(--text-main);
+  --nqs-muted: var(--text-muted);
+  --nqs-border: var(--border-light);
+  --nqs-input: var(--bg-input);
+  --nqs-header: var(--bg-card);
+  --nqs-header-text: var(--text-main);
+  --nqs-navbar-bg: var(--bg-card);
+  --nqs-sidebar-bg: var(--bg-card);
+  --nqs-footer-bg: var(--bg-card);
+  --nqs-primary: var(--color-primary);
+  --nqs-primary-hover: var(--color-primary-hover);
+  --nqs-brand: var(--color-primary);
+  --nqs-success: var(--color-success);
+  --nqs-danger: var(--color-danger);
+  --nqs-warning: var(--color-warning);
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
-/* Premium Animations */
 @keyframes pulseGlow {
   0%, 100% {
     transform: scale(1);
@@ -65,7 +156,6 @@
   50% {
     transform: scale(1.1);
     opacity: 1;
-    filter: drop-shadow(0 0 8px rgba(65, 137, 221, 0.35));
   }
 }
 

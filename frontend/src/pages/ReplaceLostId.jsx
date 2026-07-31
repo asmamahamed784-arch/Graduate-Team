@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FiArrowLeft, FiCheckCircle, FiClock, FiDownload, FiRefreshCw } from 'react-icons/fi';
 import api from '../api/axiosInstance';
@@ -11,8 +11,11 @@ import {
   activeCenters,
   findService,
   formatDate,
+  formatSomaliPhone,
   getDistrict,
   inputClass,
+  isBeforeToday,
+  isPastTimeSlot,
   labelClass,
   maxDateKey,
   pageShellClass,
@@ -22,24 +25,24 @@ import {
 } from './appointments/appointmentShared';
 
 const BANAADIR_DISTRICTS = [
+  'Abdulaziz',
+  'Boondheere',
+  'Dayniile',
+  'Dharkenley',
+  'Garasbaaley',
+  'Heliwaa',
   'Hodan',
   'Howlwadaag',
-  'Wadajir',
-  'Dharkenley',
-  'Dayniile',
-  'Heliwaa',
-  'Yaqshiid',
   'Kaaraan',
-  'Shibis',
-  'Boondheere',
-  'Xamar Weyne',
-  'Xamar Jajab',
-  'Waaberi',
-  'Wardhiigley',
-  'Abdulaziz',
-  'Shangaani',
   'Kaxda',
-  'Garasbaaley'
+  'Shangaani',
+  'Shibis',
+  'Waaberi',
+  'Wadajir',
+  'Wardhiigley',
+  'Xamar Jajab',
+  'Xamar Weyne',
+  'Yaqshiid'
 ];
 
 const districtKey = (value) => String(value || '')
@@ -58,18 +61,33 @@ const DISTRICT_ALIASES = {
   banaadir: 'Hodan'
 };
 
-const normalizeDistrictValue = (value) => {
+const normalizeDistrictValue = (value, districtOptions = BANAADIR_DISTRICTS) => {
   const key = districtKey(value);
-  return BANAADIR_DISTRICTS.find((district) => districtKey(district) === key) || DISTRICT_ALIASES[key] || '';
+  const directMatch = districtOptions.find((district) => districtKey(district) === key);
+  if (directMatch) return directMatch;
+  const alias = DISTRICT_ALIASES[key];
+  return districtOptions.find((district) => districtKey(district) === districtKey(alias)) || '';
 };
 
 const getOriginalRegistration = (bookings = []) => (
-  bookings.find((ticket) => ticket.requestType === 'new_national_id') || null
+  bookings.find((ticket) => {
+    const status = String(ticket.status || ticket.requestStatus || '').trim().toLowerCase();
+    return ticket.requestType === 'new_national_id' && status === 'completed';
+  }) || null
 );
+
+const canResubmitTicket = (ticket = {}) => {
+  const status = String(ticket.status || '').trim().toLowerCase();
+  const requestStatus = String(ticket.requestStatus || '').trim().toLowerCase();
+  return Boolean(ticket.needsResubmission)
+    || ['cancelled', 'canceled', 'needs_correction', 'needs correction', 'correction required'].includes(status)
+    || ['resubmission required', 'needs_correction', 'needs correction', 'correction required'].includes(requestStatus);
+};
 
 const ReplaceLostId = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const resubmitId = searchParams.get('resubmit');
   const [services, setServices] = useState([]);
   const [centers, setCenters] = useState([]);
@@ -84,7 +102,7 @@ const ReplaceLostId = () => {
   const [form, setForm] = useState({
     nationalIdNumber: user?.nationalId || '',
     fullName: user?.name || '',
-    phone: user?.phone || '',
+    phone: formatSomaliPhone(user?.phone),
     district: '',
     dateLost: '',
     placeLost: '',
@@ -102,10 +120,31 @@ const ReplaceLostId = () => {
     () => centers.find((center) => (center._id || center.id) === form.centerId),
     [centers, form.centerId]
   );
-  const selectedDistrict = normalizeDistrictValue(form.district);
-  const filteredCenters = useMemo(
-    () => centers.filter((center) => normalizeDistrictValue(getDistrict(center)) === selectedDistrict),
-    [centers, selectedDistrict]
+  const districtOptions = useMemo(() => {
+    const options = [];
+    centers.forEach((center) => {
+      const rawDistrict = getDistrict(center);
+      const normalized = normalizeDistrictValue(rawDistrict, options);
+      const label = normalized || String(rawDistrict || '').trim();
+      if (label && !options.some((item) => districtKey(item) === districtKey(label))) {
+        options.push(label);
+      }
+    });
+    return options.sort((a, b) => a.localeCompare(b));
+  }, [centers]);
+  const selectedDistrict = normalizeDistrictValue(form.district, districtOptions);
+  const districtCenterOptions = useMemo(() => {
+    const normalizedDistrict = normalizeDistrictValue(selectedDistrict, districtOptions);
+    return [...centers].sort((a, b) => {
+      const aMatchesDistrict = normalizedDistrict && normalizeDistrictValue(getDistrict(a), districtOptions) === normalizedDistrict;
+      const bMatchesDistrict = normalizedDistrict && normalizeDistrictValue(getDistrict(b), districtOptions) === normalizedDistrict;
+      if (aMatchesDistrict !== bMatchesDistrict) return aMatchesDistrict ? -1 : 1;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }, [centers, selectedDistrict, districtOptions]);
+  const recommendedCenters = useMemo(
+    () => centers.filter((center) => selectedDistrict && normalizeDistrictValue(getDistrict(center), districtOptions) === selectedDistrict),
+    [centers, selectedDistrict, districtOptions]
   );
   const bookedSlots = form.date ? availability[form.date]?.bookedSlots || [] : [];
   const availableDateOptions = useMemo(
@@ -115,6 +154,12 @@ const ReplaceLostId = () => {
       .sort(),
     [availability]
   );
+
+  useEffect(() => {
+    if (!centers.length || !form.district) return;
+    if (normalizeDistrictValue(form.district, districtOptions)) return;
+    setForm((current) => ({ ...current, district: '', centerId: '', date: '', timeSlot: '' }));
+  }, [centers.length, districtOptions, form.district]);
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -134,7 +179,7 @@ const ReplaceLostId = () => {
             ...current,
             nationalIdNumber: current.nationalIdNumber || user?.nationalId || '',
             fullName: details.fullName || original.citizenName || current.fullName,
-            phone: details.phone || original.citizen?.phone || current.phone,
+            phone: formatSomaliPhone(details.phone || original.citizen?.phone || current.phone),
             district: normalizeDistrictValue(details.district || original.district || original.center?.district) || current.district
           }));
         }
@@ -156,8 +201,8 @@ const ReplaceLostId = () => {
         const res = await api.get(`/api/bookings/${resubmitId}`);
         const existing = res.data?.data || res.data;
         if (!mounted || !existing) return;
-        if (existing.status !== 'Cancelled') {
-          toast.error('Only cancelled appointments can be resubmitted.');
+        if (!canResubmitTicket(existing)) {
+          toast.error('Only appointments that require correction can be resubmitted.');
           return;
         }
 
@@ -167,7 +212,7 @@ const ReplaceLostId = () => {
         setForm({
           nationalIdNumber: details.nationalIdNumber || user?.nationalId || '',
           fullName: details.fullName || existing.citizenName || user?.name || '',
-          phone: details.phone || existing.citizen?.phone || user?.phone || '',
+          phone: formatSomaliPhone(details.phone || existing.citizen?.phone || user?.phone),
           district: normalizeDistrictValue(details.district || existing.district || existing.center?.district),
           dateLost: details.dateLost ? String(details.dateLost).slice(0, 10) : '',
           placeLost: details.placeLost || '',
@@ -235,7 +280,9 @@ const ReplaceLostId = () => {
         next.timeSlot = '';
       }
       if (field === 'district') {
-        next.centerId = '';
+        const normalizedDistrict = normalizeDistrictValue(value, districtOptions);
+        const recommendedCenter = centers.find((center) => normalizeDistrictValue(getDistrict(center), districtOptions) === normalizedDistrict);
+        next.centerId = recommendedCenter ? (recommendedCenter._id || recommendedCenter.id) : '';
         next.date = '';
         next.timeSlot = '';
       }
@@ -268,8 +315,8 @@ const ReplaceLostId = () => {
       toast.error('Please select your district.');
       return false;
     }
-    if (selectedCenter && normalizeDistrictValue(getDistrict(selectedCenter)) !== selectedDistrict) {
-      toast.error('The selected center does not belong to the selected district.');
+    if (isBeforeToday(form.date)) {
+      toast.error('Past appointment dates cannot be selected.');
       return false;
     }
     if (availability[form.date]?.status === 'closed') {
@@ -278,6 +325,10 @@ const ReplaceLostId = () => {
     }
     if (availability[form.date]?.status === 'full') {
       toast.error('Appointments are full for this date. Please choose another date.');
+      return false;
+    }
+    if (isPastTimeSlot(form.date, form.timeSlot)) {
+      toast.error('Past appointment times cannot be selected.');
       return false;
     }
     if (bookedSlots.includes(form.timeSlot)) {
@@ -316,10 +367,30 @@ const ReplaceLostId = () => {
           additionalNotes: form.notes
         }
       };
-      const resubmitTicketId = resubmitTicket?._id || resubmitTicket?.id;
-      const res = resubmitTicketId
-        ? await apiClient.put(`/api/bookings/${resubmitTicketId}/resubmit`, payload)
-        : await apiClient.post('/api/bookings', payload);
+      const resubmitTicketId = resubmitTicket?._id || resubmitTicket?.id || resubmitTicket?.ref || resubmitId;
+      if (!resubmitTicketId) {
+        const otpResponse = await api.post('/api/otp/request', {
+          purpose: 'replace_lost_id',
+          phone: form.phone
+        });
+        sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
+          purpose: 'replace_lost_id',
+          phone: otpResponse.data?.data?.phone || form.phone,
+          otpId: otpResponse.data?.data?.otpId,
+          finalRequest: {
+            method: 'post',
+            url: '/api/bookings',
+            payload
+          },
+          successPath: '/dashboard/user/appointments',
+          successMessage: 'Lost ID request submitted successfully.'
+        }));
+        toast.success('OTP sent.');
+        navigate('/otp-verification?purpose=replace_lost_id');
+        return;
+      }
+
+      const res = await apiClient.put(`/api/bookings/${resubmitTicketId}/resubmit`, payload);
       setTicket({
         ...(res.data || {}),
         service: 'Replace Lost National ID',
@@ -392,7 +463,27 @@ const ReplaceLostId = () => {
           </section>
         )}
 
-        {ticket ? (
+        {!existingRegistration && !resubmitTicket && !ticket ? (
+          <section className={panelClass}>
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <FiRefreshCw />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Complete your National ID registration first</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                  Replace Lost National ID is available only after admin has completed your New National ID Registration.
+                </p>
+                <Link
+                  to="/dashboard/user/new-id-registration"
+                  className="mt-4 inline-flex rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800"
+                >
+                  Book Appointment
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : ticket ? (
           <section className={`${panelClass} grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]`}>
             <div className="rounded-2xl bg-white p-5">
               {qrCodeUrl ? (
@@ -439,7 +530,7 @@ const ReplaceLostId = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="National ID Number (optional)" value={form.nationalIdNumber} onChange={(value) => updateForm('nationalIdNumber', value)} />
                 <Field label="Full Name" value={form.fullName} onChange={(value) => updateForm('fullName', value)} />
-                <Field label="Phone" value={form.phone} onChange={(value) => updateForm('phone', value)} />
+                <Field label="Phone" value={form.phone} onChange={(value) => updateForm('phone', formatSomaliPhone(value))} />
                 <Field label="Date Lost" type="date" value={form.dateLost} onChange={(value) => updateForm('dateLost', value)} />
                 <Field label="Place Lost" value={form.placeLost} onChange={(value) => updateForm('placeLost', value)} />
                 <Field label="Reason" value={form.reason} onChange={(value) => updateForm('reason', value)} />
@@ -466,7 +557,7 @@ const ReplaceLostId = () => {
                   <span className={labelClass}>District Where You Live</span>
                   <select value={form.district} onChange={(event) => updateForm('district', event.target.value)} className={inputClass}>
                     <option value="">Select your district</option>
-                    {BANAADIR_DISTRICTS.map((district) => (
+                    {districtOptions.map((district) => (
                       <option key={district} value={district}>{district}</option>
                     ))}
                   </select>
@@ -474,43 +565,59 @@ const ReplaceLostId = () => {
                 <label className="sm:col-span-2">
                   <span className={labelClass}>Select Center</span>
                   <select value={form.centerId} disabled={!selectedDistrict} onChange={(event) => updateForm('centerId', event.target.value)} className={inputClass}>
-                    <option value="">{selectedDistrict ? `Choose a ${selectedDistrict} center` : 'Select your district first'}</option>
-                    {filteredCenters.map((center) => (
-                      <option key={center._id || center.id} value={center._id || center.id}>
-                        {center.name}
-                      </option>
-                    ))}
+                    <option value="">{selectedDistrict ? 'Choose any National ID center' : 'Select your district first'}</option>
+                    {districtCenterOptions.map((center) => {
+                      const centerDistrict = normalizeDistrictValue(getDistrict(center), districtOptions) || getDistrict(center);
+                      const isRecommended = selectedDistrict && normalizeDistrictValue(getDistrict(center), districtOptions) === selectedDistrict;
+                      return (
+                        <option key={center._id || center.id} value={center._id || center.id}>
+                          {center.name}{isRecommended ? ' (Recommended)' : centerDistrict ? ` - ${centerDistrict}` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
-                  {selectedDistrict && filteredCenters.length === 0 && (
-                    <p className="mt-1.5 text-xs font-semibold text-amber-400">No active National ID centers found for {selectedDistrict}.</p>
+                  {selectedDistrict && recommendedCenters.length === 0 && (
+                    <p className="mt-1.5 text-xs font-semibold text-amber-400">No active center is assigned to {selectedDistrict}; you can choose another Banaadir center.</p>
                   )}
                 </label>
                 <label>
                   <span className={labelClass}>Appointment Date</span>
-                  <select
+                  <input
+                    type="date"
                     value={form.date}
                     disabled={!form.centerId}
+                    min={todayKey()}
+                    max={maxDateKey()}
                     onChange={(event) => updateForm('date', event.target.value)}
                     className={inputClass}
-                  >
-                    <option value="">{form.centerId ? 'Choose an available date' : 'Select a center first'}</option>
-                    {availableDateOptions.map((date) => (
-                      <option key={date} value={date}>{formatDate(date)}</option>
-                    ))}
-                  </select>
+                  />
                   {form.centerId && availableDateOptions.length === 0 && (
-                    <p className="mt-1.5 text-xs font-semibold text-amber-400">No available dates for this center in the next 30 days.</p>
+                    <p className="mt-1.5 text-xs font-semibold text-amber-400">No available dates for this center in the next 12 months.</p>
+                  )}
+                  {form.date && availability[form.date]?.status === 'closed' && (
+                    <p className="mt-1.5 text-xs font-semibold text-amber-400">This center is not available on this date.</p>
+                  )}
+                  {form.date && availability[form.date]?.status === 'full' && (
+                    <p className="mt-1.5 text-xs font-semibold text-amber-400">Appointments are full for this date. Please choose another date.</p>
                   )}
                 </label>
                 <label>
                   <span className={labelClass}>Appointment Time</span>
                   <select value={form.timeSlot} onChange={(event) => updateForm('timeSlot', event.target.value)} className={inputClass}>
                     <option value="">Choose a time</option>
-                    {availableSlots.map((slot) => (
-                      <option key={slot} value={slot} disabled={!form.date || availability[form.date]?.status !== 'available' || bookedSlots.includes(slot)}>
-                        {slot}{bookedSlots.includes(slot) ? ' - Full' : ''}
-                      </option>
-                    ))}
+                    {availableSlots.map((slot) => {
+                      const slotIsFull = bookedSlots.includes(slot);
+                      const slotIsPast = isPastTimeSlot(form.date, slot);
+                      return (
+                        <option
+                          key={slot}
+                          value={slot}
+                          disabled={!form.date || availability[form.date]?.status !== 'available' || slotIsFull || slotIsPast}
+                        >
+                          {slot}{slotIsFull ? ' - Full' : slotIsPast ? ' - Past' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
               </div>

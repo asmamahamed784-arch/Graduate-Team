@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import {
   FaPlus,
   FaEdit,
+  FaTrashAlt,
   FaTimes,
   FaConciergeBell,
   FaSearch,
@@ -21,11 +22,10 @@ const item = {
 
 const categories = ['National ID'];
 const emptyForm = {
-  name: 'National ID Registration',
-  description: 'Book and manage National ID registration appointments for citizens in Banaadir Region.',
+  name: '',
+  description: '',
   category: 'National ID',
-  duration: 15,
-  status: 'Active'
+  duration: 15
 };
 
 const ServiceManagement = () => {
@@ -64,8 +64,7 @@ const ServiceManagement = () => {
       name: svc.name,
       description: svc.description,
       category: svc.category,
-      duration: svc.duration,
-      status: svc.status || 'Active'
+      duration: svc.duration
     });
     setModalOpen(true);
   };
@@ -75,18 +74,36 @@ const ServiceManagement = () => {
       toast.error('Service name is required.');
       return;
     }
+    const payload = { ...form, status: 'Active' };
     try {
       if (editing) {
-        await apiClient.put(`/api/services/update/${editing}`, form);
+        await apiClient.put(`/api/services/update/${editing}`, payload);
         toast.success('Service updated.');
       } else {
-        await apiClient.post('/api/services/create', form);
+        await apiClient.post('/api/services/create', payload);
         toast.success('Service added.');
       }
       await loadServices();
       setModalOpen(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save service.');
+    }
+  };
+
+  const handleDelete = async (svc) => {
+    const serviceId = svc._id || svc.id;
+    if (!serviceId) {
+      toast.error('Service ID was not found.');
+      return;
+    }
+    if (!window.confirm(`Delete ${svc.name}?`)) return;
+
+    try {
+      await apiClient.delete(`/api/services/${serviceId}`);
+      toast.success('Service deleted.');
+      await loadServices();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete service.');
     }
   };
 
@@ -123,14 +140,12 @@ const ServiceManagement = () => {
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Update the National ID service shown to citizens.</p>
           </div>
-          {services.length === 0 && (
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xl shadow-lg transition-all text-sm"
-            >
-              <FaPlus /> Add National ID Service
-            </button>
-          )}
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xl shadow-lg transition-all text-sm"
+          >
+            <FaPlus /> Add New Service
+          </button>
         </motion.div>
 
         {/* Search */}
@@ -151,7 +166,7 @@ const ServiceManagement = () => {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-gray-700/50">
                 <tr>
-                  {['Name', 'Description', 'Category', 'Duration', 'Status', 'Actions'].map((h) => (
+                  {['Name', 'Description', 'Category', 'Duration', 'Actions'].map((h) => (
                     <th key={h} className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -174,15 +189,6 @@ const ServiceManagement = () => {
                     </td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-300">{svc.duration} min</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        svc.status !== 'Inactive'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
-                          : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                      }`}>
-                        {svc.status || 'Active'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <div className="flex gap-2">
                         <button
                           onClick={() => openEdit(svc)}
@@ -190,13 +196,19 @@ const ServiceManagement = () => {
                         >
                           <FaEdit /> Edit
                         </button>
+                        <button
+                          onClick={() => handleDelete(svc)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 dark:text-red-300 dark:bg-red-900/30 dark:hover:bg-red-900/50 rounded-lg transition-colors"
+                        >
+                          <FaTrashAlt /> Delete
+                        </button>
                       </div>
                     </td>
                   </motion.tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400 dark:text-gray-500">
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-400 dark:text-gray-500">
                       No service matches your search.
                     </td>
                   </tr>
@@ -240,8 +252,9 @@ const ServiceManagement = () => {
                     <input
                       type="text"
                       value={form.name}
-                    readOnly
+                      onChange={(e) => setForm({ ...form, name: e.target.value })}
                       className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Example: National ID Renewal"
                     />
                 </div>
                 <div>
@@ -259,7 +272,7 @@ const ServiceManagement = () => {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
                     <select
                       value={form.category}
-                      disabled
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
                       className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {categories.map((c) => (
@@ -277,23 +290,6 @@ const ServiceManagement = () => {
                       onChange={(e) => setForm({ ...form, duration: parseInt(e.target.value) || 15 })}
                       className="w-full px-4 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</label>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, status: form.status === 'Active' ? 'Inactive' : 'Active' })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        form.status === 'Active' ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                        form.status === 'Active' ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                    <span className="text-sm text-gray-600 dark:text-gray-300">{form.status}</span>
                   </div>
                 </div>
               </div>

@@ -1,17 +1,16 @@
-import Ticket from '../models/Ticket.js';
-import User from '../models/User.js';
-import Service from '../models/Service.js';
-import Center from '../models/Center.js';
-import Notification from '../models/Notification.js';
-import AuditLog from '../models/AuditLog.js';
+import prisma from '../config/prisma.js';
+import { CORRECTION_REASON_CATALOG, CORRECTION_REASON_NAMES } from '../constants/correctionReasons.js';
 import { generateRef } from '../utils/generateReference.js';
 import {
+  getCenterDistrict,
   isBanaadirNationalIdCenter,
   isLostNationalIdReplacementService,
   isNationalIdService,
-  isUpdateNationalIdInformationService
+  isNewNationalIdRegistrationService,
+  isUpdateNationalIdInformationService,
+  normalizeBanaadirDistrict
 } from '../utils/nqsScope.js';
-import { canAccessTicket, getAssignedCenterId, normalizeRole } from '../utils/rbac.js';
+import { canAccessTicket, getAssignedCenterId, isAdminRole, normalizeRole } from '../utils/rbac.js';
 import {
   sendAppointmentApprovalEmail,
   sendAppointmentCancellationEmail,
@@ -19,6 +18,14 @@ import {
   sendBookingConfirmationEmail
 } from '../services/emailService.js';
 import { logSmsOnly } from '../services/smsLogService.js';
+import { normalizeOtpPhone, verifyOtpToken } from '../services/otpService.js';
+import { ERRORS } from '../utils/errorMessages.js';
+import {
+  ensureCitizenPermanentNqsId,
+  isIssuedNationalIdStatus,
+  restoreCitizenIdStatusAfterRequestEnd,
+  syncCitizenIdentityProfile
+} from '../utils/citizenIdentity.js';
 
 const sanitizeReplacementDetails = (details = {}, fallbackUser = {}) => ({
   fullName: String(details.fullName || fallbackUser.name || '').trim(),
@@ -29,13 +36,15 @@ const sanitizeReplacementDetails = (details = {}, fallbackUser = {}) => ({
   placeLost: String(details.placeLost || '').trim(),
   policeReportNumber: String(details.policeReportNumber || '').trim(),
   policeReportDocument: String(details.policeReportDocument || '').trim(),
-  additionalNotes: String(details.additionalNotes || '').trim()
+  additionalNotes: String(details.additionalNotes || '').trim(),
+  district: String(details.district || details.centerDistrict || '').trim()
 });
 
 const validateReplacementDetails = (details) => {
   const requiredFields = [
     ['fullName', 'Full name is required for lost National ID replacement.'],
     ['phone', 'Phone number is required for lost National ID replacement.'],
+    ['district', 'District is required for lost National ID replacement.'],
     ['reason', 'Reason for replacement is required.'],
     ['dateLost', 'Date lost is required.'],
     ['placeLost', 'Place lost is required.']
@@ -49,6 +58,7 @@ const sanitizeUpdateDetails = (details = {}, fallbackUser = {}) => ({
   fullName: String(details.fullName || fallbackUser.name || '').trim(),
   phone: String(details.phone || fallbackUser.phone || '').trim(),
   nationalIdNumber: String(details.nationalIdNumber || fallbackUser.nationalId || '').trim(),
+  mistakeType: String(details.mistakeType || '').trim(),
   selectedFields: Array.isArray(details.selectedFields) ? details.selectedFields.map((field) => String(field).trim()).filter(Boolean) : [],
   changes: Array.isArray(details.changes)
     ? details.changes.map((change) => ({
@@ -65,16 +75,28 @@ const sanitizeUpdateDetails = (details = {}, fallbackUser = {}) => ({
   notes: String(details.notes || '').trim()
 });
 
+const normalizeUpdateComparableValue = (field = '', value = '') => {
+  const key = String(field || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (key.includes('marital')) return text.toUpperCase();
+  if (key.includes('date')) {
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  }
+  return text.toLowerCase().replace(/\s+/g, ' ');
+};
+
 const validateUpdateDetails = (details) => {
+  const mistakeTypes = ['Document type', 'Office Mistake', 'Mixed Mistake'];
   const requiredFields = [
     ['fullName', 'Full name is required for update requests.'],
-    ['phone', 'Phone number is required for update requests.'],
   ];
 
   const missing = requiredFields.find(([field]) => !details[field]);
   if (missing) return missing[1];
+  if (!mistakeTypes.includes(details.mistakeType)) return 'Please select type mistake.';
   if (!isValidGovernmentName(details.fullName, 5)) return 'Full Name must contain letters only.';
-  if (!isValidSomaliPhone(details.phone)) return 'Enter a valid Somali phone number.';
 
   const changes = details.changes?.length
     ? details.changes
@@ -88,8 +110,43 @@ const validateUpdateDetails = (details) => {
       : [];
 
   if (changes.length === 0) return 'Please select at least one field to update.';
-  const incomplete = changes.find((change) => !change.field || !change.currentValue || !change.newValue || !change.reason);
-  if (incomplete) return 'Each selected update field must include current value, new value, and reason.';
+  const incomplete = changes.find((change) => !change.field || !change.newValue || !change.reason);
+  if (incomplete) return 'Each selected update field must include a new value and reason.';
+  const invalidMaritalStatus = changes.find((change) => (
+    String(change.field || '').toLowerCase().includes('marital') &&
+    !['SINGLE', 'MARRIED'].includes(String(change.newValue || '').trim().toUpperCase())
+  ));
+  if (invalidMaritalStatus) return 'Please select your marital status.';
+  const nationalIdChange = changes.find((change) => {
+    const field = String(change.field || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return field.includes('nationalid') || field === 'idnumber' || field === 'nqs';
+  });
+  if (nationalIdChange) {
+    return 'National ID number cannot be changed. Each citizen keeps one permanent ID.';
+  }
+  const unchanged = changes.find((change) => (
+    normalizeUpdateComparableValue(change.field, change.currentValue) === normalizeUpdateComparableValue(change.field, change.newValue)
+  ));
+  if (unchanged) {
+    return `${unchanged.field || 'Selected field'} has no change. Please enter a different new value or reject the request.`;
+  }
+  return '';
+};
+
+const sanitizeServiceRequestDetails = (details = {}, fallbackUser = {}) => ({
+  fullName: String(details.fullName || fallbackUser.name || '').trim(),
+  phone: String(details.phone || fallbackUser.phone || '').trim(),
+  serviceName: String(details.serviceName || '').trim(),
+  notes: String(details.notes || details.additionalNotes || '').trim(),
+  selectedCenter: String(details.selectedCenter || '').trim(),
+  centerDistrict: String(details.centerDistrict || details.district || '').trim(),
+  appointmentDate: String(details.appointmentDate || '').trim(),
+  appointmentTime: String(details.appointmentTime || '').trim()
+});
+
+const validateServiceRequestDetails = (details) => {
+  if (!details.fullName) return 'Full name is required.';
+  if (!details.phone) return 'Phone number is required.';
   return '';
 };
 
@@ -107,41 +164,861 @@ const normalizePhoneForLookup = (value) => {
   return digits;
 };
 
+const ISSUED_NATIONAL_ID_MESSAGE = 'You already have a National ID. You cannot register for a new National ID. You may only update your information or request a replacement for a lost ID.';
+const ACTIVE_APPOINTMENT_MESSAGE = 'You already have an active appointment for this service. Please complete, update, or cancel the existing appointment.';
+const ACTIVE_LOST_REPLACEMENT_MESSAGE = 'You already have an active lost ID replacement request. Please wait until the current request is completed.';
+const ACTIVE_UPDATE_REQUEST_MESSAGE = 'You already have a pending Update Information request. Please wait until the Center or Admin reviews it.';
+const NO_EXISTING_NATIONAL_ID_MESSAGE = 'No existing National ID registration found for this name and phone number.';
+const CANCELLATION_SUCCESS_MESSAGE = 'The appointment was cancelled successfully, and the citizen has been notified.';
+const COMPLETED_REQUEST_LOCKED_MESSAGE = 'This request has already been completed and cannot be cancelled.';
+const CANCELLATION_REASON_OPTIONS = CORRECTION_REASON_NAMES.filter((reason) => reason !== 'Other');
+const OTHER_CANCELLATION_REASON = 'Other';
+const COMPLETED_STATUS_VALUES = new Set(['Completed', 'COMPLETED']);
+const NEEDS_CORRECTION_STATUS = 'NEEDS_CORRECTION';
+const RESUBMITTED_STATUS = 'RESUBMITTED';
+const BLOCKING_NEW_REGISTRATION_STATUSES = new Set([
+  'Waiting',
+  'Pending',
+  'Approved',
+  'Scheduled',
+  'In Progress',
+  'Resubmitted',
+  'Now Serving',
+  'Being Served',
+  'Completed',
+  'On Hold'
+]);
+const BLOCKING_NEW_REGISTRATION_REQUEST_STATUSES = new Set([
+  'Pending',
+  'Under Review',
+  'Approved',
+  'In Progress',
+  'Completed',
+  'Resubmission Required'
+]);
+const ACTIVE_TICKET_STATUSES = ['Pending', 'Approved', 'Scheduled', 'Waiting', 'Being Served', 'In Progress', 'On Hold'];
+const ACTIVE_REQUEST_STATUSES = ['Pending', 'Under Review', 'Approved', 'In Progress', 'Resubmission Required'];
+const CITIZEN_CANCEL_WINDOW_MS = 60 * 60 * 1000;
+const ISSUED_APPLICATION_STATUSES = new Set(['Completed']);
+const TICKET_DATA_FIELDS = new Set([
+  'ref',
+  'service',
+  'citizenName',
+  'citizen',
+  'counter',
+  'waitTime',
+  'status',
+  'center',
+  'district',
+  'date',
+  'timeSlot',
+  'requestType',
+  'requestStatus',
+  'nationalIdNumber',
+  'cardSerialNumber',
+  'cardStatus',
+  'registrationDetails',
+  'replacementDetails',
+  'updateDetails',
+  'existingRegistration',
+  'createdAt',
+  'updatedAt'
+]);
+
+const idFrom = (value) => {
+  if (!value) return value;
+  if (typeof value === 'object') return value.id || value._id || value;
+  return value;
+};
+
+const pickTicketData = (data = {}) => {
+  const output = Object.fromEntries(
+    Object.entries(data).filter(([key, value]) => TICKET_DATA_FIELDS.has(key) && value !== undefined)
+  );
+  ['service', 'center', 'citizen'].forEach((key) => {
+    if (output[key]) output[key] = idFrom(output[key]);
+  });
+  return output;
+};
+
 const getQueueNumberFromRef = (ref) => {
   if (!ref) return '';
   return String(ref).split('-').pop();
 };
 
-const buildExistingRegistrationInfo = (ticket) => ({
-  found: Boolean(ticket),
-  ticket: ticket?._id || null,
-  ticketNumber: ticket?.ref || '',
-  queueNumber: getQueueNumberFromRef(ticket?.ref),
-  serviceType: ticket?.service?.name || 'New National ID Registration',
-  centerName: ticket?.center?.name || ticket?.registrationDetails?.selectedCenter || '',
-  centerId: ticket?.center?._id || ticket?.center || null,
-  date: ticket?.date || ticket?.registrationDetails?.appointmentDate || '',
-  timeSlot: ticket?.timeSlot || ticket?.registrationDetails?.appointmentTime || '',
-  status: ticket?.status || ''
-});
+const formatExistingRegistrationInfo = (ticket, centerOverride, citizenOverride) => {
+  const center = centerOverride || (typeof ticket?.center === 'object' ? ticket.center : null) || {};
+  const citizen = citizenOverride || (typeof ticket?.citizen === 'object' ? ticket.citizen : null) || {};
+  const details = ticket?.registrationDetails || {};
 
-const canExposeExistingRegistration = (ticket, user) => (
-  normalizeRole(user.role) === 'admin' ||
-  String(ticket?.citizen?._id || ticket?.citizen || '') === String(user._id)
+  return {
+    found: Boolean(ticket),
+    ticket: ticket?.id || null,
+    originalRegistrationId: ticket?.id || null,
+    ticketNumber: ticket?.ref || '',
+    originalTicketReference: ticket?.ref || '',
+    queueNumber: getQueueNumberFromRef(ticket?.ref),
+    originalQueueNumber: getQueueNumberFromRef(ticket?.ref),
+    serviceType: ticket?.service?.name || 'New National ID Registration',
+    centerName: center.name || details.selectedCenter || '',
+    originalCenter: center.name || details.selectedCenter || '',
+    originalDistrict: ticket?.district || details.district || center.district || center.city || '',
+    centerId: center.id || idFrom(ticket?.center) || null,
+    date: ticket?.date || details.appointmentDate || '',
+    timeSlot: ticket?.timeSlot || details.appointmentTime || '',
+    status: ticket?.status || '',
+    citizenName: ticket?.citizenName || details.fullName || citizen.name || '',
+    citizenPhone: details.phone || citizen.phone || '',
+    citizenEmail: citizen.email || '',
+    nationalIdNumber: ticket?.nationalIdNumber || details.nationalIdNumber || citizen.nationalId || '',
+    cardSerialNumber: ticket?.cardSerialNumber || '',
+    cardStatus: ticket?.cardStatus || '',
+    registrationDetails: {
+      ...details,
+      fullName: details.fullName || ticket?.citizenName || citizen.name || '',
+      phone: details.phone || citizen.phone || '',
+      selectedCenter: details.selectedCenter || center.name || '',
+      centerDistrict: details.centerDistrict || center.district || center.city || ''
+    }
+  };
+};
+
+const hydrateTickets = async (tickets = []) => {
+  const existingRegistrationIds = [...new Set(tickets
+    .map((ticket) => idFrom(ticket.existingRegistration?.ticket || ticket.existingRegistration?.originalRegistrationId))
+    .filter(Boolean))];
+  const originalRegistrations = existingRegistrationIds.length
+    ? await prisma.ticket.findMany({ where: { id: { in: existingRegistrationIds } } })
+    : [];
+  const ticketsForReference = [...tickets, ...originalRegistrations];
+  const serviceIds = [...new Set(ticketsForReference.map((ticket) => idFrom(ticket.service)).filter(Boolean))];
+  const centerIds = [...new Set(ticketsForReference.map((ticket) => idFrom(ticket.center)).filter(Boolean))];
+  const citizenIds = [...new Set(ticketsForReference.map((ticket) => idFrom(ticket.citizen)).filter(Boolean))];
+  const [services, centers, citizens] = await Promise.all([
+    serviceIds.length
+      ? prisma.service.findMany({ where: { id: { in: serviceIds } }, select: { id: true, name: true, category: true, duration: true, requirements: true, priority: true } })
+      : [],
+    centerIds.length
+      ? prisma.center.findMany({ where: { id: { in: centerIds } }, select: { id: true, name: true, address: true, city: true, district: true, phone: true } })
+      : [],
+    citizenIds.length
+      ? prisma.user.findMany({ where: { id: { in: citizenIds } }, select: { id: true, name: true, username: true, email: true, phone: true, nationalId: true, citizenProfile: { select: { nationalId: true, nationalIdStatus: true } } } })
+      : []
+  ]);
+  const servicesById = new Map(services.map((service) => [service.id, service]));
+  const centersById = new Map(centers.map((center) => [center.id, center]));
+  const citizensById = new Map(citizens.map((citizen) => [citizen.id, {
+    ...citizen,
+    nationalId: citizen.citizenProfile?.nationalId || citizen.nationalId
+  }]));
+  const originalsById = new Map(originalRegistrations.map((ticket) => [ticket.id, ticket]));
+
+  return tickets.map((ticket) => {
+    const originalId = ticket.existingRegistration?.ticket || ticket.existingRegistration?.originalRegistrationId;
+    const original = originalsById.get(originalId);
+    return {
+      ...ticket,
+      _id: ticket.id,
+      service: servicesById.get(idFrom(ticket.service)) || ticket.service,
+      center: centersById.get(idFrom(ticket.center)) || ticket.center,
+      citizen: citizensById.get(idFrom(ticket.citizen)) || ticket.citizen,
+      existingRegistration: ticket.existingRegistration
+        ? {
+            ...ticket.existingRegistration,
+            ...(original
+              ? formatExistingRegistrationInfo(
+                  original,
+                  centersById.get(idFrom(original.center)),
+                  citizensById.get(idFrom(original.citizen))
+                )
+              : {})
+          }
+        : ticket.existingRegistration
+    };
+  });
+};
+
+const hydrateTicket = async (ticket) => {
+  if (!ticket) return null;
+  const [hydrated] = await hydrateTickets([ticket]);
+  return hydrated;
+};
+
+const findTicketById = (id) => prisma.ticket.findUnique({ where: { id } });
+const findTicketByIdOrRef = (idOrRef) => (
+  /^(REQ|NQS)-\d+$/i.test(String(idOrRef || '').trim())
+    ? prisma.ticket.findUnique({ where: { ref: String(idOrRef).toUpperCase() } })
+    : prisma.ticket.findUnique({ where: { id: idOrRef } })
 );
 
-const findExistingNewRegistration = async ({ fullName, phone }) => {
+const updateTicketById = async (id, data) => prisma.ticket.update({
+  where: { id },
+  data: pickTicketData({ ...data, updatedAt: new Date() })
+});
+
+const isBlockingNewRegistration = (ticket) => {
+  if (!ticket) return false;
+  return (
+    BLOCKING_NEW_REGISTRATION_STATUSES.has(ticket.status) ||
+    BLOCKING_NEW_REGISTRATION_REQUEST_STATUSES.has(ticket.requestStatus) ||
+    ticket.needsResubmission === true
+  );
+};
+
+const hasIssuedNationalId = (user = {}) => (
+  isIssuedNationalIdStatus(user.citizenProfile?.nationalIdStatus || user.nationalIdStatus)
+);
+
+const splitCitizenName = (fullName = '') => {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : parts[1] || '',
+    lastName: parts.length > 2 ? parts[parts.length - 1] : ''
+  };
+};
+
+const setCitizenNameParts = (user, fullName = '') => {
+  const cleanName = String(fullName || '').trim();
+  if (!cleanName || !user) return;
+  const parts = splitCitizenName(cleanName);
+  user.name = cleanName;
+  user.firstName = parts.firstName || user.firstName;
+  user.middleName = parts.middleName || user.middleName;
+  user.lastName = parts.lastName || user.lastName;
+};
+
+const hasApprovedRegistration = (ticket) => (
+  Boolean(ticket) && (
+    ticket.status === 'Completed' ||
+    ISSUED_APPLICATION_STATUSES.has(ticket.requestStatus)
+  )
+);
+
+const hasCitizenNationalIdAccess = (user, registration) => (
+  hasIssuedNationalId(user) || hasApprovedRegistration(registration)
+);
+
+const getIdentityNationalId = (user = {}, registration = null) => (
+  String(
+    user.citizenProfile?.nationalId ||
+    user.nationalId ||
+    registration?.nationalIdNumber ||
+    registration?.citizen?.nationalId ||
+    registration?.registrationDetails?.nationalIdNumber ||
+    ''
+  ).trim()
+);
+
+const cancellationNotificationType = (ticket) => (
+  ticket?.requestType === 'new_national_id' ? 'APPOINTMENT_CANCELLED' : 'REQUEST_CANCELLED'
+);
+
+const cleanStringArray = (value) => (
+  Array.isArray(value)
+    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    : []
+);
+
+const isCompletedTicket = (ticket = {}) => (
+  COMPLETED_STATUS_VALUES.has(String(ticket.status || '').trim()) ||
+  COMPLETED_STATUS_VALUES.has(String(ticket.requestStatus || '').trim())
+);
+
+const citizenCancelWindowExpired = (ticket = {}) => {
+  const createdAt = new Date(ticket.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return true;
+  return Date.now() - createdAt.getTime() > CITIZEN_CANCEL_WINDOW_MS;
+};
+
+const ensureCorrectionReasonDocuments = async () => {
+  await Promise.all(
+    CORRECTION_REASON_CATALOG.map((reason) => (
+      prisma.correctionReason.upsert({
+        where: { code: reason.code },
+        update: {
+          reasonName: reason.reasonName,
+          fieldName: reason.fieldName,
+          category: reason.category,
+          isActive: true
+        },
+        create: {
+          code: reason.code,
+          reasonName: reason.reasonName,
+          fieldName: reason.fieldName,
+          category: reason.category,
+          isActive: true
+        }
+      })
+    ))
+  );
+
+  return prisma.correctionReason.findMany({
+    where: {
+      code: { in: CORRECTION_REASON_CATALOG.map((reason) => reason.code) },
+      isActive: true
+    }
+  });
+};
+
+const resolveCorrectionReasons = async (inputReasons = []) => {
+  const requested = cleanStringArray(inputReasons);
+  if (!requested.length) {
+    return { error: 'Please select at least one correction reason.' };
+  }
+
+  const reasonDocs = await ensureCorrectionReasonDocuments();
+  const byId = new Map(reasonDocs.map((reason) => [String(reason.id), reason]));
+  const byCode = new Map(reasonDocs.map((reason) => [reason.code, reason]));
+  const byName = new Map(reasonDocs.map((reason) => [reason.reasonName, reason]));
+
+  const resolved = [];
+  const invalid = [];
+  requested.forEach((value) => {
+    const match = byId.get(value) || byCode.get(value) || byName.get(value);
+    if (match) {
+      if (!resolved.some((reason) => String(reason.id) === String(match.id))) {
+        resolved.push(match);
+      }
+    } else {
+      invalid.push(value);
+    }
+  });
+
+  if (invalid.length) {
+    return { error: `Invalid correction reason selected: ${invalid.join(', ')}` };
+  }
+
+  return { reasons: resolved };
+};
+
+const formatCorrectionNotificationMessage = ({ ticket, reasons, additionalNote }) => {
+  const reasonList = reasons.map((reason) => `- ${reason.reasonName}`).join('\n');
+  return `Your National ID registration request ${ticket.ref} requires corrections before it can continue.\n\nProblems found:\n${reasonList}\n\nAdmin note:\n${additionalNote}`;
+};
+
+const flattenCorrectionValues = (source = {}, prefix = '') => (
+  Object.entries(source || {}).reduce((items, [key, value]) => {
+    const fieldName = prefix ? `${prefix}.${key}` : key;
+    if (value === null || value === undefined) return items;
+    if (Array.isArray(value)) {
+      items[fieldName] = JSON.stringify(value);
+      return items;
+    }
+    if (typeof value === 'object') {
+      return { ...items, ...flattenCorrectionValues(value, fieldName) };
+    }
+    items[fieldName] = String(value);
+    return items;
+  }, {})
+);
+
+const createCorrectionHistory = async ({ ticket, before, after, changedBy }) => {
+  const oldValues = flattenCorrectionValues(before);
+  const newValues = flattenCorrectionValues(after);
+  const changedFields = Object.keys(newValues).filter((field) => oldValues[field] !== newValues[field]);
+
+  if (!changedFields.length) return;
+
+  await prisma.requestCorrectionHistory.createMany({
+    data: changedFields.map((fieldName) => ({
+      request: ticket.id,
+      fieldName,
+      oldValue: oldValues[fieldName] || '',
+      correctedValue: newValues[fieldName] || '',
+      changedBy
+    }))
+  });
+};
+
+const buildCancellationPayload = (body = {}) => {
+  const inputReasons = cleanStringArray(body.cancellationReasons || body.reasonIds || body.reasons);
+  const legacyReason = String(body.cancellationReason || body.rejectionReason || body.reason || '').trim();
+  const additionalReason = String(body.additionalReason || body.additionalCancellationReason || '').trim();
+  const additionalNotes = String(body.additionalNotes || body.cancellationNotes || '').trim();
+
+  let selectedReasons = [...new Set(inputReasons)];
+  if (!selectedReasons.length && legacyReason) {
+    if (CANCELLATION_REASON_OPTIONS.includes(legacyReason) || legacyReason === OTHER_CANCELLATION_REASON) {
+      selectedReasons = [legacyReason];
+    } else {
+      selectedReasons = [OTHER_CANCELLATION_REASON];
+    }
+  }
+
+  if (!selectedReasons.length) {
+    return { error: 'Please select at least one cancellation reason.' };
+  }
+
+  const invalidReasons = selectedReasons.filter((reason) => (
+    reason !== OTHER_CANCELLATION_REASON && !CANCELLATION_REASON_OPTIONS.includes(reason)
+  ));
+  if (invalidReasons.length) {
+    return { error: `Invalid cancellation reason selected: ${invalidReasons.join(', ')}` };
+  }
+
+  const requiresOtherText = selectedReasons.includes(OTHER_CANCELLATION_REASON);
+  const resolvedAdditionalReason = additionalReason || (
+    requiresOtherText && legacyReason && !CANCELLATION_REASON_OPTIONS.includes(legacyReason)
+      ? legacyReason
+      : ''
+  );
+  if (requiresOtherText && !resolvedAdditionalReason) {
+    return { error: 'Please enter the additional cancellation reason.' };
+  }
+
+  const displayReasons = selectedReasons.filter((reason) => reason !== OTHER_CANCELLATION_REASON);
+  if (requiresOtherText) {
+    displayReasons.push(resolvedAdditionalReason);
+  }
+
+  return {
+    reasons: selectedReasons,
+    displayReasons,
+    additionalReason: resolvedAdditionalReason,
+    additionalNotes,
+    summary: displayReasons.join(', ')
+  };
+};
+
+const applyCancellationDetails = (ticket, cancellation, previousStatus, userId) => {
+  ticket.cancellationReasons = cancellation.reasons;
+  ticket.additionalCancellationReason = cancellation.additionalReason;
+  ticket.cancellationNotes = cancellation.additionalNotes;
+  ticket.cancellationReason = cancellation.summary;
+  ticket.previousStatusBeforeCancellation = previousStatus || '';
+  ticket.cancelledBy = userId;
+  ticket.cancelledAt = new Date();
+};
+
+const cancellationDetailsFromTicket = (ticket = {}) => {
+  const rawReasons = cleanStringArray(ticket.cancellationReasons);
+  const additionalReason = String(ticket.additionalCancellationReason || '').trim();
+  const displayReasons = rawReasons
+    .filter((reason) => reason !== OTHER_CANCELLATION_REASON)
+    .concat(rawReasons.includes(OTHER_CANCELLATION_REASON) && additionalReason ? [additionalReason] : [])
+    .filter(Boolean);
+
+  if (displayReasons.length) {
+    return {
+      reasons: rawReasons,
+      displayReasons,
+      additionalReason,
+      additionalNotes: ticket.cancellationNotes || '',
+      summary: displayReasons.join(', ')
+    };
+  }
+
+  const legacyReason = String(ticket.cancellationReason || ticket.rejectionReason || 'No reason provided.').trim();
+  return {
+    reasons: legacyReason ? [legacyReason] : [],
+    displayReasons: legacyReason ? [legacyReason] : [],
+    additionalReason: '',
+    additionalNotes: ticket.cancellationNotes || '',
+    summary: legacyReason || 'No reason provided.'
+  };
+};
+
+const assertCanCancelTicket = (ticket) => {
+  if (isCompletedTicket(ticket)) {
+    return ERRORS.APPOINTMENT_ALREADY_COMPLETED;
+  }
+  const status = String(ticket?.status || '').trim();
+  const requestStatus = String(ticket?.requestStatus || '').trim();
+  if (['Cancelled', 'Expired'].includes(status) || ['Cancelled', 'CANCELLED'].includes(requestStatus)) {
+    return 'This appointment/request cannot be cancelled in its current status.';
+  }
+  return '';
+};
+
+const createCancellationNotification = async ({ ticket, reason, previousStatus = '' }) => {
+  if (!ticket?.citizen) return null;
+
+  const requestLabel = getRequestLabel(ticket.requestType);
+  const title = ticket.requestType === 'new_national_id' ? 'Appointment Cancelled' : 'Request Cancelled';
+  const cancellationDate = ticket.cancelledAt || new Date();
+  const cancellation = cancellationDetailsFromTicket(ticket);
+  const cleanReason = String(reason || cancellation.summary || 'No reason provided.').trim();
+  const reasonsList = cancellation.displayReasons.map((item) => `- ${item}`).join('\n');
+  const additionalNoteText = cancellation.additionalNotes
+    ? `\n\nAdditional note:\n${cancellation.additionalNotes}`
+    : '';
+  const message = ticket.requestType === 'new_national_id'
+    ? `Your National ID appointment with reference number ${ticket.ref} has been cancelled.\n\nReasons:\n${reasonsList}${additionalNoteText}`
+    : `Your ${requestLabel} request with reference number ${ticket.ref} has been cancelled.\n\nReasons:\n${reasonsList}${additionalNoteText}`;
+
+  return prisma.notification.create({
+    data: {
+      user: typeof ticket.citizen === 'object' ? ticket.citizen?.id : ticket.citizen,
+      title,
+      desc: message,
+      category: 'Appointments',
+      notificationType: cancellationNotificationType(ticket),
+      referenceNumber: ticket.ref,
+      requestType: ticket.requestType,
+      relatedEntity: ticket.id,
+      relatedEntityType: 'Ticket',
+      cancellationReason: cleanReason,
+      cancellationReasons: cancellation.reasons,
+      additionalCancellationReason: cancellation.additionalReason,
+      cancellationNotes: cancellation.additionalNotes,
+      cancellationDate,
+      previousStatus,
+      newStatus: 'Cancelled',
+      read: false
+    }
+  });
+};
+
+const createAdminRequestNotifications = async ({ ticket, service, center, requestLabel }) => {
+  const recipients = await prisma.user.findMany({
+    where: {
+      OR: [
+        { role: { in: ['admin', 'super_admin'] }, status: { not: 'Locked' } },
+        {
+          center: center.id,
+          role: { in: ['operator', 'super_operator', 'center_manager'] },
+          status: { in: ['active', 'Active'] }
+        }
+      ]
+    },
+    select: { id: true, role: true }
+  });
+  if (!recipients.length) return [];
+
+  const title = ticket.requestType === 'new_national_id'
+    ? 'New Appointment Booked'
+    : ticket.requestType === 'update_information'
+      ? 'New Update Information Request'
+      : 'New Lost ID Replacement Request';
+  const desc = `${ticket.citizenName || 'Citizen'} submitted ${requestLabel} ${ticket.ref} at ${center.name}.`;
+
+  return Promise.all(recipients.map((recipient) => prisma.notification.create({
+    data: {
+      user: recipient.id,
+      title,
+      desc,
+      category: 'Appointments',
+      notificationType: isAdminRole(recipient.role) ? 'ADMIN_NEW_REQUEST' : 'CENTER_NEW_REQUEST',
+      referenceNumber: ticket.ref,
+      requestType: ticket.requestType,
+      relatedEntity: ticket.id,
+      relatedEntityType: 'Ticket',
+      newStatus: ticket.status || 'Pending'
+    }
+  })));
+};
+
+const futureExpiryDate = (years = 10) => {
+  const date = new Date();
+  date.setFullYear(date.getFullYear() + years);
+  return date;
+};
+
+const randomDigits = (length = 6) => String(Math.floor(Math.random() * (10 ** length))).padStart(length, '0');
+
+const generateCardSerialNumber = async () => {
+  const year = new Date().getFullYear();
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const cardSerialNumber = `CARD-${year}-${randomDigits(6)}`;
+    const exists = await prisma.user.count({ where: { cardSerialNumber } });
+    if (!exists) return cardSerialNumber;
+  }
+  throw new Error('Could not generate a unique card serial number.');
+};
+
+const findActiveRequestForCitizen = async ({ citizenId, requestType, excludeId = null }) => {
+  const query = {
+    citizen: citizenId,
+    requestType,
+    ...(excludeId ? { id: { not: excludeId } } : {}),
+    OR: [
+      { status: { in: ACTIVE_TICKET_STATUSES } },
+      { requestStatus: { in: ACTIVE_REQUEST_STATUSES } }
+    ]
+  };
+
+  return prisma.ticket.findFirst({
+    where: query,
+    orderBy: { createdAt: 'desc' }
+  });
+};
+
+const findOpenUpdateRequestForCitizen = async ({ citizenId, excludeId = null }) => prisma.ticket.findFirst({
+  where: {
+    citizen: citizenId,
+    requestType: 'update_information',
+    ...(excludeId ? { id: { not: excludeId } } : {}),
+    OR: [
+      { status: { in: ['Pending', 'On Hold', 'Waiting', 'Being Served', 'In Progress'] } },
+      { requestStatus: { in: ['Pending', 'Under Review', 'Approved', 'In Progress', 'Resubmission Required'] } }
+    ]
+  },
+  orderBy: { createdAt: 'desc' }
+});
+
+const issueInitialNationalId = async (ticket, reviewedBy) => {
+  if (!ticket?.citizen) return null;
+
+  const citizenId = idFrom(ticket.citizen);
+  const user = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+  if (!user) return null;
+
+  user.nationalId = await ensureCitizenPermanentNqsId(user);
+  if (!user.cardSerialNumber) {
+    user.cardSerialNumber = ticket.cardSerialNumber || await generateCardSerialNumber();
+  }
+
+  setCitizenNameParts(user, ticket.registrationDetails?.fullName || user.name);
+
+  const updatedUser = await syncCitizenIdentityProfile(user.id, {
+    nationalId: user.nationalId,
+    cardSerialNumber: user.cardSerialNumber,
+    name: ticket.registrationDetails?.fullName || user.name,
+    fullName: ticket.registrationDetails?.fullName || user.name,
+    firstName: user.firstName,
+    middleName: user.middleName,
+    lastName: user.lastName,
+    phone: ticket.registrationDetails?.phone || user.phone,
+    dateOfBirth: ticket.registrationDetails?.dateOfBirth || user.dateOfBirth,
+    address: ticket.registrationDetails?.fullAddress || ticket.registrationDetails?.address || user.address,
+    district: ticket.registrationDetails?.district || ticket.district,
+    center: idFrom(ticket.center) || user.center,
+    maritalStatus: ticket.registrationDetails?.maritalStatus || user.maritalStatus,
+    nationalIdStatus: 'COMPLETED',
+    cardStatus: 'ACTIVE',
+    cardIssueDate: user.cardIssueDate || new Date(),
+    cardExpiryDate: user.cardExpiryDate || futureExpiryDate(),
+    approvedRegistration: ticket.id
+  });
+
+  ticket.nationalIdNumber = user.nationalId;
+  ticket.cardSerialNumber = user.cardSerialNumber;
+  ticket.cardStatus = 'ACTIVE';
+  ticket.registrationDetails = {
+    ...(ticket.registrationDetails || {}),
+    nationalIdNumber: user.nationalId
+  };
+  ticket.reviewedBy = reviewedBy || ticket.reviewedBy;
+  ticket.reviewedAt = new Date();
+  return updatedUser;
+};
+
+const ensureIssuedNationalIdFromRegistration = async (userDoc, registration, reviewedBy = null) => {
+  if (hasIssuedNationalId(userDoc) || !hasApprovedRegistration(registration)) {
+    return userDoc;
+  }
+
+  const updatedUser = await issueInitialNationalId(registration, reviewedBy);
+  // We'll assume caller saves `registration`
+  return updatedUser || userDoc;
+};
+
+const completeLostIdReplacement = async (ticket, reviewedBy) => {
+  if (!ticket?.citizen) return null;
+
+  const citizenId = idFrom(ticket.citizen);
+  const user = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+  if (!user) return null;
+
+  user.nationalId = await ensureCitizenPermanentNqsId(user);
+
+  const cardHistory = user.cardHistory ? [...user.cardHistory] : [];
+  if (user.cardSerialNumber) {
+    cardHistory.push({
+      serialNumber: user.cardSerialNumber,
+      status: 'LOST',
+      reason: ticket.replacementDetails?.reason || 'Lost ID replacement completed',
+      ticket: ticket.id
+    });
+  }
+
+  const newCardSerialNumber = await generateCardSerialNumber();
+  
+  const updatedUser = await syncCitizenIdentityProfile(user.id, {
+    nationalId: user.nationalId,
+    cardHistory,
+    cardSerialNumber: newCardSerialNumber,
+    cardStatus: 'ACTIVE',
+    nationalIdStatus: 'COMPLETED',
+    cardIssueDate: new Date(),
+    cardExpiryDate: futureExpiryDate(),
+    replacementCount: Number(user.replacementCount || 0) + 1
+  });
+
+  ticket.nationalIdNumber = user.nationalId;
+  ticket.cardSerialNumber = newCardSerialNumber;
+  ticket.cardStatus = 'ACTIVE';
+  if (ticket.replacementDetails && typeof ticket.replacementDetails === 'object') {
+    ticket.replacementDetails = {
+      ...ticket.replacementDetails,
+      nationalIdNumber: user.nationalId
+    };
+  }
+  ticket.reviewedBy = reviewedBy || ticket.reviewedBy;
+  ticket.reviewedAt = new Date();
+  return updatedUser;
+};
+
+const applyApprovedUpdateDetails = async (ticket, reviewedBy) => {
+  if (!ticket?.citizen) return null;
+
+  const citizenId = idFrom(ticket.citizen);
+  const user = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+  if (!user) return null;
+  user.nationalId = await ensureCitizenPermanentNqsId(user);
+
+  const changes = ticket.updateDetails?.changes?.length
+    ? ticket.updateDetails.changes
+    : [{
+        field: ticket.updateDetails?.fieldToUpdate,
+        newValue: ticket.updateDetails?.newValue
+      }].filter((change) => change.field);
+
+  changes.forEach((change) => {
+    const field = String(change.field || '').trim().toLowerCase();
+    const compactField = field.replace(/[^a-z0-9]/g, '');
+    const value = String(change.newValue || '').trim();
+    if (!value) return;
+    // National ID is permanent — ignore any attempt to change it via update request.
+    if (compactField.includes('nationalid') || compactField === 'idnumber' || compactField === 'nqs') return;
+
+    if (field === 'name' || field === 'full name') setCitizenNameParts(user, value);
+    if (field.includes('phone')) user.phone = value;
+    if (field.includes('address')) user.address = value;
+    if (field.includes('birth')) user.dateOfBirth = value;
+    if (field.includes('district')) user.district = value;
+    if (field.includes('marital')) {
+      const normalizedMaritalStatus = value.toUpperCase();
+      if (['SINGLE', 'MARRIED'].includes(normalizedMaritalStatus)) {
+        user.maritalStatus = normalizedMaritalStatus;
+      }
+    }
+  });
+
+  ticket.nationalIdNumber = getIdentityNationalId(user, ticket) || ticket.updateDetails?.nationalIdNumber || '';
+  ticket.reviewedBy = reviewedBy || ticket.reviewedBy;
+  ticket.reviewedAt = new Date();
+
+  const updatedUser = await syncCitizenIdentityProfile(user.id, {
+    nationalId: user.nationalId,
+    name: user.name,
+    fullName: user.name,
+    firstName: user.firstName,
+    middleName: user.middleName,
+    lastName: user.lastName,
+    phone: user.phone,
+    address: user.address,
+    dateOfBirth: user.dateOfBirth,
+    district: user.district,
+    maritalStatus: user.maritalStatus
+  });
+
+  ticket.nationalIdNumber = getIdentityNationalId(user, ticket) || ticket.updateDetails?.nationalIdNumber || '';
+  ticket.reviewedBy = reviewedBy || ticket.reviewedBy;
+  ticket.reviewedAt = new Date();
+  return updatedUser;
+};
+
+const buildExistingRegistrationInfo = (ticket) => formatExistingRegistrationInfo(ticket);
+
+const getNationalIdFromExistingRegistration = (ticket, user = {}) => (
+  String(
+    user.nationalId ||
+    ticket?.citizen?.nationalId ||
+    ticket?.registrationDetails?.nationalIdNumber ||
+    ''
+  ).trim()
+);
+
+const getExistingRegistrationCurrentValue = (ticket, field, user = {}) => {
+  const details = ticket?.registrationDetails || {};
+  const normalizedField = String(field || '').trim().toLowerCase();
+
+  if (normalizedField === 'name' || normalizedField === 'full name') {
+    return details.fullName || ticket?.citizenName || user.name || '';
+  }
+  if (normalizedField.includes('mother')) {
+    return details.motherName || '';
+  }
+  if (normalizedField.includes('birth')) {
+    return details.dateOfBirth || '';
+  }
+  if (normalizedField.includes('address')) {
+    return details.fullAddress || details.address || user.address || '';
+  }
+  if (normalizedField.includes('phone')) {
+    return details.phone || ticket?.citizen?.phone || user.phone || '';
+  }
+  if (normalizedField.includes('marital')) {
+    if (details.maritalStatus === 'SINGLE') return 'Single';
+    if (details.maritalStatus === 'MARRIED') return 'Married';
+    if (user.maritalStatus === 'SINGLE') return 'Single';
+    if (user.maritalStatus === 'MARRIED') return 'Married';
+    return '';
+  }
+  return 'Not recorded in current record';
+};
+
+const hydrateUpdateDetailsFromExistingRegistration = (details = {}, existingRegistration, user = {}) => {
+  const registrationDetails = existingRegistration?.registrationDetails || {};
+  const changes = (details.changes?.length
+    ? details.changes
+    : details.fieldToUpdate
+      ? [{
+          field: details.fieldToUpdate,
+          currentValue: details.currentValue,
+          newValue: details.newValue,
+          reason: details.reason
+        }]
+      : []
+  ).map((change) => ({
+    ...change,
+    currentValue: getExistingRegistrationCurrentValue(existingRegistration, change.field, user)
+      || change.currentValue
+      || 'Not recorded in current record'
+  }));
+
+  return {
+    ...details,
+    fullName: registrationDetails.fullName || existingRegistration?.citizenName || details.fullName || user.name || '',
+    phone: registrationDetails.phone || existingRegistration?.citizen?.phone || details.phone || user.phone || '',
+    nationalIdNumber: getNationalIdFromExistingRegistration(existingRegistration, user) || details.nationalIdNumber || '',
+    selectedFields: details.selectedFields?.length ? details.selectedFields : changes.map((change) => change.field).filter(Boolean),
+    changes,
+    fieldToUpdate: changes[0]?.field || details.fieldToUpdate || '',
+    currentValue: changes[0]?.currentValue || details.currentValue || '',
+    newValue: changes[0]?.newValue || details.newValue || '',
+    reason: changes[0]?.reason || details.reason || ''
+  };
+};
+
+const canExposeExistingRegistration = (ticket, user) => (
+  isAdminRole(user.role) ||
+  String(ticket?.citizen?.id || ticket?.citizen?._id || ticket?.citizen || '') === String(user.id)
+);
+
+const findExistingNewRegistration = async ({ fullName, phone, userId, onlyBlocking = false }) => {
   const normalizedName = normalizeFullNameForLookup(fullName);
   const normalizedPhone = normalizePhoneForLookup(phone);
+
+  const populateRegistrationTicket = async (query) => hydrateTickets(await prisma.ticket.findMany({
+    where: query,
+    orderBy: { createdAt: 'asc' }
+  }));
+
+  if (userId) {
+    const userTickets = await populateRegistrationTicket({ requestType: 'new_national_id', citizen: userId });
+    const userMatch = userTickets.find((ticket) => !onlyBlocking || isBlockingNewRegistration(ticket));
+    if (userMatch) return userMatch;
+  }
+
   if (!normalizedName || !normalizedPhone) return null;
 
-  const candidates = await Ticket.find({ requestType: 'new_national_id' })
-    .populate('service', 'name')
-    .populate('center', 'name city district')
-    .populate('citizen', 'name phone')
-    .sort({ createdAt: 1 });
+  const candidates = await populateRegistrationTicket({ requestType: 'new_national_id' });
 
   return candidates.find((ticket) => {
+    if (onlyBlocking && !isBlockingNewRegistration(ticket)) return false;
     const ticketName = normalizeFullNameForLookup(
       ticket.registrationDetails?.fullName || ticket.citizenName || ticket.citizen?.name
     );
@@ -159,6 +1036,7 @@ const sanitizeRegistrationDetails = (details = {}, fallbackUser = {}) => ({
   dateOfBirth: String(details.dateOfBirth || '').trim(),
   age: Number(details.age || 0),
   gender: String(details.gender || '').trim(),
+  maritalStatus: String(details.maritalStatus || '').trim().toUpperCase(),
   district: String(details.district || '').trim(),
   address: String(details.address || details.fullAddress || fallbackUser.address || '').trim(),
   fullAddress: String(details.fullAddress || details.address || fallbackUser.address || '').trim(),
@@ -185,13 +1063,16 @@ const isValidGovernmentName = (value, minimumCharacters = 0) => {
 };
 
 const isValidSomaliPhone = (value) => {
-  return /^(61|62|63|65|66|68|69)\d{7}$/.test(String(value || '').trim());
+  const digits = String(value || '').replace(/\D/g, '');
+  const local = digits.startsWith('252') ? digits.slice(3) : digits.startsWith('0') ? digits.slice(1) : digits;
+  return /^61\d{7}$/.test(local);
 };
 
 const calculateAge = (dateOfBirth) => {
   const dob = parseDateKey(dateOfBirth);
   if (!dob) return 0;
   const today = new Date();
+  if (dob > today) return 0;
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
@@ -207,6 +1088,7 @@ const validateRegistrationDetails = (details) => {
     ['motherName', 'Mother’s name is required.'],
     ['dateOfBirth', 'Date of birth is required.'],
     ['gender', 'Gender is required.'],
+    ['maritalStatus', 'Please select your marital status.'],
     ['district', 'District is required.'],
     ['address', 'Full address is required.'],
     ['nearestLandmark', 'Nearest landmark is required.']
@@ -225,19 +1107,22 @@ const validateRegistrationDetails = (details) => {
   if (!hasMinimumWords(motherName)) return "Mother's Name must contain at least two words.";
   if (!isValidSomaliPhone(details.phone)) return 'Enter a valid Somali phone number.';
   if (!['Male', 'Female'].includes(details.gender)) return 'Gender must be Male or Female.';
+  if (!['SINGLE', 'MARRIED'].includes(details.maritalStatus)) return 'Please select your marital status.';
   if (!isLettersNumbersSpacesOnly(district)) return 'District can contain letters, numbers, and spaces only.';
   if (!isLettersNumbersSpacesOnly(nearestLandmark)) return 'Nearest landmark can contain letters, numbers, and spaces only.';
   if (!isAddressTextValid(address)) return 'Full address can contain letters, numbers, spaces, and commas only.';
   const dob = parseDateKey(details.dateOfBirth);
-  if (!dob || dateKey(dob) !== details.dateOfBirth || dob > new Date()) return 'Enter a real date of birth.';
-  const age = calculateAge(details.dateOfBirth);
-  if (age < 18) return 'You must be at least 18 years old to book this service.';
+  if (!dob || dateKey(dob) !== details.dateOfBirth) return ERRORS.INVALID_DATE;
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (dob > today) return ERRORS.FUTURE_DATE_NOT_ALLOWED;
   return '';
 };
 
 const getRequestLabel = (requestType) => {
   if (requestType === 'lost_replacement') return 'lost National ID replacement';
   if (requestType === 'update_information') return 'National ID information update';
+  if (requestType === 'service_request') return 'National ID service';
   return 'National ID appointment';
 };
 
@@ -325,7 +1210,19 @@ const normalizeSchedule = (payload = {}, center = {}) => {
   };
 };
 
-const getCenterSchedule = (center) => normalizeSchedule(center?.schedule || {}, center);
+const getCenterSchedule = (center = {}) => normalizeSchedule({
+  workingDays: center.workingDays,
+  closedDays: center.closedDays,
+  startTime: center.startTime,
+  endTime: center.endTime,
+  breakTime: center.breakTime,
+  slotDuration: center.slotDuration,
+  maxBookingsPerSlot: center.maxBookingsPerSlot,
+  maxAppointmentsPerDay: center.maxAppointmentsPerDay,
+  closedDates: center.closedDates,
+  specialUnavailableDates: center.specialUnavailableDates,
+  isActive: center.isActive
+}, center);
 
 const getScheduleSlots = (schedule) => {
   const start = timeToMinutes(schedule.startTime);
@@ -366,8 +1263,7 @@ const isCenterUnavailableOnDate = (center, schedule, date) => {
     schedule.isActive === false ||
     !schedule.workingDays.includes(weekday) ||
     schedule.closedDays.includes(weekday) ||
-    schedule.closedDates.includes(key) ||
-    schedule.specialUnavailableDates.includes(key)
+    schedule.closedDates.includes(key)
   );
 };
 
@@ -382,7 +1278,7 @@ export const getBookingAvailability = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Center is required.' });
     }
 
-    const center = await Center.findById(centerId);
+    const center = await prisma.center.findUnique({ where: { id: centerId } });
     if (!center || !isBanaadirNationalIdCenter(center)) {
       return res.status(404).json({ success: false, message: 'Approved Banaadir center not found.' });
     }
@@ -398,12 +1294,15 @@ export const getBookingAvailability = async (req, res) => {
     const schedule = getCenterSchedule(center);
     const scheduleSlots = getScheduleSlots(schedule);
 
-    const tickets = await Ticket.find({
-      center: centerId,
-      date: { $gte: startKey, $lte: endKey },
-      status: { $ne: 'Cancelled' },
-      timeSlot: { $in: scheduleSlots }
-    }).select('date timeSlot status');
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        center: centerId,
+        date: { gte: startKey, lte: endKey },
+        status: { not: 'Cancelled' },
+        timeSlot: { in: scheduleSlots }
+      },
+      select: { date: true, timeSlot: true, status: true }
+    });
 
     const bookedByDate = tickets.reduce((map, ticket) => {
       const slots = map.get(ticket.date) || {};
@@ -423,10 +1322,12 @@ export const getBookingAvailability = async (req, res) => {
         .filter(([, count]) => count >= Number(schedule.maxBookingsPerSlot || DEFAULT_SCHEDULE.maxBookingsPerSlot))
         .map(([slot]) => slot);
       const closed = isCenterUnavailableOnDate(center, schedule, cursor);
-      const dayTotal = await Ticket.countDocuments({
-        center: centerId,
-        date: key,
-        status: { $ne: 'Cancelled' }
+      const dayTotal = await prisma.ticket.count({
+        where: {
+          center: centerId,
+          date: key,
+          status: { not: 'Cancelled' }
+        }
       });
       dates[key] = {
         status: closed
@@ -460,15 +1361,24 @@ export const getBookingAvailability = async (req, res) => {
 // @access  Private/Citizen or Admin
 export const createBooking = async (req, res) => {
   try {
-    const { serviceId, centerId, date, timeSlot, citizenName, registrationDetails, replacementDetails, updateDetails } = req.body;
+    const { serviceId, centerId, date, timeSlot, citizenName, registrationDetails, replacementDetails, updateDetails, serviceRequestDetails, otpToken } = req.body;
+    const requestedCenterId = idFrom(centerId);
 
-    const service = await Service.findById(serviceId);
+    let citizenAccount = await prisma.user.findUnique({ where: { id: req.user.id }, include: { citizenProfile: true } });
+    if (!citizenAccount) {
+      return res.status(404).json({ success: false, message: 'Citizen account not found.' });
+    }
+    citizenAccount.nationalId = await ensureCitizenPermanentNqsId(citizenAccount);
+
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
     const isUpdateService = isUpdateNationalIdInformationService(service);
-    const center = centerId
-      ? await Center.findById(centerId)
-      : isUpdateService
-        ? await Center.findOne({ city: 'Banaadir', name: 'Banaadir National ID Center' })
-        : null;
+    const center = requestedCenterId
+      ? await prisma.center.findUnique({ where: { id: requestedCenterId } })
+      : isUpdateService && citizenAccount.center
+        ? await prisma.center.findUnique({ where: { id: citizenAccount.center } })
+        : isUpdateService
+          ? await prisma.center.findFirst({ where: { city: 'Banaadir', name: 'Banaadir National ID Center' } })
+          : null;
 
     if (!service || !center) {
       return res.status(404).json({ success: false, message: 'Service or Center not found' });
@@ -481,20 +1391,62 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    const resolvedCenterId = center._id || centerId;
+    const resolvedCenterId = center.id || requestedCenterId;
+    if (normalizeRole(req.user.role) === 'citizen' && citizenAccount.center && citizenAccount.center !== resolvedCenterId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account belongs to another service center. You can only create requests for your assigned center.'
+      });
+    }
 
     const isReplacement = isLostNationalIdReplacementService(service);
     const isUpdateRequest = isUpdateService;
-    const isNewRegistration = !isReplacement && !isUpdateRequest;
+    const isNewRegistration = isNewNationalIdRegistrationService(service);
+    const isGeneralServiceRequest = !isReplacement && !isUpdateRequest && !isNewRegistration;
+    const requestType = isReplacement ? 'lost_replacement' : isUpdateRequest ? 'update_information' : isNewRegistration ? 'new_national_id' : 'service_request';
     const cleanRegistrationDetails = isNewRegistration
       ? sanitizeRegistrationDetails(registrationDetails, req.user)
       : {};
     const cleanReplacementDetails = isReplacement
       ? sanitizeReplacementDetails(replacementDetails, req.user)
       : {};
-    const cleanUpdateDetails = isUpdateRequest
+    const cleanServiceRequestDetails = isGeneralServiceRequest
+      ? sanitizeServiceRequestDetails(serviceRequestDetails || registrationDetails, req.user)
+      : {};
+    let cleanUpdateDetails = isUpdateRequest
       ? sanitizeUpdateDetails(updateDetails, req.user)
       : {};
+    let existingRegistrationInfo = { found: false };
+    let existingIdentityTicket = null;
+
+    if (normalizeRole(req.user.role) === 'citizen') {
+      const otpPurpose = isReplacement ? 'replace_lost_id' : isUpdateRequest ? 'update_information' : 'new_id_booking';
+      const otpPhone = normalizeOtpPhone(
+        isReplacement
+          ? cleanReplacementDetails.phone
+          : isUpdateRequest
+            ? cleanUpdateDetails.phone
+            : isGeneralServiceRequest
+              ? cleanServiceRequestDetails.phone
+              : cleanRegistrationDetails.phone
+      );
+      if (!verifyOtpToken({
+        token: otpToken,
+        purpose: otpPurpose,
+        userId: req.user.id,
+        phone: otpPhone
+      })) {
+        return res.status(401).json({ success: false, message: 'OTP verification required before submitting this request.' });
+      }
+    }
+
+    if (isNewRegistration && hasIssuedNationalId(citizenAccount)) {
+      return res.status(409).json({
+        success: false,
+        message: ISSUED_NATIONAL_ID_MESSAGE,
+        allowedServices: ['update_information', 'replace_lost_id']
+      });
+    }
 
     if (isNewRegistration) {
       const registrationError = validateRegistrationDetails(cleanRegistrationDetails);
@@ -509,6 +1461,54 @@ export const createBooking = async (req, res) => {
         return res.status(400).json({ success: false, message: replacementError });
       }
     }
+
+    if (isUpdateRequest) {
+      const openUpdateRequest = await findOpenUpdateRequestForCitizen({
+        citizenId: req.user.id
+      });
+      if (openUpdateRequest) {
+        return res.status(409).json({
+          success: false,
+          message: ACTIVE_UPDATE_REQUEST_MESSAGE,
+          data: openUpdateRequest
+        });
+      }
+
+      const existingRegistration = await findExistingNewRegistration({
+        fullName: cleanUpdateDetails.fullName,
+        phone: cleanUpdateDetails.phone,
+        user: req.user.id,
+        onlyBlocking: false
+      });
+
+      if (!existingRegistration) {
+        return res.status(404).json({
+          success: false,
+          message: 'No existing National ID registration found for this account.'
+        });
+      }
+
+      if (!canExposeExistingRegistration(existingRegistration, req.user)) {
+        return res.status(403).json({
+          success: false,
+          message: 'No existing National ID registration found for this account.'
+        });
+      }
+
+      existingIdentityTicket = existingRegistration;
+      existingRegistrationInfo = buildExistingRegistrationInfo(existingRegistration);
+      cleanUpdateDetails = hydrateUpdateDetailsFromExistingRegistration(cleanUpdateDetails, existingRegistration, req.user);
+
+      if (!hasCitizenNationalIdAccess(citizenAccount, existingRegistration)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You must have an issued National ID before requesting an information update.'
+        });
+      }
+      citizenAccount = await ensureIssuedNationalIdFromRegistration(citizenAccount, existingRegistration, null);
+      cleanUpdateDetails.nationalIdNumber = getIdentityNationalId(citizenAccount, existingRegistration);
+    }
+
     if (isUpdateRequest) {
       const updateError = validateUpdateDetails(cleanUpdateDetails);
       if (updateError) {
@@ -516,26 +1516,70 @@ export const createBooking = async (req, res) => {
       }
     }
 
-    let existingRegistrationInfo = { found: false };
-    if (isNewRegistration || isUpdateRequest) {
-      const lookupDetails = isNewRegistration ? cleanRegistrationDetails : cleanUpdateDetails;
+    if (isGeneralServiceRequest) {
+      const serviceRequestError = validateServiceRequestDetails(cleanServiceRequestDetails);
+      if (serviceRequestError) {
+        return res.status(400).json({ success: false, message: serviceRequestError });
+      }
+    }
+
+    const centerDistrict = getCenterDistrict(center);
+    if (!isUpdateRequest && !isGeneralServiceRequest) {
+      const selectedDistrict = isNewRegistration
+        ? cleanRegistrationDetails.district
+        : cleanReplacementDetails.district;
+
+      const selectedDistrictText = String(selectedDistrict || '').trim();
+      if (!selectedDistrictText) {
+        return res.status(400).json({ success: false, message: 'District is required.' });
+      }
+
+      if (isNewRegistration) {
+        cleanRegistrationDetails.district = normalizeBanaadirDistrict(selectedDistrict) || selectedDistrictText;
+        cleanRegistrationDetails.centerDistrict = centerDistrict;
+      }
+      if (isReplacement) {
+        cleanReplacementDetails.district = normalizeBanaadirDistrict(selectedDistrict) || selectedDistrictText;
+      }
+    }
+
+    if (isGeneralServiceRequest) {
+      cleanServiceRequestDetails.serviceName = cleanServiceRequestDetails.serviceName || service.name;
+      cleanServiceRequestDetails.selectedCenter = center.name;
+      cleanServiceRequestDetails.centerDistrict = centerDistrict;
+      cleanServiceRequestDetails.appointmentDate = date;
+      cleanServiceRequestDetails.appointmentTime = timeSlot;
+    }
+
+    if (isNewRegistration || isReplacement) {
+      const lookupDetails = isNewRegistration
+        ? cleanRegistrationDetails
+        : cleanReplacementDetails;
       const existingRegistration = await findExistingNewRegistration({
         fullName: lookupDetails.fullName,
-        phone: lookupDetails.phone
+        phone: lookupDetails.phone,
+        userId: req.user.id,
+        onlyBlocking: isNewRegistration
       });
 
       if (isNewRegistration && existingRegistration) {
+        const alreadyIssued = hasIssuedNationalId(citizenAccount) || hasApprovedRegistration(existingRegistration);
         const existingTicket = canExposeExistingRegistration(existingRegistration, req.user)
           ? buildExistingRegistrationInfo(existingRegistration)
           : null;
-        return res.status(409).json({
+        const duplicateResponse = {
           success: false,
-          message: 'You have already registered for a National ID service. Please use your existing ticket or contact support.',
+          message: alreadyIssued ? ISSUED_NATIONAL_ID_MESSAGE : ACTIVE_APPOINTMENT_MESSAGE,
+          allowedServices: ['update_information', 'replace_lost_id'],
           data: existingTicket ? { existingTicket } : undefined
-        });
+        };
+        if (existingTicket?.ticketNumber) {
+          duplicateResponse.existingTicket = existingTicket.ticketNumber;
+        }
+        return res.status(409).json(duplicateResponse);
       }
 
-      if (isUpdateRequest) {
+      if (isReplacement) {
         if (!existingRegistration) {
           return res.status(404).json({
             success: false,
@@ -546,12 +1590,48 @@ export const createBooking = async (req, res) => {
         if (!canExposeExistingRegistration(existingRegistration, req.user)) {
           return res.status(403).json({
             success: false,
-            message: 'No existing National ID registration found for this name and phone number.'
+            message: NO_EXISTING_NATIONAL_ID_MESSAGE
           });
         }
 
+        if (!hasCitizenNationalIdAccess(citizenAccount, existingRegistration)) {
+          return res.status(403).json({
+            success: false,
+            message: 'You must have an issued National ID before requesting a replacement.'
+          });
+        }
+
+        citizenAccount = await ensureIssuedNationalIdFromRegistration(citizenAccount, existingRegistration, null);
+        cleanReplacementDetails.nationalIdNumber = getIdentityNationalId(citizenAccount, existingRegistration);
+        existingIdentityTicket = existingRegistration;
         existingRegistrationInfo = buildExistingRegistrationInfo(existingRegistration);
       }
+    }
+
+    const activeRequest = isGeneralServiceRequest
+      ? await prisma.ticket.findFirst({
+          where: {
+            citizen: req.user.id,
+            service: serviceId,
+            OR: [
+              { status: { in: ACTIVE_TICKET_STATUSES } },
+              { requestStatus: { in: ACTIVE_REQUEST_STATUSES } }
+            ]
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      : await findActiveRequestForCitizen({
+          citizenId: req.user.id,
+          requestType
+        });
+    if (activeRequest) {
+      if (isReplacement) {
+        return res.status(409).json({ success: false, message: ERRORS.DUPLICATE_REQUEST, data: activeRequest });
+      }
+      if (isUpdateRequest) {
+        return res.status(409).json({ success: false, message: ERRORS.DUPLICATE_REQUEST, data: activeRequest });
+      }
+      return res.status(409).json({ success: false, message: ACTIVE_APPOINTMENT_MESSAGE, data: activeRequest });
     }
 
     if (!isUpdateRequest && (!date || !timeSlot)) {
@@ -563,26 +1643,28 @@ export const createBooking = async (req, res) => {
     if (!isUpdateRequest) {
       const bookingDate = parseDateKey(date);
       if (!bookingDate) {
-        return res.status(400).json({ success: false, message: 'Invalid appointment date.' });
+        return res.status(400).json({ success: false, message: ERRORS.INVALID_DATE });
       }
       if (isCenterUnavailableOnDate(center, schedule, bookingDate)) {
-        return res.status(400).json({ success: false, message: 'This center is not available on this date.' });
+        return res.status(400).json({ success: false, message: ERRORS.CLOSED_DATE });
       }
       if (!scheduleSlots.includes(timeSlot)) {
-        return res.status(400).json({ success: false, message: 'Selected time is outside the available appointment schedule.' });
+        return res.status(400).json({ success: false, message: ERRORS.CLOSED_TIME });
       }
 
       const [slotCount, dayCount] = await Promise.all([
-        Ticket.countDocuments({ center: resolvedCenterId, date, timeSlot, status: { $ne: 'Cancelled' } }),
-        Ticket.countDocuments({ center: resolvedCenterId, date, status: { $ne: 'Cancelled' } })
+        prisma.ticket.count({ where: { center: resolvedCenterId, date, timeSlot, status: { not: 'Cancelled' } } }),
+        prisma.ticket.count({ where: { center: resolvedCenterId, date, status: { not: 'Cancelled' } } })
       ]);
       if (slotCount >= Number(schedule.maxBookingsPerSlot || DEFAULT_SCHEDULE.maxBookingsPerSlot)
         || dayCount >= Number(schedule.maxAppointmentsPerDay || DEFAULT_SCHEDULE.maxAppointmentsPerDay)) {
-        await Notification.create({
-          user: req.user._id,
-          title: 'Appointment Time Full',
-          desc: 'Appointments are full for this time. Please choose another available slot.',
-          category: 'Appointments'
+        await prisma.notification.create({
+          data: {
+            user: req.user.id,
+            title: 'Appointment Time Full',
+            desc: 'Appointments are full for this time. Please choose another available slot.',
+            category: 'Appointments'
+          }
         });
         return res.status(400).json({ success: false, message: 'Appointments are full for this time. Please choose another available slot.' });
       }
@@ -590,65 +1672,117 @@ export const createBooking = async (req, res) => {
 
     if (isNewRegistration) {
       cleanRegistrationDetails.selectedCenter = center.name;
-      cleanRegistrationDetails.centerDistrict = cleanRegistrationDetails.centerDistrict || center.district || center.city || 'Banaadir';
+      cleanRegistrationDetails.centerDistrict = centerDistrict;
       cleanRegistrationDetails.appointmentDate = date;
       cleanRegistrationDetails.appointmentTime = timeSlot;
+      cleanRegistrationDetails.nationalIdNumber = citizenAccount.nationalId;
     }
 
     const refCode = await generateRef();
-    const citizenId = req.user._id;
-    const requestType = isReplacement ? 'lost_replacement' : isUpdateRequest ? 'update_information' : 'new_national_id';
+    const citizenId = req.user.id;
     const requestLabel = getRequestLabel(requestType);
-    const nameOfCitizen = cleanRegistrationDetails.fullName || cleanReplacementDetails.fullName || cleanUpdateDetails.fullName || citizenName || req.user.name;
+    const nameOfCitizen = cleanRegistrationDetails.fullName || cleanReplacementDetails.fullName || cleanUpdateDetails.fullName || cleanServiceRequestDetails.fullName || citizenName || req.user.name;
 
     // Calculate queue waiting list details
-    const activeWaiting = await Ticket.countDocuments({
-      center: resolvedCenterId,
-      status: 'Waiting',
-      date: isUpdateRequest ? '' : date
+    const activeWaiting = await prisma.ticket.count({
+      where: {
+        center: resolvedCenterId,
+        status: 'Waiting',
+        date: isUpdateRequest ? '' : date
+      }
     });
     // Est wait time = active waiting * service duration
     const waitMins = activeWaiting * service.duration;
 
-    const ticket = await Ticket.create({
-      ref: refCode,
-      service: serviceId,
-      citizenName: nameOfCitizen,
-      citizen: citizenId,
-      center: resolvedCenterId,
+    const ticket = await prisma.ticket.create({
+      data: {
+        ref: refCode,
+        service: serviceId,
+        citizenName: nameOfCitizen,
+        citizen: citizenId,
+        center: resolvedCenterId,
       date: isUpdateRequest ? '' : date,
       timeSlot: isUpdateRequest ? null : timeSlot,
+      district: isUpdateRequest
+        ? ''
+        : isGeneralServiceRequest
+          ? centerDistrict
+          : isNewRegistration
+          ? cleanRegistrationDetails.district
+          : cleanReplacementDetails.district,
       requestType,
       requestStatus: 'Pending',
-      registrationDetails: isNewRegistration ? cleanRegistrationDetails : undefined,
+      nationalIdNumber: getIdentityNationalId(citizenAccount, existingIdentityTicket),
+      cardSerialNumber: isReplacement || isUpdateRequest ? citizenAccount.cardSerialNumber || '' : '',
+      cardStatus: isReplacement || isUpdateRequest ? citizenAccount.cardStatus || '' : '',
+      registrationDetails: isNewRegistration ? cleanRegistrationDetails : isGeneralServiceRequest ? cleanServiceRequestDetails : undefined,
       replacementDetails: isReplacement ? cleanReplacementDetails : undefined,
       updateDetails: isUpdateRequest ? cleanUpdateDetails : undefined,
-      existingRegistration: isUpdateRequest ? existingRegistrationInfo : undefined,
-      documents: isReplacement && cleanReplacementDetails.policeReportDocument
-        ? [{ name: 'Police report', fileUrl: cleanReplacementDetails.policeReportDocument, documentType: 'police_report' }]
-        : [],
-      waitTime: isUpdateRequest ? 'Review pending' : waitMins > 0 ? `${waitMins} min` : '10 min',
-      status: isUpdateRequest ? 'On Hold' : 'Waiting'
+      existingRegistration: isUpdateRequest || isReplacement ? existingRegistrationInfo : undefined,
+        waitTime: isUpdateRequest ? 'Review pending' : waitMins > 0 ? `${waitMins} min` : '10 min',
+        status: isUpdateRequest ? 'On Hold' : 'Waiting'
+      }
     });
 
+    if (isNewRegistration) {
+      const nameParts = splitCitizenName(cleanRegistrationDetails.fullName);
+      await syncCitizenIdentityProfile(citizenId, {
+        nationalId: citizenAccount.nationalId,
+        name: cleanRegistrationDetails.fullName,
+        fullName: cleanRegistrationDetails.fullName,
+        firstName: nameParts.firstName,
+        middleName: nameParts.middleName,
+        lastName: nameParts.lastName,
+        phone: cleanRegistrationDetails.phone,
+        dateOfBirth: cleanRegistrationDetails.dateOfBirth,
+        address: cleanRegistrationDetails.fullAddress || cleanRegistrationDetails.address,
+        district: cleanRegistrationDetails.district,
+        center: resolvedCenterId,
+        maritalStatus: cleanRegistrationDetails.maritalStatus,
+        nationalIdStatus: 'WAITING'
+      });
+    } else if (normalizeRole(req.user.role) === 'citizen' && !citizenAccount.center) {
+      await prisma.user.update({
+        where: { id: citizenId },
+        data: {
+          center: resolvedCenterId,
+          district: isReplacement
+            ? cleanReplacementDetails.district
+            : isGeneralServiceRequest
+              ? centerDistrict
+              : (cleanUpdateDetails.district || citizenAccount.district || '')
+        }
+      });
+    }
+
     // Create persistent Notification
-    const notif = await Notification.create({
-      user: citizenId,
-      title: isReplacement
-        ? 'Replacement Request Submitted'
-        : isUpdateRequest
-          ? 'Update Request Submitted'
-          : 'Appointment Confirmed',
-      desc: isReplacement || isUpdateRequest
-        ? `Your ${requestLabel} request ${refCode} has been submitted.`
-        : `Your ticket ${refCode} for ${service.name} has been scheduled.`,
-      category: 'Appointments'
+    const notif = await prisma.notification.create({
+      data: {
+        user: citizenId,
+        title: isReplacement
+          ? 'Replacement Request Submitted'
+          : isUpdateRequest
+            ? 'Update Request Submitted'
+            : isGeneralServiceRequest
+              ? 'Service Request Submitted'
+            : 'Appointment Confirmed',
+        desc: isReplacement || isUpdateRequest
+          ? `Your ${requestLabel} request ${refCode} has been submitted.`
+          : `Your ticket ${refCode} for ${service.name} has been scheduled.`,
+        category: 'Appointments'
+      }
+    });
+    const staffNotifications = await createAdminRequestNotifications({
+      ticket,
+      service,
+      center,
+      requestLabel
     });
 
     await Promise.all([
       sendBookingConfirmationEmail({ user: req.user, ticket, service, center }),
       logSmsOnly({
-        recipient: req.user.phone,
+        recipient: cleanRegistrationDetails.phone || cleanReplacementDetails.phone || cleanUpdateDetails.phone || cleanServiceRequestDetails.phone || req.user.phone,
         message: isUpdateRequest
           ? `Your ${service.name} request is submitted. Reference: ${refCode}.`
           : `Your ${service.name} appointment is confirmed. Ticket: ${refCode}. Center: ${center.name}. Date: ${date}.`
@@ -656,17 +1790,21 @@ export const createBooking = async (req, res) => {
     ]);
 
     // Audit logging
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: isReplacement
-        ? 'Create Lost ID Replacement Request'
-        : isUpdateRequest
-          ? 'Create ID Information Update Request'
-          : 'Book Appointment',
-      details: `${isReplacement || isUpdateRequest ? `Created ${requestLabel} request` : 'Booked ticket'}: ${refCode} at center: ${center.name} for service: ${service.name}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: isReplacement
+          ? 'Lost ID Request'
+          : isUpdateRequest
+            ? 'Update Request'
+            : 'Booking',
+        details: `${isReplacement || isUpdateRequest ? `Created ${requestLabel} request` : 'Booked ticket'}: ${refCode} at center: ${center.name} for service: ${service.name}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
+
+    const populatedTicket = await hydrateTicket(ticket);
 
     // Emit Socket.io updates for real-time queue tracking
     const io = req.app.get('io');
@@ -674,14 +1812,19 @@ export const createBooking = async (req, res) => {
       // Notify the specific center room that the queue list has updated
       io.to(resolvedCenterId.toString()).emit('queueUpdate', { centerId: resolvedCenterId });
       // Notify the specific ticket room (for live single ticket tracking)
-      io.to(refCode).emit('ticketUpdate', ticket);
+      io.to(refCode).emit('ticketUpdate', populatedTicket);
       // If citizenId exists, alert the user’s personal feed
       if (citizenId) {
         io.emit(`notification-${citizenId}`, notif);
       }
+      staffNotifications.forEach((staffNotification) => {
+        if (staffNotification.user) {
+          io.emit(`notification-${staffNotification.user}`, staffNotification);
+        }
+      });
     }
 
-    return res.status(201).json({ success: true, data: ticket });
+    return res.status(201).json({ success: true, data: populatedTicket });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -692,10 +1835,10 @@ export const createBooking = async (req, res) => {
 // @access  Private (Citizen or Admin, scoped to the logged-in account)
 export const getUserBookings = async (req, res) => {
   try {
-    const tickets = await Ticket.find({ citizen: req.user._id })
-      .populate('service')
-      .populate('center')
-      .sort({ createdAt: -1 });
+    const tickets = await hydrateTickets(await prisma.ticket.findMany({
+      where: { citizen: req.user.id },
+      orderBy: { createdAt: 'desc' }
+    }));
 
     return res.json({ success: true, count: tickets.length, data: tickets });
   } catch (error) {
@@ -708,8 +1851,9 @@ export const getUserBookings = async (req, res) => {
 // @access  Private/Admin
 export const getAllBookings = async (req, res) => {
   try {
-    const { search = '', status = '', center = '', date = '', requestType = '', requestStatus = '' } = req.query;
+    const { search = '', status = '', center = '', district = '', date = '', requestType = '', requestStatus = '' } = req.query;
     const query = {};
+    const normalizedDistrict = normalizeBanaadirDistrict(district) || String(district || '').trim();
 
     if (status) {
       query.status = status;
@@ -720,13 +1864,32 @@ export const getAllBookings = async (req, res) => {
     if (requestStatus) {
       query.requestStatus = requestStatus;
     }
-    if (center) {
+    if (normalizedDistrict) {
+      const districtCenters = await prisma.center.findMany({
+        where: { district: normalizedDistrict },
+        select: { id: true }
+      });
+      const districtCenterIds = districtCenters.map((item) => item.id);
+      if (center) {
+        const selectedCenter = await prisma.center.findUnique({
+          where: { id: center },
+          select: { district: true }
+        });
+        const selectedCenterDistrict = normalizeBanaadirDistrict(selectedCenter?.district) || String(selectedCenter?.district || '').trim();
+        if (!selectedCenter || selectedCenterDistrict !== normalizedDistrict) {
+          return res.json({ success: true, count: 0, data: [] });
+        }
+        query.center = center;
+      } else {
+        query.center = { in: districtCenterIds };
+      }
+    } else if (center) {
       query.center = center;
     }
-    if (normalizeRole(req.user.role) === 'super_operator') {
+    if (['operator', 'super_operator', 'center_manager'].includes(normalizeRole(req.user.role))) {
       const assignedCenterId = getAssignedCenterId(req.user);
       if (!assignedCenterId) {
-        return res.status(403).json({ success: false, message: 'Super operator account is not assigned to a center.' });
+        return res.status(403).json({ success: false, message: 'Operator account is not assigned to a center.' });
       }
       query.center = assignedCenterId;
     }
@@ -735,28 +1898,130 @@ export const getAllBookings = async (req, res) => {
     }
     if (search.trim()) {
       const term = search.trim();
-      const matchingUsers = await User.find({
-        $or: [
-          { name: { $regex: term, $options: 'i' } },
-          { email: { $regex: term, $options: 'i' } },
-          { phone: { $regex: term, $options: 'i' } }
-        ]
-      }).select('_id');
-      const userIds = matchingUsers.map((user) => user._id);
-      query.$or = [
-        { ref: { $regex: term, $options: 'i' } },
-        { citizenName: { $regex: term, $options: 'i' } },
-        { citizen: { $in: userIds } }
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { name: { contains: term, mode: 'insensitive' } },
+            { email: { contains: term, mode: 'insensitive' } },
+            { phone: { contains: term, mode: 'insensitive' } }
+          ]
+        },
+        select: { id: true }
+      });
+      const userIds = matchingUsers.map((user) => user.id);
+      query.OR = [
+        { ref: { contains: term, mode: 'insensitive' } },
+        { citizenName: { contains: term, mode: 'insensitive' } },
+        { citizen: { in: userIds } }
       ];
     }
 
-    const tickets = await Ticket.find(query)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name email phone')
-      .sort({ createdAt: -1 });
+    const tickets = await hydrateTickets(await prisma.ticket.findMany({
+      where: query,
+      orderBy: { createdAt: 'desc' }
+    }));
 
     return res.json({ success: true, count: tickets.length, data: tickets });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Send appointment/request back to citizen for correction
+// @route   PUT /api/bookings/admin/:id/correction
+// @access  Private/Admin
+export const sendCorrectionFeedback = async (req, res) => {
+  try {
+    const inputReasons = req.body.reasonIds || req.body.correctionReasonIds || req.body.correctionReasons || req.body.reasons;
+    const additionalNote = String(req.body.additionalNote || req.body.additionalNotes || req.body.note || '').trim();
+
+    if (!additionalNote) {
+      return res.status(400).json({ success: false, message: 'Additional notes are required when sending a request back for correction.' });
+    }
+
+    const resolvedReasons = await resolveCorrectionReasons(inputReasons);
+    if (resolvedReasons.error) {
+      return res.status(400).json({ success: false, message: resolvedReasons.error });
+    }
+
+    let ticket = await hydrateTicket(await findTicketByIdOrRef(req.params.id));
+
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    if (!canAccessTicket(req.user, ticket)) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to manage this appointment.' });
+    }
+
+    if (isCompletedTicket(ticket)) {
+      return res.status(400).json({ success: false, message: ERRORS.APPOINTMENT_ALREADY_COMPLETED });
+    }
+
+    const previousStatus = ticket.requestStatus || ticket.status || '';
+    const correctionReasons = resolvedReasons.reasons;
+
+    ticket = await hydrateTicket(await updateTicketById(ticket.id, {
+      status: 'On Hold',
+      requestStatus: NEEDS_CORRECTION_STATUS
+    }));
+
+    await prisma.requestCorrectionFeedback.createMany({
+      data: correctionReasons.map((reason) => ({
+        request: ticket.id,
+        correctionReason: reason.id,
+        admin: req.user.id,
+        additionalNote
+      }))
+    });
+
+    await prisma.notification.create({
+      data: {
+        user: idFrom(ticket.citizen),
+        title: 'Registration Requires Correction',
+        desc: formatCorrectionNotificationMessage({ ticket, reasons: correctionReasons, additionalNote }),
+        category: 'Appointments',
+        notificationType: 'CORRECTION_REQUIRED',
+        referenceNumber: ticket.ref,
+        requestType: ticket.requestType,
+        relatedEntity: ticket.id,
+        relatedEntityType: 'Ticket',
+        previousStatus,
+        newStatus: NEEDS_CORRECTION_STATUS,
+        read: false
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Send Request Back for Correction',
+        details: `Sent ticket ${ticket.ref} back for correction. Previous status: ${previousStatus}. Reasons: ${correctionReasons.map((reason) => reason.reasonName).join(', ')}. Notes: ${additionalNote}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
+    });
+
+    const populatedTicket = await hydrateTicket(await findTicketById(ticket.id));
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(idFrom(ticket.center).toString()).emit('queueUpdate', { centerId: idFrom(ticket.center) });
+      io.to(ticket.ref).emit('ticketUpdate', populatedTicket);
+      if (ticket.citizen) {
+        io.emit(`notification-${idFrom(ticket.citizen)}`, {
+          title: 'Registration Requires Correction',
+          desc: `Your request ${ticket.ref} requires corrections before it can continue.`,
+          category: 'Appointments'
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Correction feedback sent to the citizen.',
+      data: populatedTicket
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -767,17 +2032,38 @@ export const getAllBookings = async (req, res) => {
 // @access  Private/Admin
 export const updateRequestStatus = async (req, res) => {
   try {
-    const { requestStatus } = req.body;
-    const allowedStatuses = ['Pending', 'Approved', 'Rejected', 'Completed', 'Resubmission Required'];
+    const { requestStatus, rejectionReason = '' } = req.body;
+    const allowedStatuses = [
+      'Pending',
+      'Under Review',
+      'Approved',
+      'In Progress',
+      'Rejected',
+      'Completed',
+      'Cancelled',
+      'Resubmission Required',
+      'WAITING',
+      'UNDER_REVIEW',
+      NEEDS_CORRECTION_STATUS,
+      RESUBMITTED_STATUS,
+      'APPROVED',
+      'COMPLETED',
+      'CANCELLED',
+      'REJECTED'
+    ];
 
     if (!allowedStatuses.includes(requestStatus)) {
       return res.status(400).json({ success: false, message: 'Invalid request status' });
     }
+    let cancellation = null;
+    if (requestStatus === 'Cancelled') {
+      cancellation = buildCancellationPayload(req.body);
+      if (cancellation.error) {
+        return res.status(400).json({ success: false, message: cancellation.error });
+      }
+    }
 
-    const ticket = await Ticket.findById(req.params.id)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name email phone');
+    let ticket = await hydrateTicket(await findTicketByIdOrRef(req.params.id));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -787,54 +2073,134 @@ export const updateRequestStatus = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorized to manage this appointment.' });
     }
 
+    if (isCompletedTicket(ticket) && !COMPLETED_STATUS_VALUES.has(requestStatus)) {
+        return res.status(400).json({ success: false, message: ERRORS.APPOINTMENT_ALREADY_COMPLETED });
+    }
+
+    if (requestStatus === 'Cancelled') {
+      const cancelError = assertCanCancelTicket(ticket);
+      if (cancelError) {
+        return res.status(400).json({ success: false, message: cancelError });
+      }
+    }
+
     if (ticket.requestType === 'new_national_id') {
       return res.status(400).json({ success: false, message: 'This ticket is not a National ID special request' });
     }
 
     const requestLabel = getRequestLabel(ticket.requestType);
+    const previousStatus = ticket.requestStatus || ticket.status || '';
     ticket.requestStatus = requestStatus;
-    if (requestStatus === 'Approved' && ticket.status === 'Cancelled') {
-      ticket.status = 'Waiting';
+    ticket.reviewedBy = req.user.id;
+    ticket.reviewedAt = new Date();
+
+    if (requestStatus === 'Approved' || requestStatus === 'APPROVED') {
+      if (ticket.requestType === 'update_information') {
+        const updateError = validateUpdateDetails(ticket.updateDetails || {});
+        if (updateError) return res.status(400).json({ success: false, message: updateError });
+      }
+      ticket.status = ticket.requestType === 'update_information' ? 'On Hold' : 'Waiting';
     }
-    if (requestStatus === 'Rejected') {
+    if (requestStatus === 'Under Review' || requestStatus === 'UNDER_REVIEW') {
+      ticket.status = 'On Hold';
+    }
+    if (requestStatus === 'In Progress') {
+      ticket.status = 'In Progress';
+    }
+    if (requestStatus === 'Rejected' || requestStatus === 'REJECTED' || requestStatus === 'Cancelled' || requestStatus === 'CANCELLED') {
       ticket.status = 'Cancelled';
+      ticket.rejectionReason = requestStatus === 'Cancelled' || requestStatus === 'CANCELLED'
+        ? cancellation.summary
+        : String(rejectionReason || '').trim();
+      if (requestStatus === 'Cancelled' || requestStatus === 'CANCELLED') {
+        applyCancellationDetails(ticket, cancellation, previousStatus, req.user.id);
+      } else {
+        ticket.cancellationReason = ticket.rejectionReason;
+        ticket.cancelledBy = req.user.id;
+        ticket.cancelledAt = new Date();
+      }
     }
-    if (requestStatus === 'Resubmission Required') {
+    if (requestStatus === 'Resubmission Required' || requestStatus === NEEDS_CORRECTION_STATUS) {
       ticket.needsResubmission = true;
-      ticket.status = 'Cancelled';
+      ticket.status = 'On Hold';
+      ticket.rejectionReason = String(rejectionReason || '').trim();
     }
-    if (requestStatus === 'Completed') {
+    if (requestStatus === 'Completed' || requestStatus === 'COMPLETED') {
+      if (ticket.requestType === 'update_information') {
+        const updateError = validateUpdateDetails(ticket.updateDetails || {});
+        if (updateError) return res.status(400).json({ success: false, message: updateError });
+      }
       ticket.status = 'Completed';
-      ticket.completedAt = new Date();
+      ticket.requestStatus = 'Completed';
+      if (ticket.requestType === 'lost_replacement') {
+        await completeLostIdReplacement(ticket, req.user.id);
+      }
+      if (ticket.requestType === 'update_information') {
+        await applyApprovedUpdateDetails(ticket, req.user.id);
+      }
     }
 
-    await ticket.save();
+    ticket = await hydrateTicket(await updateTicketById(ticket.id, ticket));
 
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name email phone');
-
-    const citizenId = ticket.citizen?._id || ticket.citizen;
-    const centerId = ticket.center?._id || ticket.center;
-
-    if (citizenId) {
-      await Notification.create({
-        user: citizenId,
-        title: 'Request Updated',
-        desc: requestStatus === 'Resubmission Required'
-          ? `Your ${requestLabel} request ${ticket.ref} needs correction and resubmission.`
-          : `Your ${requestLabel} request ${ticket.ref} is now ${requestStatus}.`,
-        category: 'Appointments'
+    let cancellationNotification = null;
+    if (requestStatus === 'Cancelled' || requestStatus === 'CANCELLED') {
+      cancellationNotification = await createCancellationNotification({
+        ticket,
+        reason: ticket.cancellationReason || ticket.rejectionReason,
+        previousStatus
       });
     }
 
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Update National ID Request',
-      details: `Updated ${requestLabel} request ${ticket.ref} to ${requestStatus}`,
-      ipAddress: req.ip || '127.0.0.1'
+    const populatedTicket = await hydrateTicket(await findTicketById(ticket.id));
+
+    const citizenId = ticket.citizen?.id || ticket.citizen;
+    const centerId = ticket.center?.id || ticket.center;
+
+    if (citizenId) {
+      const notificationTitle = requestStatus === 'Approved'
+        ? 'Request Approved'
+        : requestStatus === 'Completed'
+          ? 'Request Completed'
+          : requestStatus === 'Rejected' || requestStatus === 'Cancelled'
+            ? 'Request Rejected'
+            : 'Request Updated';
+      const notificationDesc = requestStatus === 'Approved'
+        ? `Your ${requestLabel} request ${ticket.ref} has been approved.`
+        : requestStatus === 'Completed'
+          ? `Your request ${ticket.ref} has been completed.`
+          : requestStatus === 'Rejected' || requestStatus === 'Cancelled'
+            ? `Your request ${ticket.ref} was rejected.${ticket.rejectionReason ? ` Reason: ${ticket.rejectionReason}` : ''}`
+            : requestStatus === 'Resubmission Required'
+              ? `Your ${requestLabel} request ${ticket.ref} needs correction and resubmission.`
+              : `Your ${requestLabel} request ${ticket.ref} is now ${requestStatus}.`;
+      if (!cancellationNotification) {
+        await prisma.notification.create({
+          data: {
+            user: citizenId,
+            title: notificationTitle,
+            desc: notificationDesc,
+            category: 'Appointments'
+          }
+        });
+      }
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: requestStatus === 'Completed' || requestStatus === 'COMPLETED'
+          ? 'Complete Service'
+          : requestStatus === 'Cancelled' || requestStatus === 'CANCELLED'
+            ? 'Cancel Service'
+            : requestStatus === 'Approved' || requestStatus === 'APPROVED'
+              ? 'Admin Approval'
+              : 'Update Request',
+        details: requestStatus === 'Cancelled'
+          ? `Cancel Service: cancelled ${requestLabel} request ${ticket.ref}. Previous status: ${previousStatus}. Reasons: ${cancellation.displayReasons.join(', ')}${cancellation.additionalNotes ? `. Notes: ${cancellation.additionalNotes}` : ''}`
+          : `Updated ${requestLabel} request ${ticket.ref} to ${requestStatus}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     const io = req.app.get('io');
@@ -842,15 +2208,32 @@ export const updateRequestStatus = async (req, res) => {
       io.to(centerId.toString()).emit('queueUpdate', { centerId });
       io.to(ticket.ref).emit('ticketUpdate', populatedTicket);
       if (citizenId) {
+        const socketTitle = requestStatus === 'Approved'
+          ? 'Appointment Accepted'
+          : requestStatus === 'Completed'
+            ? 'Appointment Completed'
+            : requestStatus === 'Rejected'
+              ? 'Appointment Cancelled'
+              : 'Request Updated';
         io.emit(`notification-${citizenId}`, {
-          title: 'Request Updated',
-          desc: `Your ${requestLabel} request ${ticket.ref} is now ${requestStatus}.`,
+          title: socketTitle,
+          desc: requestStatus === 'Approved'
+            ? `Your request ${ticket.ref} has been accepted. Please check your appointment details.`
+            : requestStatus === 'Completed'
+              ? `Your request ${ticket.ref} has been completed.`
+              : requestStatus === 'Rejected'
+                ? `Your request ${ticket.ref} was cancelled.`
+                : `Your ${requestLabel} request ${ticket.ref} is now ${requestStatus}.`,
           category: 'Appointments'
         });
       }
     }
 
-    return res.json({ success: true, message: 'Request updated.', data: populatedTicket });
+    return res.json({
+      success: true,
+      message: requestStatus === 'Cancelled' ? CANCELLATION_SUCCESS_MESSAGE : 'Request updated.',
+      data: populatedTicket
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -861,14 +2244,14 @@ export const updateRequestStatus = async (req, res) => {
 // @access  Private/Admin
 export const updateBookingStatus = async (req, res) => {
   try {
-    const { status, cancellationReason = '' } = req.body;
-    const allowedStatuses = ['Waiting', 'Being Served', 'On Hold', 'Completed', 'Cancelled'];
+    const { status, cancellationReason = '', otpToken = '' } = req.body;
+    const allowedStatuses = ['Pending', 'Approved', 'Scheduled', 'Waiting', 'Being Served', 'In Progress', 'On Hold', 'Completed', 'Rejected', 'Cancelled', 'Expired'];
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid appointment status' });
     }
 
-    const ticket = await Ticket.findById(req.params.id);
+    let ticket = await hydrateTicket(await findTicketByIdOrRef(req.params.id));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -878,55 +2261,170 @@ export const updateBookingStatus = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorized to manage this appointment.' });
     }
 
-    if (status === 'Cancelled' && !String(cancellationReason || '').trim()) {
-      return res.status(400).json({ success: false, message: 'Cancellation reason is required.' });
+    const adminCanCompleteWithoutOtp = isAdminRole(req.user.role);
+    if (status === 'Completed' && !adminCanCompleteWithoutOtp) {
+      const populatedForOtp = await hydrateTicket(await findTicketById(ticket.id));
+      const citizenPhone = normalizeOtpPhone(
+        populatedForOtp?.registrationDetails?.phone ||
+        populatedForOtp?.updateDetails?.phone ||
+        populatedForOtp?.replacementDetails?.phone ||
+        populatedForOtp?.citizen?.phone
+      );
+      if (!verifyOtpToken({
+        token: otpToken,
+        purpose: 'complete_service',
+        userId: req.user.id,
+        ticketId: ticket.id,
+        phone: citizenPhone
+      })) {
+        return res.status(401).json({ success: false, message: 'OTP verification required before completing this service.' });
+      }
+    }
+
+    let cancellation = null;
+    if (status === 'Cancelled') {
+      cancellation = buildCancellationPayload({ ...req.body, cancellationReason });
+      if (cancellation.error) {
+        return res.status(400).json({ success: false, message: cancellation.error });
+      }
+    }
+
+    const previousStatus = ticket.status;
+    const previousRequestStatus = ticket.requestStatus;
+    const returningFromTerminalStatus = status === 'Waiting' && (
+      ['Completed', 'Cancelled'].includes(String(previousStatus || '').trim()) ||
+      ['Completed', 'Cancelled', 'Resubmission Required'].includes(String(previousRequestStatus || '').trim())
+    );
+    const populatedBeforeCancel = await hydrateTicket(await findTicketById(ticket.id));
+    const service = populatedBeforeCancel?.service;
+    const center = populatedBeforeCancel?.center;
+    const requestLabel = getRequestLabel(ticket.requestType);
+    if (status === 'Cancelled') {
+      const cancelError = assertCanCancelTicket(ticket);
+      if (cancelError) {
+        return res.status(400).json({ success: false, message: cancelError });
+      }
     }
 
     ticket.status = status;
+    ticket.reviewedBy = req.user.id;
+    ticket.reviewedAt = new Date();
     if (status === 'Completed') {
-      ticket.completedAt = new Date();
-      if (ticket.requestType !== 'new_national_id') {
-        ticket.requestStatus = 'Completed';
+      if (ticket.requestType === 'update_information') {
+        const updateError = validateUpdateDetails(ticket.updateDetails || {});
+        if (updateError) return res.status(400).json({ success: false, message: updateError });
+      }
+      ticket.requestStatus = 'Completed';
+      if (ticket.requestType === 'new_national_id') {
+        await issueInitialNationalId(ticket, req.user.id);
+      }
+      if (ticket.requestType === 'lost_replacement') {
+        await completeLostIdReplacement(ticket, req.user.id);
+      }
+      if (ticket.requestType === 'update_information') {
+        await applyApprovedUpdateDetails(ticket, req.user.id);
       }
     }
-    if (status === 'Cancelled' && ticket.requestType !== 'new_national_id') {
+    if (['Waiting', 'Approved', 'Scheduled', 'In Progress', 'Being Served'].includes(status)) {
+      if (ticket.requestType === 'update_information') {
+        const updateError = validateUpdateDetails(ticket.updateDetails || {});
+        if (updateError) return res.status(400).json({ success: false, message: updateError });
+      }
+      ticket.requestStatus = ['In Progress', 'Being Served'].includes(status) ? 'In Progress' : 'Approved';
+      if (ticket.requestType === 'new_national_id') {
+        await prisma.user.updateMany({
+          where: { id: idFrom(ticket.citizen) },
+          data: { nationalIdStatus: ['In Progress', 'Being Served'].includes(status) ? 'UNDER_REVIEW' : 'WAITING' }
+        });
+      }
+    }
+    if (status === 'Rejected') {
+      ticket.status = 'Rejected';
       ticket.requestStatus = 'Rejected';
+      ticket.rejectionReason = String(req.body?.rejectionReason || cancellationReason || 'Rejected by admin.').trim();
+      ticket.cancelledBy = req.user.id;
+      ticket.cancelledAt = new Date();
+      ticket.needsResubmission = false;
+      const citizenId = idFrom(ticket.citizen);
+      if (citizenId) {
+        const citizen = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+        await restoreCitizenIdStatusAfterRequestEnd(citizenId, {
+          wasIssuedBefore: hasIssuedNationalId(citizen || {})
+        });
+      }
     }
     if (status === 'Cancelled') {
-      ticket.cancellationReason = String(cancellationReason || '').trim();
-      ticket.cancelledBy = req.user._id;
-      ticket.cancelledAt = new Date();
-      ticket.needsResubmission = true;
-      ticket.requestStatus = 'Resubmission Required';
-    }
-    if (status === 'Being Served' && !ticket.calledAt) {
-      ticket.calledAt = new Date();
+      applyCancellationDetails(ticket, cancellation, previousStatus, req.user.id);
+      ticket.needsResubmission = false;
+      ticket.requestStatus = 'Cancelled';
+      ticket.rejectionReason = ticket.cancellationReason;
+      const citizenId = idFrom(ticket.citizen);
+      if (citizenId) {
+        const citizen = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+        // Keep the same permanent National ID — never clear or regenerate after cancel.
+        await restoreCitizenIdStatusAfterRequestEnd(citizenId, {
+          wasIssuedBefore: hasIssuedNationalId(citizen || {})
+        });
+      }
     }
     if (status === 'Waiting') {
-      ticket.completedAt = null;
       if (ticket.requestType !== 'new_national_id' && ticket.requestStatus !== 'Completed') {
         ticket.requestStatus = 'Approved';
       }
+      if (returningFromTerminalStatus) {
+        ticket.cancellationReason = '';
+        ticket.cancellationReasons = [];
+        ticket.additionalCancellationReason = '';
+        ticket.cancellationNotes = '';
+        ticket.cancelledBy = null;
+        ticket.cancelledAt = null;
+        ticket.rejectionReason = '';
+        ticket.needsResubmission = false;
+      }
     }
 
-    await ticket.save();
-
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name email phone');
+    ticket = await hydrateTicket(await updateTicketById(ticket.id, ticket));
+    const populatedTicket = await hydrateTicket(await findTicketById(ticket.id));
 
     if (ticket.citizen) {
-      await Notification.create({
-        user: ticket.citizen,
-        title: status === 'Cancelled'
-          ? 'Appointment Cancelled'
-          : 'Appointment Updated',
-        desc: status === 'Cancelled'
-          ? `Your appointment ${ticket.ref} was cancelled. Reason: ${ticket.cancellationReason}. Please correct your information and resubmit your appointment.`
-          : `Your ticket ${ticket.ref} status is now ${status}.`,
-        category: 'Appointments'
-      });
+      const notificationTitle = status === 'Cancelled'
+        ? 'Appointment Cancelled'
+        : status === 'Rejected'
+          ? 'Appointment Rejected'
+        : status === 'Waiting'
+          ? returningFromTerminalStatus
+            ? 'Appointment Returned'
+            : 'Appointment Accepted'
+          : status === 'Completed'
+            ? 'Appointment Completed'
+            : 'Appointment Updated';
+      const notificationDesc = status === 'Cancelled'
+        ? `Your appointment ${ticket.ref} was cancelled. Reasons: ${cancellation.displayReasons.join(', ')}.`
+        : status === 'Rejected'
+          ? `Your appointment ${ticket.ref} was rejected.`
+        : status === 'Waiting'
+          ? returningFromTerminalStatus
+            ? `Your request ${ticket.ref} was returned to waiting by staff.`
+            : `Your request ${ticket.ref} has been accepted. Please check your appointment details.`
+          : status === 'Completed'
+            ? "You're completed your Appointment."
+            : `Your ticket ${ticket.ref} status is now ${status}.`;
+      if (status === 'Cancelled') {
+        await createCancellationNotification({
+          ticket,
+          reason: ticket.cancellationReason,
+          previousStatus
+        });
+      } else {
+        await prisma.notification.create({
+          data: {
+            user: idFrom(ticket.citizen),
+            title: notificationTitle,
+            desc: notificationDesc,
+            category: 'Appointments'
+          }
+        });
+      }
 
       if (populatedTicket?.citizen) {
         const citizenUser = populatedTicket.citizen;
@@ -961,32 +2459,61 @@ export const updateBookingStatus = async (req, res) => {
       }
     }
 
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Update Appointment',
-      details: status === 'Cancelled'
-        ? `Cancelled ticket ${ticket.ref}. Reason: ${ticket.cancellationReason}`
-        : `Updated ticket ${ticket.ref} status to ${status}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: status === 'Completed'
+          ? 'Complete Service'
+          : status === 'Cancelled'
+            ? 'Cancel Service'
+            : status === 'Waiting' || status === 'Approved'
+              ? 'Admin Approval'
+              : 'Update Appointment',
+        details: status === 'Cancelled'
+          ? `Cancelled ticket ${ticket.ref}. Previous status: ${previousStatus}. Reasons: ${cancellation.displayReasons.join(', ')}${cancellation.additionalNotes ? `. Notes: ${cancellation.additionalNotes}` : ''}`
+          : `Updated ticket ${ticket.ref} status to ${status}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     const io = req.app.get('io');
+    const centerId = idFrom(ticket.center);
+    const citizenId = idFrom(ticket.citizen);
     if (io) {
-      io.to(ticket.center.toString()).emit('queueUpdate', { centerId: ticket.center });
+      io.to(centerId.toString()).emit('queueUpdate', { centerId });
       io.to(ticket.ref).emit('ticketUpdate', populatedTicket);
-      if (ticket.citizen) {
-        io.emit(`notification-${ticket.citizen}`, {
-          title: status === 'Cancelled' ? 'Appointment Cancelled' : 'Appointment Updated',
+      if (citizenId) {
+        const socketTitle = status === 'Cancelled'
+          ? 'Appointment Cancelled'
+          : status === 'Rejected'
+            ? 'Appointment Rejected'
+          : status === 'Waiting'
+            ? 'Appointment Accepted'
+            : status === 'Completed'
+              ? 'Appointment Completed'
+              : 'Appointment Updated';
+        io.emit(`notification-${citizenId}`, {
+          title: socketTitle,
           desc: status === 'Cancelled'
-            ? `Your appointment ${ticket.ref} was cancelled. Reason: ${ticket.cancellationReason}. Please correct your information and resubmit your appointment.`
-            : `Your ticket ${ticket.ref} status is now ${status}.`,
+            ? `Your request ${ticket.ref} was cancelled. Reasons: ${cancellation.displayReasons.join(', ')}.`
+            : status === 'Rejected'
+              ? `Your appointment ${ticket.ref} was rejected.`
+            : status === 'Waiting'
+              ? `Your request ${ticket.ref} has been accepted. Please check your appointment details.`
+              : status === 'Completed'
+                ? "You're completed your Appointment."
+                : `Your ticket ${ticket.ref} status is now ${status}.`,
           category: 'Appointments'
         });
       }
     }
 
-    return res.json({ success: true, message: 'Appointment updated.', data: populatedTicket });
+    return res.json({
+      success: true,
+      message: status === 'Cancelled' ? CANCELLATION_SUCCESS_MESSAGE : 'Appointment updated.',
+      data: populatedTicket
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -1000,16 +2527,13 @@ export const getBookingDetails = async (req, res) => {
     const { refOrId } = req.params;
     let query = {};
     
-    if (refOrId.startsWith('NQS-')) {
-      query = { ref: refOrId };
+    if (/^(REQ|NQS)-\d+$/i.test(String(refOrId || '').trim())) {
+      query = { ref: String(refOrId).toUpperCase() };
     } else {
-      query = { _id: refOrId };
+      query = { id: refOrId };
     }
 
-    const ticket = await Ticket.findOne(query)
-      .populate('service')
-      .populate('center')
-      .populate('citizen', 'name email phone');
+    const ticket = await hydrateTicket(await prisma.ticket.findFirst({ where: query }));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -1030,30 +2554,77 @@ export const getBookingDetails = async (req, res) => {
 // @access  Private
 export const cancelBooking = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    let ticket = await hydrateTicket(await findTicketByIdOrRef(req.params.id));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
 
     // Verify ownership
-    if (normalizeRole(req.user.role) === 'citizen' && ticket.citizen && ticket.citizen.toString() !== req.user._id.toString()) {
+    if (normalizeRole(req.user.role) === 'citizen' && ticket.citizen && idFrom(ticket.citizen).toString() !== req.user.id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to cancel this booking' });
     }
 
+    const currentStatus = String(ticket.status || '').trim();
+    const currentRequestStatus = String(ticket.requestStatus || '').trim();
+    if (['Completed', 'Cancelled', 'Expired', 'Rejected'].includes(currentStatus) || ['Completed', 'Cancelled', 'Rejected'].includes(currentRequestStatus)) {
+      return res.status(400).json({ success: false, message: 'This appointment cannot be cancelled in its current status.' });
+    }
+
+    if (normalizeRole(req.user.role) === 'citizen' && citizenCancelWindowExpired(ticket)) {
+      return res.status(400).json({
+        success: false,
+        message: 'You can cancel an appointment only within 1 hour after booking. After that, please contact your service center.'
+      });
+    }
+
+    const previousStatus = ticket.status;
+    const requesterRole = normalizeRole(req.user.role);
+    const requestTypeText = String(ticket.requestType || ticket.type || ticket.service?.name || '').trim().toLowerCase();
+    const requestTypeKey = requestTypeText.replace(/[\s-]+/g, '_');
+    const isUpdateRequest = requestTypeKey === 'update_information' ||
+      requestTypeKey === 'update_national_id_information' ||
+      requestTypeText.includes('update');
     ticket.status = 'Cancelled';
-    await ticket.save();
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name email phone');
+    ticket.requestStatus = isUpdateRequest
+      ? 'Cancelled'
+      : requesterRole === 'citizen'
+        ? 'Cancelled'
+        : 'Resubmission Required';
+    ticket.cancellationReason = String(req.body?.reason || req.body?.cancellationReason || 'Cancelled by citizen.').trim();
+    ticket.cancellationReasons = [ticket.cancellationReason];
+    ticket.additionalCancellationReason = '';
+    ticket.cancellationNotes = '';
+    ticket.previousStatusBeforeCancellation = previousStatus;
+    ticket.cancelledBy = req.user.id;
+    ticket.cancelledAt = new Date();
+    ticket = await hydrateTicket(await updateTicketById(ticket.id, ticket));
+
+    // Always keep the same permanent National ID after cancel (never clear / never regenerate).
+    const citizenId = idFrom(ticket.citizen);
+    if (citizenId) {
+      const citizen = await prisma.user.findUnique({ where: { id: citizenId }, include: { citizenProfile: true } });
+      await restoreCitizenIdStatusAfterRequestEnd(citizenId, {
+        wasIssuedBefore: hasIssuedNationalId(citizen || {})
+      });
+    }
+
+    const populatedTicket = await hydrateTicket(await findTicketById(ticket.id));
 
     // Create Notification
-    const notif = await Notification.create({
-      user: ticket.citizen,
-      title: 'Appointment Cancelled',
-      desc: `Your appointment with ticket ${ticket.ref} has been cancelled.`,
-      category: 'Appointments'
+    const notif = await prisma.notification.create({
+      data: {
+        user: citizenId,
+        title: 'Appointment Cancelled',
+        desc: `Your appointment with ticket ${ticket.ref} has been cancelled.`,
+        category: 'Appointments'
+      }
+    });
+    const adminNotifications = await createAdminRequestNotifications({
+      ticket,
+      service,
+      center,
+      requestLabel
     });
 
     if (populatedTicket?.citizen) {
@@ -1072,22 +2643,30 @@ export const cancelBooking = async (req, res) => {
     }
 
     // Audit logging
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Cancel Booking',
-      details: `Cancelled ticket reference: ${ticket.ref}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Cancel Service',
+        details: `Cancelled ticket reference: ${ticket.ref}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     // Socket.io Real-time update
     const io = req.app.get('io');
+    const centerId = idFrom(ticket.center);
     if (io) {
-      io.to(ticket.center.toString()).emit('queueUpdate', { centerId: ticket.center });
+      io.to(centerId.toString()).emit('queueUpdate', { centerId });
       io.to(ticket.ref).emit('ticketUpdate', ticket);
-      if (ticket.citizen) {
-        io.emit(`notification-${ticket.citizen}`, notif);
+      if (citizenId) {
+        io.emit(`notification-${citizenId}`, notif);
       }
+      adminNotifications.forEach((adminNotification) => {
+        if (adminNotification.user) {
+          io.emit(`notification-${adminNotification.user}`, adminNotification);
+        }
+      });
     }
 
     return res.json({ success: true, message: 'Booking cancelled.', data: ticket });
@@ -1101,7 +2680,7 @@ export const cancelBooking = async (req, res) => {
 // @access  Private/Citizen
 export const resubmitBooking = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    let ticket = await hydrateTicket(await findTicketByIdOrRef(req.params.id));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -1109,73 +2688,97 @@ export const resubmitBooking = async (req, res) => {
     if (normalizeRole(req.user.role) !== 'citizen') {
       return res.status(403).json({ success: false, message: 'Only citizens can resubmit their own appointment.' });
     }
-    if (ticket.citizen?.toString() !== req.user._id.toString()) {
+    if (idFrom(ticket.citizen)?.toString() !== req.user.id.toString()) {
       return res.status(403).json({ success: false, message: 'Not authorized to resubmit this booking' });
     }
     if (ticket.status !== 'Cancelled') {
       return res.status(400).json({ success: false, message: 'Only cancelled appointments can be resubmitted.' });
     }
-    if (!ticket.needsResubmission) {
-      return res.status(400).json({ success: false, message: 'This appointment is not marked for resubmission.' });
-    }
 
-    const { registrationDetails, replacementDetails, updateDetails, note = '' } = req.body;
+    const { registrationDetails, replacementDetails, updateDetails } = req.body;
+    const center = typeof ticket.center === 'object'
+      ? ticket.center
+      : await prisma.center.findUnique({ where: { id: ticket.center } });
+    const centerDistrict = getCenterDistrict(center);
 
     if (ticket.requestType === 'new_national_id' && registrationDetails) {
       const clean = sanitizeRegistrationDetails(registrationDetails, req.user);
       const error = validateRegistrationDetails(clean);
       if (error) return res.status(400).json({ success: false, message: error });
+      clean.district = normalizeBanaadirDistrict(clean.district);
+      clean.centerDistrict = centerDistrict;
       clean.age = calculateAge(clean.dateOfBirth);
       ticket.registrationDetails = clean;
       ticket.citizenName = clean.fullName;
+      ticket.district = clean.district;
     }
     if (ticket.requestType === 'lost_replacement' && replacementDetails) {
       const clean = sanitizeReplacementDetails(replacementDetails, req.user);
       const error = validateReplacementDetails(clean);
       if (error) return res.status(400).json({ success: false, message: error });
+      clean.district = normalizeBanaadirDistrict(clean.district);
       ticket.replacementDetails = clean;
       ticket.citizenName = clean.fullName;
+      ticket.district = clean.district;
     }
     if (ticket.requestType === 'update_information' && updateDetails) {
-      const clean = sanitizeUpdateDetails(updateDetails, req.user);
+      let clean = sanitizeUpdateDetails(updateDetails, req.user);
+      const originalRegistration = ticket.existingRegistration?.ticket
+        ? await hydrateTicket(await findTicketById(ticket.existingRegistration.ticket))
+        : await findExistingNewRegistration({
+          fullName: clean.fullName,
+          phone: clean.phone,
+          userId: req.user.id,
+          onlyBlocking: false
+        });
+
+      if (!originalRegistration || !canExposeExistingRegistration(originalRegistration, req.user)) {
+        return res.status(404).json({ success: false, message: 'No existing National ID registration found for this account.' });
+      }
+
+      clean = hydrateUpdateDetailsFromExistingRegistration(clean, originalRegistration, req.user);
       const error = validateUpdateDetails(clean);
       if (error) return res.status(400).json({ success: false, message: error });
       ticket.updateDetails = clean;
       ticket.citizenName = clean.fullName;
+      ticket.existingRegistration = buildExistingRegistrationInfo(originalRegistration);
     }
 
     ticket.status = 'Waiting';
     ticket.requestStatus = 'Pending';
-    ticket.needsResubmission = false;
     ticket.cancellationReason = '';
+    ticket.cancellationReasons = [];
+    ticket.additionalCancellationReason = '';
+    ticket.cancellationNotes = '';
+    ticket.previousStatusBeforeCancellation = '';
     ticket.cancelledBy = null;
     ticket.cancelledAt = null;
-    ticket.resubmissionHistory.push({ note: String(note || 'Citizen resubmitted corrected information.').trim() });
-    await ticket.save();
+    ticket = await hydrateTicket(await updateTicketById(ticket.id, ticket));
 
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('service', 'name category duration')
-      .populate('center', 'name address city phone')
-      .populate('citizen', 'name username phone');
+    const populatedTicket = await hydrateTicket(await findTicketById(ticket.id));
 
-    await Notification.create({
-      user: ticket.citizen,
-      title: 'Appointment Resubmitted',
-      desc: `Your ticket ${ticket.ref} was resubmitted for review.`,
-      category: 'Appointments'
+    await prisma.notification.create({
+      data: {
+        user: idFrom(ticket.citizen),
+        title: 'Appointment Resubmitted',
+        desc: `Your ticket ${ticket.ref} was resubmitted for review.`,
+        category: 'Appointments'
+      }
     });
 
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Resubmit Appointment',
-      details: `Resubmitted ticket ${ticket.ref}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Resubmit Appointment',
+        details: `Resubmitted ticket ${ticket.ref}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     const io = req.app.get('io');
     if (io) {
-      io.to(ticket.center.toString()).emit('queueUpdate', { centerId: ticket.center });
+      io.to(idFrom(ticket.center).toString()).emit('queueUpdate', { centerId: idFrom(ticket.center) });
       io.to(ticket.ref).emit('ticketUpdate', populatedTicket);
     }
 

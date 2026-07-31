@@ -1,5 +1,4 @@
-import Setting from '../models/Setting.js';
-import SystemConfig from '../models/SystemConfig.js';
+import prisma from '../config/prisma.js';
 
 const DEFAULT_APPOINTMENT_SCHEDULE = {
   workingDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Saturday'],
@@ -56,14 +55,16 @@ const normalizeSchedule = (payload = {}) => {
 // @access  Private
 export const getUserSettings = async (req, res) => {
   try {
-    let settings = await Setting.findOne({ user: req.user._id });
+    let settings = await prisma.setting.findFirst({ where: { user: req.user.id } });
 
     if (!settings) {
       // Create default
-      settings = await Setting.create({
-        user: req.user._id,
-        darkMode: false,
-        language: 'en'
+      settings = await prisma.setting.create({
+        data: {
+          user: req.user.id,
+          darkMode: false,
+          language: 'en'
+        }
       });
     }
 
@@ -78,19 +79,20 @@ export const getUserSettings = async (req, res) => {
 // @access  Private
 export const updateUserSettings = async (req, res) => {
   try {
-    let settings = await Setting.findOne({ user: req.user._id });
+    let settings = await prisma.setting.findFirst({ where: { user: req.user.id } });
 
     if (!settings) {
-      settings = await Setting.create({
-        user: req.user._id,
-        ...req.body
+      settings = await prisma.setting.create({
+        data: {
+          user: req.user.id,
+          ...req.body
+        }
       });
     } else {
-      settings = await Setting.findOneAndUpdate(
-        { user: req.user._id },
-        req.body,
-        { new: true }
-      );
+      settings = await prisma.setting.update({
+        where: { id: settings.id },
+        data: req.body
+      });
     }
 
     return res.json({ success: true, data: settings });
@@ -104,7 +106,7 @@ export const updateUserSettings = async (req, res) => {
 // @access  Public
 export const getSystemConfigs = async (req, res) => {
   try {
-    const list = await SystemConfig.find({});
+    const list = await prisma.systemConfig.findMany();
     return res.json({ success: true, data: list });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -119,18 +121,16 @@ export const updateSystemConfig = async (req, res) => {
     const { key } = req.params;
     const { value } = req.body;
 
-    const config = await SystemConfig.findOneAndUpdate(
-      { key },
-      { value },
-      { new: true, runValidators: true }
-    );
-
-    if (!config) {
-      return res.status(404).json({ success: false, message: 'Configuration key not found' });
-    }
+    const config = await prisma.systemConfig.update({
+      where: { key },
+      data: { value }
+    });
 
     return res.json({ success: true, data: config });
   } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Configuration key not found' });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -140,12 +140,14 @@ export const updateSystemConfig = async (req, res) => {
 // @access  Private/Admin
 export const getAppointmentSchedule = async (_req, res) => {
   try {
-    let config = await SystemConfig.findOne({ key: 'appointmentSchedule' });
+    let config = await prisma.systemConfig.findUnique({ where: { key: 'appointmentSchedule' } });
     if (!config) {
-      config = await SystemConfig.create({
-        key: 'appointmentSchedule',
-        value: DEFAULT_APPOINTMENT_SCHEDULE,
-        description: 'Appointment calendar and capacity controls'
+      config = await prisma.systemConfig.create({
+        data: {
+          key: 'appointmentSchedule',
+          value: DEFAULT_APPOINTMENT_SCHEDULE,
+          description: 'Appointment calendar and capacity controls'
+        }
       });
     }
     return res.json({ success: true, data: normalizeSchedule(config.value || {}) });
@@ -161,18 +163,22 @@ export const updateAppointmentSchedule = async (req, res) => {
   try {
     const nextSchedule = normalizeSchedule(req.body || {});
 
-    const config = await SystemConfig.findOneAndUpdate(
-      { key: 'appointmentSchedule' },
-      {
-        key: 'appointmentSchedule',
+    const config = await prisma.systemConfig.upsert({
+      where: { key: 'appointmentSchedule' },
+      update: {
         value: nextSchedule,
         description: 'Appointment calendar and capacity controls'
       },
-      { upsert: true, new: true, runValidators: true }
-    );
+      create: {
+        key: 'appointmentSchedule',
+        value: nextSchedule,
+        description: 'Appointment calendar and capacity controls'
+      }
+    });
 
     return res.json({ success: true, data: config.value });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+

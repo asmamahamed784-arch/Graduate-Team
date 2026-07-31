@@ -25,10 +25,11 @@ export const validatePhone = (phone) => {
 };
 
 /**
- * Validates NQS Ticket Reference numbers e.g. NQS-1023
+ * Validates request reference numbers e.g. REQ-1001.
+ * Legacy NQS ticket references are accepted for older records.
  */
 export const validateTicketReference = (ref) => {
-  const re = /^NQS-\d{4}$/i;
+  const re = /^(REQ|NQS)-\d{4}$/i;
   return re.test(String(ref).trim());
 };
 

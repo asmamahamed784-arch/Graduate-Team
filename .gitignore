@@ -17,6 +17,8 @@ dist-ssr
 backend/.env
 backend/.env.*
 !backend/.env.example
+backend/database/generated/
+backend/database/backups/
 
 # Editor directories and files
 .vscode/*

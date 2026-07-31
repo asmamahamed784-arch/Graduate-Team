@@ -1,20 +1,22 @@
-export const errorHandler = (err, req, res, _next) => {
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  let message = err.message;
+import { normalizeError } from '../utils/errorMessages.js';
 
-  // Mongoose bad ObjectId
+export const errorHandler = (err, req, res, _next) => {
+  let { statusCode, message } = normalizeError(err);
+  if (res.statusCode !== 200) statusCode = res.statusCode;
+
+  // Invalid object-style identifier
   if (err.name === 'CastError' && err.kind === 'ObjectId') {
     statusCode = 400;
     message = 'Resource not found';
   }
 
-  // Mongoose duplicate key
+  // Duplicate key
   if (err.code === 11000) {
     statusCode = 400;
     message = 'Duplicate field value entered';
   }
 
-  // Mongoose validation error
+  // Validation error
   if (err.name === 'ValidationError') {
     statusCode = 400;
     message = Object.values(err.errors).map(val => val.message).join(', ');

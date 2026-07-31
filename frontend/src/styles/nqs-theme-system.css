@@ -1,0 +1,1123 @@
+/* src/styles/nqs-theme-system.css
+   Authoritative global theme application layer.
+   Imported AFTER index.css so light/dark never mix.
+*/
+
+/* -------------------------------------------------------------------------- */
+/* 1. Token lock                                                              */
+/* -------------------------------------------------------------------------- */
+html.nqs-theme-light,
+html.nqs-theme-light body,
+html:not(.nqs-theme-dark),
+html:not(.nqs-theme-dark) body {
+  --nqs-bg: #F8FAFC;
+  --nqs-bg-soft: #F1F5F9;
+  --nqs-card: #FFFFFF;
+  --nqs-card-strong: #FFFFFF;
+  --nqs-card-soft: #F1F5F9;
+  --nqs-surface: #F1F5F9;
+  --nqs-panel: #FFFFFF;
+  --nqs-panel-soft: #F1F5F9;
+  --nqs-text: #0F172A;
+  --nqs-heading: #0F172A;
+  --nqs-muted: #475569;
+  --nqs-border: #E2E8F0;
+  --nqs-input: #FFFFFF;
+  --nqs-header: #FFFFFF;
+  --nqs-header-text: #0F172A;
+  --nqs-navbar-bg: #FFFFFF;
+  --nqs-sidebar-bg: #FFFFFF;
+  --nqs-sidebar: #FFFFFF;
+  --nqs-sidebar-strong: #F1F5F9;
+  --nqs-sidebar-muted: #475569;
+  --nqs-footer-bg: #F1F5F9;
+  --nqs-table-head: #F1F5F9;
+  --nqs-table-row: #FFFFFF;
+  --nqs-primary: #2563EB;
+  --nqs-primary-hover: #1D4ED8;
+  --nqs-primary-strong: #1D4ED8;
+  --nqs-primary-soft: #EFF6FF;
+  --nqs-brand: #2563EB;
+  --nqs-success: #16A34A;
+  --nqs-danger: #DC2626;
+  --nqs-warning: #D97706;
+  --bg-app: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-secondary: #F1F5F9;
+  --bg-input: #FFFFFF;
+  --bg-overlay: rgba(15, 23, 42, 0.45);
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --border-light: #E2E8F0;
+  --border-focus: #2563EB;
+  --color-primary: #2563EB;
+  --color-primary-soft: rgba(37, 99, 235, 0.12);
+  --color-primary-500: #2563EB;
+  --color-primary-600: #1D4ED8;
+}
+
+html.dark,
+html.nqs-theme-dark,
+html.nqs-theme-dark body {
+  --nqs-bg: #0F172A;
+  --nqs-bg-soft: #1E293B;
+  --nqs-card: #1E293B;
+  --nqs-card-strong: #1E293B;
+  --nqs-card-soft: #334155;
+  --nqs-surface: #334155;
+  --nqs-panel: #1E293B;
+  --nqs-panel-soft: #334155;
+  --nqs-text: #F8FAFC;
+  --nqs-heading: #F8FAFC;
+  --nqs-muted: #CBD5E1;
+  --nqs-border: #475569;
+  --nqs-input: #1E293B;
+  --nqs-header: #1E293B;
+  --nqs-header-text: #F8FAFC;
+  --nqs-navbar-bg: #1E293B;
+  --nqs-sidebar-bg: #1E293B;
+  --nqs-sidebar: #1E293B;
+  --nqs-sidebar-strong: #334155;
+  --nqs-sidebar-muted: #CBD5E1;
+  --nqs-footer-bg: #1E293B;
+  --nqs-table-head: #334155;
+  --nqs-table-row: #1E293B;
+  --nqs-primary: #2563EB;
+  --nqs-primary-hover: #3B82F6;
+  --nqs-primary-strong: #3B82F6;
+  --nqs-primary-soft: rgba(37, 99, 235, 0.22);
+  --nqs-brand: #2563EB;
+  --nqs-success: #22C55E;
+  --nqs-danger: #F87171;
+  --nqs-warning: #FBBF24;
+  --bg-app: #0F172A;
+  --bg-card: #1E293B;
+  --bg-secondary: #334155;
+  --bg-input: #1E293B;
+  --bg-overlay: rgba(2, 6, 23, 0.65);
+  --text-main: #F8FAFC;
+  --text-muted: #CBD5E1;
+  --border-light: #475569;
+  --border-focus: #2563EB;
+  --color-primary: #2563EB;
+  --color-primary-soft: rgba(37, 99, 235, 0.22);
+  --color-primary-500: #2563EB;
+  --color-primary-600: #3B82F6;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. App shell                                                               */
+/* -------------------------------------------------------------------------- */
+html.nqs-theme-light,
+html.nqs-theme-dark,
+html.nqs-theme-light body,
+html.nqs-theme-dark body,
+html.nqs-theme-light #root,
+html.nqs-theme-dark #root {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-public-surface,
+html body .nqs-dashboard-surface,
+html body .nqs-app-shell,
+html body .nqs-app-content,
+html body .nqs-auth-page,
+html body .nqs-faq-page,
+html body .nqs-about-page,
+html body .nqs-about-hero,
+html body .nqs-about-section,
+html body .nqs-about-process,
+html body .nqs-citizen-layout,
+html body .nqs-citizen-layout main,
+html body .nqs-citizen-portal,
+html body .nqs-new-id-page,
+html body .nqs-home-redesign,
+html body .nqs-operator-dashboard,
+html body .nqs-admin-modern,
+html body main {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. Navbar / Sidebar / Header / Footer                                      */
+/* -------------------------------------------------------------------------- */
+html.nqs-theme-light body .nqs-simple-navbar,
+html.nqs-theme-dark body .nqs-simple-navbar,
+html.nqs-theme-light body .nqs-simple-navbar.is-scrolled,
+html.nqs-theme-dark body .nqs-simple-navbar.is-scrolled,
+html.nqs-theme-light body .nqs-navbar,
+html.nqs-theme-dark body .nqs-navbar,
+html.nqs-theme-light body .nqs-public-navbar,
+html.nqs-theme-dark body .nqs-public-navbar,
+html.nqs-theme-light body .nqs-dashboard-header,
+html.nqs-theme-dark body .nqs-dashboard-header,
+html.nqs-theme-light body .nqs-app-header,
+html.nqs-theme-dark body .nqs-app-header,
+html.nqs-theme-light body .nqs-simple-footer,
+html.nqs-theme-dark body .nqs-simple-footer,
+html body .nqs-simple-navbar,
+html body .nqs-simple-navbar.is-scrolled,
+html body .nqs-navbar,
+html body .nqs-public-navbar,
+html body .nqs-dashboard-header,
+html body .nqs-app-header,
+html body .nqs-simple-footer {
+  background: var(--nqs-navbar-bg) !important;
+  background-image: none !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-header-text) !important;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.05));
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar,
+html.nqs-theme-dark body .nqs-dashboard-sidebar,
+html.nqs-theme-light body aside.nqs-dashboard-sidebar,
+html.nqs-theme-dark body aside.nqs-dashboard-sidebar,
+html body .nqs-dashboard-sidebar,
+html body aside.nqs-dashboard-sidebar {
+  background: var(--nqs-sidebar-bg) !important;
+  background-image: none !important;
+  border-right: 1px solid var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-simple-footer {
+  background: var(--nqs-footer-bg) !important;
+}
+
+html body .nqs-simple-navbar,
+html body .nqs-dashboard-header,
+html body .nqs-app-header,
+html body .nqs-public-navbar {
+  border-bottom: 1px solid var(--nqs-border) !important;
+}
+
+html body .nqs-simple-navbar :is(a, button, span, strong, small, svg),
+html body .nqs-dashboard-header :is(a, button, span, strong, small, p, svg),
+html body .nqs-app-header :is(a, button, span, strong, small, p, svg),
+html body .nqs-public-navbar :is(a, button, span, strong, small, svg),
+html body .nqs-simple-footer :is(a, button, span, strong, small, p, h3, svg),
+html.nqs-theme-light .nqs-dashboard-header > :not(.nqs-profile-dropdown):not(:has(.nqs-notification-dropdown)) *,
+html.nqs-theme-dark .nqs-dashboard-header > :not(.nqs-profile-dropdown):not(:has(.nqs-notification-dropdown)) *,
+html.nqs-theme-light .nqs-public-navbar *,
+html.nqs-theme-dark .nqs-public-navbar * {
+  color: var(--nqs-header-text) !important;
+  opacity: 1 !important;
+}
+
+/* Notification dropdown is a card — do not inherit header chrome colors. */
+html body .nqs-notification-dropdown,
+html.nqs-theme-light body .nqs-notification-dropdown,
+html.nqs-theme-dark body .nqs-notification-dropdown {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-notification-dropdown :is(p, span, a, button, strong, small),
+html body .nqs-notification-dropdown :is(p, span, a, button, strong, small) *,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-dropdown :is(p, span, a, button, strong, small),
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-dropdown :is(p, span, a, button, strong, small),
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-dropdown :is(p, span, a, button, strong, small) *,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-dropdown :is(p, span, a, button, strong, small) * {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html body .nqs-notification-dropdown-item-desc,
+html body .nqs-notification-dropdown-empty {
+  color: var(--nqs-muted) !important;
+}
+
+html body .nqs-notification-dropdown-item-link,
+html body .nqs-notification-dropdown-footer {
+  color: #2563EB !important;
+}
+
+html.nqs-theme-dark body .nqs-notification-dropdown-item-link,
+html.nqs-theme-dark body .nqs-notification-dropdown-footer {
+  color: #93C5FD !important;
+}
+
+html body .nqs-notification-dropdown-item {
+  background: transparent !important;
+}
+
+html body .nqs-notification-dropdown-item.is-unread {
+  background: var(--nqs-primary-soft) !important;
+}
+
+html body .nqs-notification-dropdown-item:hover,
+html body .nqs-notification-dropdown-footer:hover {
+  background: var(--nqs-card-soft) !important;
+}
+
+html body .nqs-notification-dropdown-badge {
+  background: #FEE2E2 !important;
+  color: #B91C1C !important;
+}
+
+html.nqs-theme-dark body .nqs-notification-dropdown-badge {
+  background: rgba(127, 29, 29, 0.45) !important;
+  color: #FCA5A5 !important;
+}
+
+/* Sidebar text must follow sidebar tokens (not header tokens). */
+html body .nqs-dashboard-sidebar :is(a, button, span, strong, small, h2, p, svg),
+html body .nqs-dashboard-sidebar .nqs-sidebar-link,
+html body .nqs-dashboard-sidebar .nqs-sidebar-child-link {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html body .nqs-simple-navbar .nqs-brand-copy small,
+html body .nqs-dashboard-sidebar .text-blue-100,
+html body .nqs-simple-footer .nqs-footer-brand p,
+html body .nqs-simple-footer .nqs-footer-links a,
+html body .nqs-simple-footer .nqs-footer-links span,
+html body .nqs-simple-footer .nqs-footer-contact {
+  color: var(--nqs-muted) !important;
+}
+
+html body .nqs-nav-mark,
+html body .nqs-sidebar-logo,
+html body .nqs-footer-logo,
+html body .nqs-footer-title span {
+  background: var(--nqs-primary) !important;
+  color: #FFFFFF !important;
+  border: 0 !important;
+}
+
+html body .nqs-nav-link.is-active,
+html body .nqs-nav-link:hover,
+html body .nqs-sidebar-link:hover,
+html body .nqs-sidebar-child-link:hover,
+html body .nqs-sidebar-link-active {
+  background: var(--color-primary-soft) !important;
+  border-color: transparent !important;
+  color: var(--nqs-primary) !important;
+}
+
+html body .nqs-sidebar-link,
+html body .nqs-sidebar-child-link {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-theme-link,
+html body .nqs-menu-button,
+html body .nqs-header-action,
+html body .nqs-force-header-button,
+html body .nqs-header-icon,
+html body .nqs-header-profile,
+html body .nqs-header-date,
+html body .nqs-mobile-menu-button,
+html.nqs-theme-light .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile),
+html.nqs-theme-dark .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) {
+  background: var(--nqs-card-soft) !important;
+  border: 1px solid var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-theme-link *,
+html body .nqs-header-action *,
+html body .nqs-force-header-button *,
+html body .nqs-header-icon *,
+html body .nqs-header-profile *,
+html body .nqs-header-date *,
+html body .nqs-mobile-menu-button *,
+html.nqs-theme-light .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) *,
+html.nqs-theme-dark .nqs-dashboard-header :where(.nqs-header-action, .nqs-header-icon, .nqs-header-profile) * {
+  color: inherit !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html body .nqs-header-profile .rounded-full,
+html body .nqs-dashboard-header .nqs-header-profile .rounded-full {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html body .nqs-dashboard-header .nqs-notification-badge {
+  background: #DC2626 !important;
+  background-color: #DC2626 !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-link,
+html body .nqs-dashboard-link span {
+  background: var(--nqs-primary) !important;
+  border-color: var(--nqs-primary) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+html body .nqs-dashboard-link:hover {
+  background: var(--nqs-primary-hover) !important;
+}
+
+html body .nqs-mobile-menu {
+  background: var(--nqs-card) !important;
+  border-top: 1px solid var(--nqs-border) !important;
+}
+
+html body .nqs-mobile-menu a,
+html body .nqs-mobile-menu button {
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-footer-status,
+html body .nqs-footer-links h3 {
+  color: var(--nqs-primary) !important;
+  border-color: var(--nqs-primary) !important;
+}
+
+html body .nqs-footer-links a:hover {
+  color: var(--nqs-primary) !important;
+}
+
+html body .nqs-profile-dropdown {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* Restore white text only on primary-filled avatar circles */
+html.nqs-theme-light body .nqs-dashboard-header .rounded-full,
+html.nqs-theme-dark body .nqs-dashboard-header .rounded-full,
+html body .nqs-dashboard-header .rounded-full {
+  color: #FFFFFF !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-header .rounded-full *,
+html.nqs-theme-dark body .nqs-dashboard-header .rounded-full *,
+html body .nqs-dashboard-header .rounded-full * {
+  color: #FFFFFF !important;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* 4. Cards, surfaces, tables, modals, forms                                  */
+/* -------------------------------------------------------------------------- */
+html body .nqs-public-surface [class~="bg-white"],
+html body .nqs-public-surface [class~="bg-slate-50"],
+html body .nqs-public-surface [class~="bg-slate-100"],
+html body .nqs-public-surface [class~="bg-gray-50"],
+html body .nqs-public-surface [class~="bg-gray-100"],
+html body .nqs-public-surface [class~="bg-blue-50"],
+html body .nqs-public-surface [class~="bg-blue-100"],
+html body .nqs-dashboard-surface [class~="bg-white"],
+html body .nqs-dashboard-surface [class~="bg-slate-50"],
+html body .nqs-dashboard-surface [class~="bg-slate-100"],
+html body .nqs-dashboard-surface [class~="bg-gray-50"],
+html body .nqs-dashboard-surface [class~="bg-gray-100"],
+html body .nqs-dashboard-surface [class~="bg-blue-50"],
+html body .nqs-dashboard-surface [class~="bg-blue-100"],
+html body .glass-card,
+html body .dashboard-panel-card,
+html body .nqs-faq-item,
+html body .nqs-faq-search,
+html body .nqs-faq-help,
+html body .nqs-admin-metric-card,
+html body .nqs-admin-table-card,
+html body [role="dialog"],
+html body [class*="modal"] {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-public-surface [class~="bg-slate-900"],
+html body .nqs-public-surface [class~="bg-slate-950"],
+html body .nqs-public-surface [class~="bg-gray-800"],
+html body .nqs-public-surface [class~="bg-gray-900"],
+html body .nqs-dashboard-surface [class~="bg-slate-900"],
+html body .nqs-dashboard-surface [class~="bg-slate-950"],
+html body .nqs-dashboard-surface [class~="bg-gray-800"],
+html body .nqs-dashboard-surface [class~="bg-gray-900"] {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body .nqs-public-surface :is(h1, h2, h3, h4, h5, h6),
+html body .nqs-dashboard-surface :is(h1, h2, h3, h4, h5, h6),
+html body .nqs-about-title,
+html body .nqs-about-heading,
+html body .nqs-faq-title,
+html body .nqs-faq-heading,
+html body .nqs-faq-question {
+  color: var(--nqs-heading) !important;
+}
+
+html body .nqs-public-surface :is(p, label, li, td, th, span),
+html body .nqs-dashboard-surface :is(p, label, li, td, th, span),
+html body .nqs-about-body,
+html body .nqs-about-subtitle,
+html body .nqs-faq-muted,
+html body .nqs-faq-answer,
+html body .nqs-operator-muted,
+html body .nqs-operator-head {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html body .nqs-public-surface [class*="text-slate-500"],
+html body .nqs-public-surface [class*="text-slate-600"],
+html body .nqs-public-surface [class*="text-gray-500"],
+html body .nqs-public-surface [class*="text-gray-600"],
+html body .nqs-dashboard-surface [class*="text-slate-500"],
+html body .nqs-dashboard-surface [class*="text-slate-600"],
+html body .nqs-dashboard-surface [class*="text-gray-500"],
+html body .nqs-dashboard-surface [class*="text-gray-600"] {
+  color: var(--nqs-muted) !important;
+}
+
+html body .nqs-public-surface [class*="text-slate-900"],
+html body .nqs-public-surface [class*="text-slate-800"],
+html body .nqs-public-surface [class*="text-gray-900"],
+html body .nqs-public-surface [class*="text-gray-800"],
+html body .nqs-public-surface [class*="text-black"],
+html body .nqs-dashboard-surface [class*="text-slate-900"],
+html body .nqs-dashboard-surface [class*="text-slate-800"],
+html body .nqs-dashboard-surface [class*="text-gray-900"],
+html body .nqs-dashboard-surface [class*="text-gray-800"],
+html body .nqs-dashboard-surface [class*="text-black"] {
+  color: var(--nqs-text) !important;
+}
+
+/* text-white on non-action surfaces should follow theme text, not stay white */
+html.nqs-theme-light body .nqs-public-surface [class*="text-white"],
+html.nqs-theme-light body .nqs-dashboard-surface [class*="text-white"] {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-dark body .nqs-public-surface [class*="text-white"],
+html.nqs-theme-dark body .nqs-dashboard-surface [class*="text-white"] {
+  color: var(--nqs-text) !important;
+}
+
+/* Restore white text on primary/status actions and hero */
+html body .nqs-public-surface [class*="bg-blue-"][class*="text-white"],
+html body .nqs-dashboard-surface [class*="bg-blue-"][class*="text-white"],
+html body .nqs-public-surface [class*="bg-green-"][class*="text-white"],
+html body .nqs-dashboard-surface [class*="bg-green-"][class*="text-white"],
+html body .nqs-public-surface [class*="bg-emerald-"][class*="text-white"],
+html body .nqs-dashboard-surface [class*="bg-emerald-"][class*="text-white"],
+html body .nqs-public-surface [class*="bg-red-"][class*="text-white"],
+html body .nqs-dashboard-surface [class*="bg-red-"][class*="text-white"],
+html body .nqs-public-surface [class*="bg-[#2563EB]"],
+html body .nqs-dashboard-surface [class*="bg-[#2563EB]"],
+html body .nqs-accent-icon,
+html body .nqs-accent-icon *,
+html body .nqs-portal-hero,
+html body .nqs-portal-hero :is(h1, h2, h3, p, span, a, button),
+html body .nqs-dashboard-link,
+html body .nqs-dashboard-link span {
+  color: #FFFFFF !important;
+}
+
+html body :is(input, select, textarea),
+html body .nqs-faq-input,
+html body .nqs-admin-input {
+  background: var(--nqs-input) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body :is(input, textarea)::placeholder,
+html body .nqs-faq-input::placeholder,
+html body .nqs-admin-input::placeholder {
+  color: var(--nqs-muted) !important;
+  opacity: 0.85 !important;
+}
+
+html body :is(input, select, textarea):focus {
+  border-color: var(--nqs-primary) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2) !important;
+}
+
+html body :is(table, thead, tbody, tr, td, th),
+html body .nqs-custom-table th,
+html body .nqs-custom-table td {
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html body :is(table, tbody, tbody tr) {
+  background: var(--nqs-card) !important;
+}
+
+html body :is(thead, thead tr),
+html body .nqs-custom-table th {
+  background: var(--nqs-card-soft) !important;
+  color: var(--nqs-muted) !important;
+}
+
+html body .nqs-custom-table tr:hover td,
+html body tbody tr:hover td {
+  background: var(--nqs-card-soft) !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Primary actions — one blue only                                         */
+/* -------------------------------------------------------------------------- */
+html body .nqs-public-surface :is(button, a)[class~="bg-blue-500"],
+html body .nqs-public-surface :is(button, a)[class~="bg-blue-600"],
+html body .nqs-public-surface :is(button, a)[class~="bg-blue-700"],
+html body .nqs-public-surface :is(button, a)[class~="bg-sky-600"],
+html body .nqs-public-surface :is(button, a)[class*="bg-[#4189DD]"],
+html body .nqs-public-surface :is(button, a)[class*="bg-[#0B3A75]"],
+html body .nqs-public-surface :is(button, a)[class*="bg-[#2563EB]"],
+html body .nqs-dashboard-surface :is(button, a)[class~="bg-blue-500"],
+html body .nqs-dashboard-surface :is(button, a)[class~="bg-blue-600"],
+html body .nqs-dashboard-surface :is(button, a)[class~="bg-blue-700"],
+html body .nqs-dashboard-surface :is(button, a)[class~="bg-sky-600"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-[#4189DD]"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-[#0B3A75]"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-[#2563EB]"] {
+  background: var(--nqs-primary) !important;
+  border-color: var(--nqs-primary) !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-public-surface [class*="text-blue-600"],
+html body .nqs-public-surface [class*="text-blue-700"],
+html body .nqs-public-surface [class*="text-[#0B3A75]"],
+html body .nqs-public-surface [class*="text-[#4189DD]"],
+html body .nqs-dashboard-surface [class*="text-blue-600"],
+html body .nqs-dashboard-surface [class*="text-blue-700"],
+html body .nqs-dashboard-surface [class*="text-[#0B3A75]"],
+html body .nqs-dashboard-surface [class*="text-[#4189DD]"],
+html body .nqs-about-eyebrow,
+html body .nqs-operator-link {
+  color: var(--nqs-primary) !important;
+}
+
+html body .nqs-public-surface :is(button, a)[class*="bg-green-"],
+html body .nqs-public-surface :is(button, a)[class*="bg-emerald-"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-green-"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-emerald-"],
+html body .nqs-public-surface :is(button, a)[class*="bg-red-"],
+html body .nqs-dashboard-surface :is(button, a)[class*="bg-red-"] {
+  color: #FFFFFF !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 6. Page guards that previously forced light colors in dark mode            */
+/* -------------------------------------------------------------------------- */
+html.nqs-theme-dark body .nqs-admin-modern,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern :is(h1, h2, h3, h4, p, label, span, strong, td, th),
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern :is(h1, h2, h3, h4, p, label, strong, td, th) {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern :is(.nqs-admin-metric-card, .nqs-admin-table-card, table, tr),
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern :is(.nqs-admin-metric-card, .nqs-admin-table-card, table, tr) {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern thead,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern thead {
+  background: var(--nqs-card-soft) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-admin-input,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern .nqs-admin-input {
+  background: var(--nqs-input) !important;
+  border-color: var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-admin-card-icon,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern .nqs-admin-card-icon {
+  background: var(--nqs-card-soft) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-admin-card-icon svg,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-admin-modern .nqs-admin-card-icon svg {
+  color: var(--nqs-text) !important;
+  stroke: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light body .nqs-admin-modern,
+html.nqs-theme-light body .nqs-dashboard-surface .nqs-admin-modern {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light body .nqs-admin-modern :is(.nqs-admin-metric-card, .nqs-admin-table-card, table, tr),
+html.nqs-theme-light body .nqs-dashboard-surface .nqs-admin-modern :is(.nqs-admin-metric-card, .nqs-admin-table-card, table, tr) {
+  background: var(--nqs-card) !important;
+  border-color: var(--nqs-border) !important;
+}
+
+html.nqs-theme-light body .nqs-admin-modern thead,
+html.nqs-theme-light body .nqs-dashboard-surface .nqs-admin-modern thead {
+  background: var(--nqs-card-soft) !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-blue,
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-purple,
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-indigo,
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-cyan {
+  background: rgba(37, 99, 235, 0.2) !important;
+  color: #93C5FD !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-green {
+  background: rgba(34, 197, 94, 0.18) !important;
+  color: #86EFAC !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-yellow {
+  background: rgba(251, 191, 36, 0.18) !important;
+  color: #FDE68A !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-rose,
+html.nqs-theme-dark body .nqs-admin-modern .nqs-tone-orange {
+  background: rgba(248, 113, 113, 0.18) !important;
+  color: #FCA5A5 !important;
+}
+
+html body .nqs-home-redesign {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* Home process section: fix white-on-white / dark-on-dark mixing */
+html.nqs-theme-light body .nqs-process-section,
+html.nqs-theme-dark body .nqs-process-section,
+html body .nqs-process-section {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light body .nqs-process-section :is(h2, h3),
+html.nqs-theme-dark body .nqs-process-section :is(h2, h3),
+html.nqs-theme-light body .nqs-process-section .nqs-step h3,
+html.nqs-theme-dark body .nqs-process-section .nqs-step h3,
+html body .nqs-process-section :is(h2, h3),
+html body .nqs-process-section .nqs-step h3 {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light body .nqs-process-section :is(p, .nqs-process-intro),
+html.nqs-theme-dark body .nqs-process-section :is(p, .nqs-process-intro),
+html.nqs-theme-light body .nqs-process-section .nqs-step p,
+html.nqs-theme-dark body .nqs-process-section .nqs-step p,
+html body .nqs-process-section :is(p, .nqs-process-intro),
+html body .nqs-process-section .nqs-step p {
+  color: var(--nqs-muted) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light body .nqs-process-badge,
+html.nqs-theme-dark body .nqs-process-badge,
+html body .nqs-process-badge {
+  background: var(--nqs-card) !important;
+  color: var(--nqs-text) !important;
+  border: 1px solid var(--nqs-border) !important;
+}
+
+html.nqs-theme-light body .nqs-process-badge svg,
+html.nqs-theme-dark body .nqs-process-badge svg,
+html body .nqs-process-badge svg {
+  color: var(--nqs-success, #16A34A) !important;
+}
+
+html.nqs-theme-light body .nqs-step > span,
+html.nqs-theme-dark body .nqs-step > span,
+html body .nqs-step > span {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+
+html body .Toastify__toast {
+  background: var(--nqs-card) !important;
+  color: var(--nqs-text) !important;
+  border: 1px solid var(--nqs-border) !important;
+}
+
+html body .Toastify__toast--error,
+html body .Toastify__toast.nqs-toast-error {
+  background: #eef4ff !important;
+  border: 1px solid #93b4e8 !important;
+  color: #0b1f3a !important;
+}
+
+html body .Toastify__toast--error .Toastify__progress-bar,
+html body .Toastify__toast.nqs-toast-error .Toastify__progress-bar {
+  background: #2563eb !important;
+}
+
+html body .Toastify__toast-body,
+html body .Toastify__close-button {
+  color: inherit !important;
+}
+
+/* Header notification bell + unread badge */
+html body .nqs-notification-btn,
+html.nqs-theme-light body .nqs-notification-btn,
+html.nqs-theme-dark body .nqs-notification-btn,
+html body .nqs-dashboard-header .nqs-notification-btn {
+  position: relative !important;
+  overflow: visible !important;
+  min-width: 2.5rem !important;
+  min-height: 2.25rem !important;
+}
+
+html body .nqs-notification-bell,
+html body .nqs-notification-btn .nqs-notification-bell,
+html body .nqs-dashboard-header .nqs-notification-btn svg,
+html body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-bell,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-btn svg,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-btn svg,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-bell,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-bell {
+  display: block !important;
+  width: 1.1rem !important;
+  height: 1.1rem !important;
+  min-width: 1.1rem !important;
+  min-height: 1.1rem !important;
+  color: var(--nqs-text) !important;
+  fill: none !important;
+  stroke: var(--nqs-text) !important;
+  stroke-width: 2.25 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-label,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-label,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-label {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-badge,
+html body .nqs-dashboard-header .nqs-force-header-button .nqs-notification-badge,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-badge,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-notification-btn .nqs-notification-badge,
+html.nqs-theme-light body .nqs-dashboard-header .nqs-force-header-button .nqs-notification-badge,
+html.nqs-theme-dark body .nqs-dashboard-header .nqs-force-header-button .nqs-notification-badge {
+  position: absolute !important;
+  top: -6px !important;
+  right: -6px !important;
+  z-index: 20 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  border-radius: 999px !important;
+  background: #DC2626 !important;
+  background-color: #DC2626 !important;
+  border: 2px solid var(--nqs-header, var(--nqs-card)) !important;
+  color: #FFFFFF !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+  pointer-events: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+
+
+/* ==========================================================================
+   SITE-WIDE CONTRAST LOCK
+   Prevents white text on light backgrounds and light panels stuck in dark mode.
+   ========================================================================== */
+
+/* Every major home section follows the active theme background */
+html.nqs-theme-light body .nqs-home-redesign,
+html.nqs-theme-dark body .nqs-home-redesign,
+html.nqs-theme-light body .nqs-home-hero,
+html.nqs-theme-dark body .nqs-home-hero,
+html.nqs-theme-light body .nqs-services-section,
+html.nqs-theme-dark body .nqs-services-section,
+html.nqs-theme-light body .nqs-process-section,
+html.nqs-theme-dark body .nqs-process-section,
+html.nqs-theme-light body .nqs-partner-strip,
+html.nqs-theme-dark body .nqs-partner-strip,
+html body .nqs-home-redesign,
+html body .nqs-home-hero,
+html body .nqs-services-section,
+html body .nqs-process-section,
+html body .nqs-partner-strip {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* Hero title, body, and secondary CTA must always match theme text */
+html.nqs-theme-light body .nqs-hero-copy,
+html.nqs-theme-dark body .nqs-hero-copy,
+html.nqs-theme-light body .nqs-hero-copy h1,
+html.nqs-theme-dark body .nqs-hero-copy h1,
+html body .nqs-hero-copy,
+html body .nqs-hero-copy h1 {
+  color: var(--nqs-text) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light body .nqs-hero-copy p,
+html.nqs-theme-dark body .nqs-hero-copy p,
+html body .nqs-hero-copy p {
+  color: var(--nqs-muted) !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-light body .nqs-secondary-action,
+html.nqs-theme-dark body .nqs-secondary-action,
+html.nqs-theme-light body .nqs-home-redesign .nqs-secondary-action,
+html.nqs-theme-dark body .nqs-home-redesign .nqs-secondary-action,
+html body .nqs-secondary-action {
+  background: var(--nqs-card) !important;
+  border: 1px solid var(--nqs-border) !important;
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light body .nqs-primary-action,
+html.nqs-theme-dark body .nqs-primary-action,
+html.nqs-theme-light body .nqs-home-redesign .nqs-primary-action,
+html.nqs-theme-dark body .nqs-home-redesign .nqs-primary-action,
+html body .nqs-primary-action,
+html body .nqs-primary-action *,
+html.nqs-theme-light body .nqs-home-redesign .nqs-primary-action *,
+html.nqs-theme-dark body .nqs-home-redesign .nqs-primary-action * {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+html.nqs-theme-light body .nqs-pill,
+html.nqs-theme-dark body .nqs-pill,
+html body .nqs-pill {
+  background: var(--color-warning-soft, #FEF3C7) !important;
+  color: var(--color-warning, #D97706) !important;
+}
+
+/* Global readable text on public + dashboard surfaces */
+html.nqs-theme-light body .nqs-public-surface :is(h1, h2, h3, h4, h5, h6),
+html.nqs-theme-dark body .nqs-public-surface :is(h1, h2, h3, h4, h5, h6),
+html.nqs-theme-light body .nqs-dashboard-surface :is(h1, h2, h3, h4, h5, h6),
+html.nqs-theme-dark body .nqs-dashboard-surface :is(h1, h2, h3, h4, h5, h6) {
+  color: var(--nqs-text) !important;
+}
+
+html.nqs-theme-light body .nqs-public-surface :is(p, label, li, td, th),
+html.nqs-theme-dark body .nqs-public-surface :is(p, label, li, td, th),
+html.nqs-theme-light body .nqs-dashboard-surface :is(p, label, li, td, th),
+html.nqs-theme-dark body .nqs-dashboard-surface :is(p, label, li, td, th) {
+  color: var(--nqs-text) !important;
+}
+
+/* Remap old light-only washes so dark mode never keeps pale panels */
+html.nqs-theme-dark body .nqs-public-surface [style*="background: #fff"],
+html.nqs-theme-dark body .nqs-public-surface [style*="background:#fff"],
+html.nqs-theme-dark body .nqs-public-surface [style*="background: #f"],
+html.nqs-theme-dark body .nqs-dashboard-surface [style*="background: #fff"],
+html.nqs-theme-dark body .nqs-dashboard-surface [style*="background:#fff"] {
+  background: var(--nqs-card) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* Keep intentional white text only on primary/status filled controls */
+html.nqs-theme-light body .nqs-public-surface :is(a, button)[class*="bg-blue-"] ,
+html.nqs-theme-dark body .nqs-public-surface :is(a, button)[class*="bg-blue-"],
+html.nqs-theme-light body .nqs-dashboard-surface :is(a, button)[class*="bg-blue-"],
+html.nqs-theme-dark body .nqs-dashboard-surface :is(a, button)[class*="bg-blue-"],
+html body .nqs-primary-action,
+html body .nqs-dashboard-link {
+  color: #FFFFFF !important;
+}
+
+/* Auth / FAQ / About pages share the same shell colors */
+html.nqs-theme-light body .nqs-auth-page,
+html.nqs-theme-dark body .nqs-auth-page,
+html.nqs-theme-light body .nqs-faq-page,
+html.nqs-theme-dark body .nqs-faq-page,
+html.nqs-theme-light body .nqs-about-page,
+html.nqs-theme-dark body .nqs-about-page {
+  background: var(--nqs-bg) !important;
+  color: var(--nqs-text) !important;
+}
+
+/* ==========================================================================
+   FINAL LIGHT/DARK SIDEBAR + SHELL CONTRAST LOCK
+   Prevents pale/white nav text on white light-mode backgrounds.
+   ========================================================================== */
+html.nqs-theme-light body .nqs-dashboard-sidebar,
+html.nqs-theme-light body aside.nqs-dashboard-sidebar {
+  background: #FFFFFF !important;
+  background-image: none !important;
+  border-right: 1px solid #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-sidebar,
+html.nqs-theme-dark body aside.nqs-dashboard-sidebar {
+  background: #1E293B !important;
+  background-image: none !important;
+  border-right: 1px solid #475569 !important;
+  color: #F8FAFC !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar :is(a, button, span, strong, small, h2, p, svg),
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-child-link,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link *,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-child-link * {
+  color: #0F172A !important;
+  stroke: #0F172A !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-sidebar :is(a, button, span, strong, small, h2, p, svg),
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-child-link,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-child-link * {
+  color: #F8FAFC !important;
+  stroke: #F8FAFC !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link:hover,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-child-link:hover,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link-active,
+html.nqs-theme-light body .nqs-dashboard-sidebar a[aria-current="page"] {
+  background: #EFF6FF !important;
+  color: #2563EB !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link:hover *,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-child-link:hover *,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-link-active *,
+html.nqs-theme-light body .nqs-dashboard-sidebar a[aria-current="page"] * {
+  color: #2563EB !important;
+  stroke: #2563EB !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link:hover,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-child-link:hover,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link-active,
+html.nqs-theme-dark body .nqs-dashboard-sidebar a[aria-current="page"] {
+  background: rgba(37, 99, 235, 0.22) !important;
+  color: #93C5FD !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link:hover *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-child-link:hover *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-link-active *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar a[aria-current="page"] * {
+  color: #93C5FD !important;
+  stroke: #93C5FD !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-logo,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-brand-logo,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-logo,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-brand-logo {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-sidebar-logo *,
+html.nqs-theme-light body .nqs-dashboard-sidebar .nqs-brand-logo *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-sidebar-logo *,
+html.nqs-theme-dark body .nqs-dashboard-sidebar .nqs-brand-logo * {
+  color: #FFFFFF !important;
+  stroke: #FFFFFF !important;
+}
+
+html.nqs-theme-light body,
+html.nqs-theme-light body .nqs-dashboard-surface,
+html.nqs-theme-light body .nqs-admin-modern,
+html.nqs-theme-light body .nqs-admin-appointments {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+html.nqs-theme-dark body,
+html.nqs-theme-dark body .nqs-dashboard-surface,
+html.nqs-theme-dark body .nqs-admin-modern,
+html.nqs-theme-dark body .nqs-admin-appointments,
+html.nqs-theme-dark body .nqs-app-content {
+  background: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+/* Dark mode: never leave navy/black utility text on darkened panels. */
+html.nqs-theme-dark body .nqs-dashboard-surface :is(
+  [class*="text-[#06194a]"],
+  [class*="text-[#06194A]"],
+  [class*="text-[#071a33]"],
+  [class*="text-[#071A33]"],
+  [class*="text-[#243b63]"],
+  [class*="text-[#0B3A75]"],
+  [class*="text-[#0b3a75]"]
+),
+html.nqs-theme-dark body .nqs-public-surface :is(
+  [class*="text-[#06194a]"],
+  [class*="text-[#06194A]"],
+  [class*="text-[#071a33]"],
+  [class*="text-[#071A33]"],
+  [class*="text-[#243b63]"],
+  [class*="text-[#0B3A75]"],
+  [class*="text-[#0b3a75]"]
+) {
+  color: #F8FAFC !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-center-detail-bar {
+  background: #0f2238 !important;
+  border-color: #1e3a5f !important;
+  color: #F8FAFC !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-center-detail-bar :is(h1, h2, h3, p, button),
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-center-detail-bar .nqs-admin-center-count {
+  color: #F8FAFC !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-center-detail-bar .nqs-admin-center-district {
+  color: #93C5FD !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-center-detail-bar button {
+  background: #071527 !important;
+  border-color: #1e3a5f !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments thead,
+html.nqs-theme-dark body .nqs-admin-appointments thead tr {
+  background: #0f2238 !important;
+  color: #cbd5e1 !important;
+}
+
+html.nqs-theme-dark body .nqs-admin-appointments .nqs-admin-appointment-row {
+  background: #071527 !important;
+  color: #F8FAFC !important;
+}
+

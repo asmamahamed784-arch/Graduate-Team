@@ -1,27 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  ArcElement,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
 import {
   FaChartLine,
+  FaBuilding,
+  FaCalendarDay,
   FaClock,
   FaClipboardList,
+  FaConciergeBell,
   FaDownload,
   FaFilePdf,
   FaFilter,
   FaLock,
+  FaServer,
   FaShieldAlt,
   FaTable,
   FaUserCog,
@@ -29,38 +20,36 @@ import {
 } from 'react-icons/fa';
 import api from '../api/axiosInstance';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
-
 const reportCards = [
   {
-    title: 'Reports Home',
-    description: 'Dashboard overview and key National ID service numbers.',
+    title: 'Overview',
+    description: 'Executive summary of citizens, appointments, queue status, and completions.',
     path: '/dashboard/admin/reports',
     icon: FaChartLine,
   },
   {
-    title: 'Applications & Requests',
-    description: 'Track all National ID requests by type, center, date, and status.',
-    path: '/dashboard/admin/reports/applications',
-    icon: FaClipboardList,
-  },
-  {
-    title: 'Operator Performance',
-    description: 'Review operator activity, completed tickets, and service timing.',
-    path: '/dashboard/admin/reports/operators',
-    icon: FaUserCog,
-  },
-  {
-    title: 'Citizen Demographics',
+    title: 'Citizen Analytics',
     description: 'Understand citizen requests by gender, age group, district, and center.',
     path: '/dashboard/admin/reports/citizens',
     icon: FaUsers,
   },
   {
-    title: 'Security & Audit',
-    description: 'Read-only audit report for login, admin, operator, and security events.',
-    path: '/dashboard/admin/reports/security',
-    icon: FaShieldAlt,
+    title: 'Service Centers',
+    description: 'Center-by-center workload, waiting, completed, and cancellation reporting.',
+    path: '/dashboard/admin/reports/service-centers',
+    icon: FaBuilding,
+  },
+  {
+    title: 'Operators',
+    description: 'Review operator activity, completed tickets, and service performance.',
+    path: '/dashboard/admin/reports/operators',
+    icon: FaUserCog,
+  },
+  {
+    title: 'Queue Analytics',
+    description: 'Waiting queue, active service, completed, cancelled, and no-show analysis.',
+    path: '/dashboard/admin/reports/queue',
+    icon: FaClock,
   },
 ];
 
@@ -70,7 +59,34 @@ const requestTypeLabels = {
   update_information: 'Update Information',
 };
 
-const chartColors = ['#2563eb', '#059669', '#f59e0b', '#7c3aed', '#dc2626', '#0891b2', '#16a34a'];
+const requestTypeSlugs = {
+  new_national_id: 'new-registration',
+  update_information: 'update-information',
+  lost_replacement: 'lost-id',
+};
+
+const slugRequestTypes = Object.fromEntries(Object.entries(requestTypeSlugs).map(([key, value]) => [value, key]));
+
+const BANAADIR_DISTRICTS = [
+  'Abdulaziz',
+  'Boondheere',
+  'Dayniile',
+  'Dharkenley',
+  'Garasbaaley',
+  'Heliwaa',
+  'Hodan',
+  'Howlwadaag',
+  'Kaaraan',
+  'Kaxda',
+  'Shangaani',
+  'Shibis',
+  'Waaberi',
+  'Wadajir',
+  'Wardhiigley',
+  'Xamar Jajab',
+  'Xamar Weyne',
+  'Yaqshiid',
+];
 
 const initialFilters = {
   service: '',
@@ -125,6 +141,13 @@ const serviceName = (ticket) => ticket.service?.name || ticket.serviceName || 'N
 
 const centerName = (ticket) => ticket.center?.name || ticket.centerName || 'Not assigned';
 
+const centerIdFromTicket = (ticket) => (
+  ticket.center?._id ||
+  ticket.center?.id ||
+  ticket.centerId ||
+  ticket.center
+);
+
 const citizenName = (ticket) => (
   ticket.registrationDetails?.fullName ||
   ticket.replacementDetails?.fullName ||
@@ -133,6 +156,26 @@ const citizenName = (ticket) => (
   ticket.citizenName ||
   'No data'
 );
+
+const citizenNqsId = (ticket) => (
+  ticket.citizen?.nationalId ||
+  ticket.nationalIdNumber ||
+  ticket.registrationDetails?.nationalIdNumber ||
+  ticket.replacementDetails?.nationalIdNumber ||
+  ticket.updateDetails?.nationalIdNumber ||
+  ''
+);
+
+const citizenUniqueKey = (ticket) => (
+  ticket.citizen?._id ||
+  ticket.citizen?.id ||
+  ticket.citizenId ||
+  ticket.citizen ||
+  citizenNqsId(ticket) ||
+  `${citizenName(ticket)}-${ticket.registrationDetails?.phone || ticket.replacementDetails?.phone || ticket.updateDetails?.phone || ''}`
+);
+
+const uniqueCitizenCount = (rows) => new Set(rows.map(citizenUniqueKey).filter(Boolean).map(String)).size;
 
 const normalizeGender = (value) => {
   const gender = String(value || '').trim().toLowerCase();
@@ -173,6 +216,15 @@ const districtBreakdownRows = (rows) => Object.values(rows.reduce((map, ticket) 
 }, {}));
 
 const roleName = (value) => String(value || '').replace('_', ' ');
+
+const statusLabel = (value) => {
+  const key = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+  return {
+    active: 'Active',
+    inactive: 'Inactive',
+    pending_approval: 'Pending',
+  }[key] || 'All';
+};
 
 const makeCountMap = (rows, selector) => rows.reduce((map, row) => {
   const key = selector(row) || 'Not available';
@@ -218,47 +270,22 @@ const csvDownload = (filename, rows) => {
   URL.revokeObjectURL(url);
 };
 
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-  },
-  scales: {
-    x: { ticks: { color: '#475569', font: { size: 11 } }, grid: { display: false } },
-    y: { ticks: { color: '#475569', font: { size: 11 } }, grid: { color: 'rgba(148,163,184,0.25)' } },
-  },
-};
-
-const doughnutOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'bottom',
-      labels: { color: '#334155', padding: 14, font: { size: 11 } },
-    },
-  },
-};
-
-const barData = (rows, label = 'Total') => ({
-  labels: rows.map((row) => row.label),
-  datasets: [{
-    label,
-    data: rows.map((row) => row.count),
-    backgroundColor: chartColors,
-    borderRadius: 8,
-  }],
-});
-
-const doughnutData = (rows) => ({
-  labels: rows.map((row) => row.label),
-  datasets: [{
-    data: rows.map((row) => row.count),
-    backgroundColor: chartColors,
-    borderWidth: 0,
-  }],
-});
+const ReportTabs = () => (
+  <motion.div variants={item} className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="flex min-w-max gap-2">
+      {reportCards.map((card) => (
+        <Link
+          key={card.path}
+          to={card.path}
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-blue-50 hover:text-blue-700"
+        >
+          <card.icon className="text-blue-700" />
+          {card.title}
+        </Link>
+      ))}
+    </div>
+  </motion.div>
+);
 
 const PageShell = ({ title, description, children, actions }) => (
   <motion.div
@@ -276,6 +303,7 @@ const PageShell = ({ title, description, children, actions }) => (
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </motion.div>
+      <ReportTabs />
       {children}
     </div>
   </motion.div>
@@ -323,15 +351,6 @@ const StatCard = ({ label, value, icon: Icon, accent = 'blue', to, onClick, acti
     </motion.div>
   );
 };
-
-const ChartCard = ({ title, children }) => (
-  <motion.div variants={item} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    <div className="border-b border-slate-200 px-4 py-3">
-      <h2 className="text-sm font-black text-[#0B3A75]">{title}</h2>
-    </div>
-    <div className="h-72 p-4">{children}</div>
-  </motion.div>
-);
 
 const ExportActions = ({ onExport, pdfLabel = 'PDF export not configured' }) => (
   <>
@@ -441,7 +460,7 @@ const RequestsTable = ({ rows, title = 'Requests' }) => (
       <table className="w-full min-w-[980px] text-left text-sm">
         <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
           <tr>
-            {['Ticket', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'].map((heading) => (
+            {['Request Ref', 'NQS ID', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'].map((heading) => (
               <th key={heading} className="px-4 py-3 font-black">{heading}</th>
             ))}
           </tr>
@@ -450,6 +469,7 @@ const RequestsTable = ({ rows, title = 'Requests' }) => (
           {rows.length ? rows.map((ticket) => (
             <tr key={ticket._id || ticket.id || ticket.ref} className="hover:bg-blue-50/50">
               <td className="px-4 py-3 font-black text-blue-700">{ticket.ref}</td>
+              <td className="px-4 py-3 font-mono font-semibold text-slate-700">{citizenNqsId(ticket) || '--'}</td>
               <td className="px-4 py-3 font-semibold text-slate-900">{citizenName(ticket)}</td>
               <td className="px-4 py-3 text-slate-700">{citizenGender(ticket)}</td>
               <td className="px-4 py-3 text-slate-700">{requestTypeLabels[ticket.requestType] || 'New ID Registration'}</td>
@@ -461,7 +481,55 @@ const RequestsTable = ({ rows, title = 'Requests' }) => (
             </tr>
           )) : (
             <tr>
-              <td colSpan="9" className="px-4 py-8 text-center text-sm text-slate-500">No requests found for the selected filters.</td>
+              <td colSpan="10" className="px-4 py-8 text-center text-sm text-slate-500">No requests found for the selected filters.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </motion.div>
+);
+
+const OperatorsTable = ({ rows }) => (
+  <motion.div id="operators-report-table" variants={item} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-200 px-4 py-3">
+      <h2 className="flex items-center gap-2 text-sm font-black text-[#0B3A75]"><FaUserCog /> Operator Records</h2>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[900px] text-left text-sm">
+        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+          <tr>
+            {['Name', 'Username', 'Phone', 'Role', 'Center', 'District', 'Status', 'Completed', 'Cancelled'].map((heading) => (
+              <th key={heading} className="px-4 py-3 font-black">{heading}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.length ? rows.map((operator) => (
+            <tr key={operator._id || operator.id || operator.username} className="hover:bg-blue-50/50">
+              <td className="px-4 py-3 font-black text-slate-950">{operator.name || 'No name'}</td>
+              <td className="px-4 py-3 text-slate-700">{operator.username || '--'}</td>
+              <td className="px-4 py-3 text-slate-700">{operator.phone || '--'}</td>
+              <td className="px-4 py-3 text-slate-700 capitalize">{roleName(operator.role || operator.type)}</td>
+              <td className="px-4 py-3 text-slate-700">{operator.center?.name || operator.centerName || 'Not assigned'}</td>
+              <td className="px-4 py-3 text-slate-700">{operator.center?.district || operator.district || '--'}</td>
+              <td className="px-4 py-3">
+                <span className={`rounded-full px-2 py-1 text-xs font-black ${
+                  operator.status === 'active' || operator.status === 'Active'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : operator.status === 'inactive' || operator.status === 'Inactive'
+                      ? 'bg-red-50 text-red-700'
+                      : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {operator.status || 'Pending'}
+                </span>
+              </td>
+              <td className="px-4 py-3 font-black text-emerald-700">{operator.completed || 0}</td>
+              <td className="px-4 py-3 font-black text-red-700">{operator.cancelled || 0}</td>
+            </tr>
+          )) : (
+            <tr>
+              <td colSpan="9" className="px-4 py-8 text-center text-sm text-slate-500">No operators found.</td>
             </tr>
           )}
         </tbody>
@@ -506,33 +574,46 @@ const DistrictBreakdownTable = ({ rows }) => (
   </motion.div>
 );
 
-const AuditTable = ({ logs }) => (
-  <motion.div variants={item} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-    <div className="border-b border-slate-200 px-4 py-3">
-      <h2 className="flex items-center gap-2 text-sm font-black text-[#0B3A75]"><FaLock /> Read-only Audit Table</h2>
+const ServiceCenterTable = ({ rows, clickable = false }) => (
+  <motion.div variants={item} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-200 bg-white px-4 py-3">
+      <h2 className="flex items-center gap-2 text-lg font-black text-slate-950"><FaBuilding className="text-blue-700" /> District Service Centers Operations</h2>
     </div>
     <div className="overflow-x-auto">
       <table className="w-full min-w-[860px] text-left text-sm">
-        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-700">
           <tr>
-            {['Time', 'User', 'Role', 'Action', 'Details', 'IP Address'].map((heading) => (
+            {['Service Center', 'Total Bookings', 'Completed', 'Waiting', 'Cancelled', 'No Show', 'Update', 'Lost ID', 'Efficiency %'].map((heading) => (
               <th key={heading} className="px-4 py-3 font-black">{heading}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
-          {logs.length ? logs.map((log) => (
-            <tr key={log._id || log.id} className="hover:bg-blue-50/50">
-              <td className="px-4 py-3 text-slate-700">{new Date(log.timestamp).toLocaleString()}</td>
-              <td className="px-4 py-3 font-semibold text-slate-900">{log.user?.name || 'System'}</td>
-              <td className="px-4 py-3 capitalize text-slate-700">{roleName(log.role)}</td>
-              <td className="px-4 py-3 font-semibold text-blue-700">{log.action}</td>
-              <td className="px-4 py-3 text-slate-700">{log.details}</td>
-              <td className="px-4 py-3 text-slate-700">{log.ipAddress || 'N/A'}</td>
+        <tbody className="divide-y divide-slate-200">
+          {rows.length ? rows.map((row) => {
+            const efficiency = row.total ? Math.round((row.completed / row.total) * 100) : 0;
+            return (
+            <tr key={row.label} className="odd:bg-white even:bg-slate-50 hover:bg-blue-50/70">
+              <td className="px-4 py-3 font-semibold text-slate-900">
+                {clickable ? (
+                  <Link to={`/dashboard/admin/reports/service-centers/${row.id}`} className="text-blue-700 hover:underline">
+                    {row.label}
+                  </Link>
+                ) : row.label}
+              </td>
+              <td className="px-4 py-3 font-black text-slate-950">{row.total}</td>
+              <td className="bg-emerald-500 px-4 py-3 font-black text-white">{row.completed}</td>
+              <td className="bg-amber-400 px-4 py-3 font-black text-slate-950">{row.waiting}</td>
+              <td className="bg-red-500 px-4 py-3 font-black text-white">{row.cancelled}</td>
+              <td className="bg-rose-400 px-4 py-3 font-black text-white">{row.noShow}</td>
+              <td className="px-4 py-3 font-black text-blue-700">{row.update}</td>
+              <td className="px-4 py-3 font-black text-blue-700">{row.lost}</td>
+              <td className={`px-4 py-3 font-black text-white ${efficiency >= 70 ? 'bg-emerald-600' : efficiency >= 30 ? 'bg-amber-500' : 'bg-red-600'}`}>
+                {efficiency}%
+              </td>
             </tr>
-          )) : (
+          );}) : (
             <tr>
-              <td colSpan="6" className="px-4 py-8 text-center text-sm text-slate-500">No audit records found.</td>
+              <td colSpan="9" className="px-4 py-8 text-center text-sm text-slate-500">No center performance data found.</td>
             </tr>
           )}
         </tbody>
@@ -541,26 +622,76 @@ const AuditTable = ({ logs }) => (
   </motion.div>
 );
 
+const CenterDirectory = ({ rows }) => (
+  <motion.div variants={item} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+    {rows.map((row) => (
+      <Link
+        key={row.id}
+        to={`/dashboard/admin/reports/service-centers/${row.id}`}
+        className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">{row.district} District</p>
+            <h3 className="mt-1 text-lg font-black text-slate-950">{row.label}</h3>
+            <p className="mt-1 text-xs font-semibold text-slate-500">{row.phone || 'No phone recorded'}</p>
+          </div>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{row.total} total</span>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg bg-amber-50 px-2 py-3">
+            <p className="text-lg font-black text-amber-700">{row.waiting}</p>
+            <p className="text-[11px] font-bold text-slate-600">Waiting</p>
+          </div>
+          <div className="rounded-lg bg-emerald-50 px-2 py-3">
+            <p className="text-lg font-black text-emerald-700">{row.completed}</p>
+            <p className="text-[11px] font-bold text-slate-600">Completed</p>
+          </div>
+          <div className="rounded-lg bg-red-50 px-2 py-3">
+            <p className="text-lg font-black text-red-700">{row.cancelled + row.noShow}</p>
+            <p className="text-[11px] font-bold text-slate-600">Stopped</p>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-black text-blue-700">
+          <span>Open full center report</span>
+          <span className="transition group-hover:translate-x-1">View</span>
+        </div>
+      </Link>
+    ))}
+  </motion.div>
+);
+
 const Reports = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const params = useParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [tickets, setTickets] = useState([]);
+  const [centers, setCenters] = useState([]);
   const [operators, setOperators] = useState([]);
   const [audits, setAudits] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
+  const [operatorStatusFilter, setOperatorStatusFilter] = useState('');
+
+  useEffect(() => {
+    const dashboardScroller = document.querySelector('main');
+    dashboardScroller?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
 
   useEffect(() => {
     let active = true;
     const fetchReports = async () => {
       setLoading(true);
       try {
-        const [statsRes, analyticsRes, bookingsRes, operatorsRes, auditsRes] = await Promise.all([
+        const [statsRes, analyticsRes, bookingsRes, centersRes, operatorsRes, auditsRes] = await Promise.all([
           api.get('/api/reports/stats'),
           api.get('/api/reports/analytics'),
           api.get('/api/bookings/admin/all'),
+          api.get('/api/centers'),
           api.get('/api/operators'),
           api.get('/api/audits', { params: { limit: 500 } }),
         ]);
@@ -569,6 +700,7 @@ const Reports = () => {
         setStats(getPayload(statsRes));
         setAnalytics(getPayload(analyticsRes));
         setTickets(safeArray(getPayload(bookingsRes)));
+        setCenters(safeArray(getPayload(centersRes)));
         setOperators(safeArray(getPayload(operatorsRes)));
         setAudits(safeArray(getPayload(auditsRes)));
         setError('');
@@ -588,7 +720,11 @@ const Reports = () => {
 
   const routeKey = useMemo(() => {
     if (location.pathname.endsWith('/applications')) return 'applications';
+    if (location.pathname.includes('/dashboard/admin/reports/services/')) return 'service-detail';
+    if (location.pathname.includes('/dashboard/admin/reports/service-centers/')) return 'center-detail';
+    if (location.pathname.endsWith('/service-centers')) return 'service-centers';
     if (location.pathname.endsWith('/operators')) return 'operators';
+    if (location.pathname.endsWith('/queue')) return 'queue';
     if (location.pathname.includes('/dashboard/admin/reports/citizens')) return 'citizens';
     if (location.pathname.endsWith('/security')) return 'security';
     return 'home';
@@ -599,16 +735,26 @@ const Reports = () => {
     return ['all', 'male', 'female', 'districts'].includes(lastSegment) ? lastSegment : 'overview';
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (routeKey !== 'operators') return;
+    const status = new URLSearchParams(location.search).get('status') || '';
+    const normalizedStatus = String(status).trim().toLowerCase().replace(/\s+/g, '_');
+    setOperatorStatusFilter(['active', 'pending_approval', 'inactive'].includes(normalizedStatus) ? normalizedStatus : '');
+  }, [routeKey, location.search]);
+
   const reportData = useMemo(() => {
     const filteredTickets = filterTickets(tickets, filters);
     const statuses = [...new Set(tickets.map((ticket) => ticket.status).filter(Boolean))].sort();
-    const centers = [...new Set(tickets.map(centerName).filter(Boolean))].sort();
-    const districts = [...new Set(tickets.map(citizenDistrict).filter(Boolean))].sort();
+    const centerOptions = [...new Set([...centers.map((center) => center.name), ...tickets.map(centerName)].filter(Boolean))].sort();
+    const districts = [...new Set([...BANAADIR_DISTRICTS, ...centers.map((center) => center.district), ...tickets.map(citizenDistrict)].filter(Boolean))].sort();
     const services = [...new Set(tickets.map(serviceName).filter(Boolean))].sort();
     const requestStatuses = [...new Set(tickets.map((ticket) => ticket.requestStatus).filter(Boolean))].sort();
     const pending = tickets.filter((ticket) => ticket.requestStatus === 'Pending').length;
+    const waiting = tickets.filter((ticket) => ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress'].includes(ticket.status) || ['Pending', 'Approved', 'Resubmission Required'].includes(ticket.requestStatus)).length;
+    const activeAppointments = tickets.filter((ticket) => !['Completed', 'Cancelled', 'Rejected', 'Expired', 'No Show'].includes(ticket.status) && !['Completed', 'Rejected', 'Cancelled'].includes(ticket.requestStatus)).length;
     const completed = tickets.filter((ticket) => ticket.status === 'Completed' || ticket.requestStatus === 'Completed').length;
     const cancelled = tickets.filter((ticket) => ticket.status === 'Cancelled').length;
+    const noShow = tickets.filter((ticket) => ['No Show', 'NoShow', 'no_show'].includes(ticket.status)).length;
     const resubmitted = tickets.filter((ticket) => ticket.needsResubmission || ticket.requestStatus === 'Resubmission Required' || ticket.resubmissionHistory?.length).length;
     const waitingTimes = tickets.map((ticket) => parseWaitMinutes(ticket.waitTime));
     const serviceTimes = tickets.map((ticket) => minutesBetween(ticket.calledAt, ticket.completedAt)).filter((value) => value !== null);
@@ -641,9 +787,92 @@ const Reports = () => {
       auditCount: audits.filter((log) => String(log.user?._id || log.user?.id) === String(operator._id || operator.id)).length,
     }));
 
+    const centerSeedRows = centers.length
+      ? centers
+      : BANAADIR_DISTRICTS.map((district) => ({
+        id: district.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        _id: district.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name: `${district} National ID Center`,
+        district,
+        phone: '',
+        address: '',
+      }));
+
+    const centerPerformanceMap = centerSeedRows.reduce((map, center) => {
+      const id = center._id || center.id || center.name;
+      map[id] = {
+        id,
+        label: center.name,
+        district: center.district || 'Banaadir',
+        phone: center.phone || '',
+        address: center.address || '',
+        total: 0,
+        waiting: 0,
+        completed: 0,
+        cancelled: 0,
+        noShow: 0,
+        update: 0,
+        lost: 0,
+        newRegistration: 0,
+        male: 0,
+        female: 0,
+        unknownGender: 0,
+        tickets: [],
+      };
+      return map;
+    }, {});
+
+    tickets.forEach((ticket) => {
+      const ticketCenterId = centerIdFromTicket(ticket);
+      const knownCenter = centerSeedRows.find((center) => (
+        String(center._id || center.id) === String(ticketCenterId) ||
+        center.name === centerName(ticket)
+      ));
+      const key = knownCenter?._id || knownCenter?.id || ticketCenterId || centerName(ticket);
+      if (!centerPerformanceMap[key]) {
+        centerPerformanceMap[key] = {
+          id: key,
+          label: centerName(ticket),
+          district: citizenDistrict(ticket),
+          phone: '',
+          address: '',
+          total: 0,
+          waiting: 0,
+          completed: 0,
+          cancelled: 0,
+          noShow: 0,
+          update: 0,
+          lost: 0,
+          newRegistration: 0,
+          male: 0,
+          female: 0,
+          unknownGender: 0,
+          tickets: [],
+        };
+      }
+      const row = centerPerformanceMap[key];
+      row.total += 1;
+      row.tickets.push(ticket);
+      if (ticket.status === 'Completed' || ticket.requestStatus === 'Completed') row.completed += 1;
+      if (['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress'].includes(ticket.status) || ['Pending', 'Approved', 'Resubmission Required'].includes(ticket.requestStatus)) row.waiting += 1;
+      if (ticket.status === 'Cancelled') row.cancelled += 1;
+      if (['No Show', 'NoShow', 'no_show'].includes(ticket.status)) row.noShow += 1;
+      if (ticket.requestType === 'new_national_id' || !ticket.requestType) row.newRegistration += 1;
+      if (ticket.requestType === 'update_information') row.update += 1;
+      if (ticket.requestType === 'lost_replacement') row.lost += 1;
+      const gender = citizenGenderKey(ticket);
+      if (gender === 'male') row.male += 1;
+      else if (gender === 'female') row.female += 1;
+      else row.unknownGender += 1;
+    });
+
+    const centerPerformanceRows = Object.values(centerPerformanceMap)
+      .filter((row) => BANAADIR_DISTRICTS.includes(row.district) || row.label !== 'Not assigned')
+      .sort((a, b) => BANAADIR_DISTRICTS.indexOf(a.district) - BANAADIR_DISTRICTS.indexOf(b.district) || a.label.localeCompare(b.label));
+
     const actionRows = mapToChartRows(makeCountMap(audits, (log) => log.action || 'Unknown action'));
-    const adminActions = audits.filter((log) => log.role === 'admin').length;
-    const operatorActions = audits.filter((log) => ['operator', 'super_operator'].includes(log.role)).length;
+    const adminActions = audits.filter((log) => ['admin', 'super_admin'].includes(log.role)).length;
+    const operatorActions = audits.filter((log) => ['operator', 'super_operator', 'center_manager'].includes(log.role)).length;
     const failedLogins = audits.filter((log) => /failed|invalid/i.test(`${log.action} ${log.details}`)).length;
     const successfulLogins = audits.filter((log) => /login$/i.test(log.action || '') || /signed in/i.test(log.details || '')).length;
     const passwordChanges = audits.filter((log) => /password/i.test(`${log.action} ${log.details}`)).length;
@@ -651,10 +880,13 @@ const Reports = () => {
 
     return {
       filteredTickets,
-      options: { statuses, centers, districts, services, requestStatuses },
+      options: { statuses, centers: centerOptions, districts, services, requestStatuses },
       pending,
+      waiting,
+      activeAppointments,
       completed,
       cancelled,
+      noShow,
       resubmitted,
       avgWait: average(waitingTimes),
       avgProcessing: average(serviceTimes),
@@ -664,6 +896,7 @@ const Reports = () => {
       serviceRows,
       ageRows,
       operatorActivityRows,
+      centerPerformanceRows,
       actionRows,
       security: {
         failedLogins,
@@ -675,20 +908,7 @@ const Reports = () => {
         criticalActions: audits.filter((log) => /delete|cancel|failed|unauthorized|password|qr/i.test(`${log.action} ${log.details}`)).length,
       },
     };
-  }, [analytics, audits, filters, operators, tickets]);
-
-  const weeklyLineData = useMemo(() => ({
-    labels: analytics?.dailyTrend?.map((row) => row.date) || [],
-    datasets: [{
-      label: 'Appointments',
-      data: analytics?.dailyTrend?.map((row) => row.count) || [],
-      borderColor: '#2563eb',
-      backgroundColor: 'rgba(37,99,235,0.12)',
-      fill: true,
-      tension: 0.35,
-      pointRadius: 4,
-    }],
-  }), [analytics]);
+  }, [analytics, audits, centers, filters, operators, tickets]);
 
   const exportTickets = () => csvDownload('nqs-applications-report.csv', [
     ['Ticket', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
@@ -717,6 +937,27 @@ const Reports = () => {
       operator.auditCount,
     ]),
   ]);
+
+  const showOperatorRows = (status = '') => {
+    setOperatorStatusFilter(status);
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        const table = document.getElementById('operators-report-table');
+        const scroller = document.querySelector('main');
+        if (table && scroller) {
+          const scrollerRect = scroller.getBoundingClientRect();
+          const tableRect = table.getBoundingClientRect();
+          scroller.scrollTo({
+            top: scroller.scrollTop + tableRect.top - scrollerRect.top - 90,
+            left: 0,
+            behavior: 'smooth',
+          });
+          return;
+        }
+        table?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 0);
+    }
+  };
 
   const exportAudits = () => csvDownload('nqs-security-audit-report.csv', [
     ['Time', 'User', 'Role', 'Action', 'Details', 'IP Address'],
@@ -747,6 +988,38 @@ const Reports = () => {
     return Object.keys(initialFilters).every((key) => String(filters[key] || '') === String(targetFilters[key] || ''));
   };
 
+  const serviceSlug = params.serviceSlug;
+  const selectedRequestType = slugRequestTypes[serviceSlug];
+  const selectedCenter = reportData.centerPerformanceRows.find((row) => String(row.id) === String(params.centerId));
+  const centerView = params.centerView || 'all';
+  const todayTickets = tickets.filter((ticket) => ticket.date === todayKey).length;
+  const totalBookings = stats?.totalBookings ?? stats?.totalAppointments ?? tickets.length;
+  const activeServices = stats?.activeServices ?? 0;
+  const totalCenters = stats?.serviceCenters ?? stats?.totalServiceCenters ?? centers.length;
+  const operatorOnlyRows = reportData.operatorActivityRows.filter((operator) => String(operator.role || '').toLowerCase() === 'operator');
+  const adminOverviewCards = [
+    { label: 'Citizen Accounts', value: stats?.totalUsers ?? stats?.totalCitizens ?? 0, icon: FaUsers, accent: 'blue', to: '/dashboard/admin/reports/citizens/all' },
+    { label: 'Total Bookings', value: totalBookings, icon: FaClipboardList, accent: 'blue', to: '/dashboard/admin/reports/applications' },
+    { label: 'Total Operators', value: operatorOnlyRows.length, icon: FaUserCog, accent: 'navy', to: '/dashboard/admin/reports/operators' },
+    { label: 'Active Service', value: activeServices, icon: FaConciergeBell, accent: 'green', to: '/service-management' },
+    { label: 'Banaadir Centers', value: totalCenters, icon: FaBuilding, accent: 'navy', to: '/dashboard/admin/reports/service-centers' },
+    { label: "Today's Tickets", value: stats?.dailyBookings ?? stats?.dailyVisitors ?? todayTickets, icon: FaCalendarDay, accent: 'amber', to: { pathname: '/admin-appointments', search: '?date=today' } },
+    { label: 'API Status', value: stats?.systemUptime || 'Online', icon: FaServer, accent: 'green', to: '/settings' },
+  ];
+
+  const buildSummaryRows = (rows) => ({
+    total: rows.length,
+    waiting: rows.filter((ticket) => ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress'].includes(ticket.status) || ['Pending', 'Approved', 'Resubmission Required'].includes(ticket.requestStatus)).length,
+    completed: rows.filter((ticket) => ticket.status === 'Completed' || ticket.requestStatus === 'Completed').length,
+    cancelled: rows.filter((ticket) => ticket.status === 'Cancelled').length,
+    noShow: rows.filter((ticket) => ['No Show', 'NoShow', 'no_show'].includes(ticket.status)).length,
+    male: rows.filter((ticket) => citizenGenderKey(ticket) === 'male').length,
+    female: rows.filter((ticket) => citizenGenderKey(ticket) === 'female').length,
+    newRegistration: rows.filter((ticket) => ticket.requestType === 'new_national_id' || !ticket.requestType).length,
+    update: rows.filter((ticket) => ticket.requestType === 'update_information').length,
+    lost: rows.filter((ticket) => ticket.requestType === 'lost_replacement').length,
+  });
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#f5f8fc]">
@@ -766,6 +1039,132 @@ const Reports = () => {
     );
   }
 
+  if (routeKey === 'center-detail') {
+    const centerTickets = selectedCenter?.tickets || [];
+    const summary = buildSummaryRows(centerTickets);
+    const centerViewConfig = {
+      all: {
+        title: 'All Center Records',
+        rows: centerTickets,
+      },
+      'new-registration': {
+        title: 'New Registration Work',
+        rows: centerTickets.filter((ticket) => ticket.requestType === 'new_national_id' || !ticket.requestType),
+      },
+      'update-information': {
+        title: 'Update Information Work',
+        rows: centerTickets.filter((ticket) => ticket.requestType === 'update_information'),
+      },
+      'lost-id': {
+        title: 'Lost ID Replacement Work',
+        rows: centerTickets.filter((ticket) => ticket.requestType === 'lost_replacement'),
+      },
+      waiting: {
+        title: 'Waiting Work',
+        rows: centerTickets.filter((ticket) => ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress'].includes(ticket.status) || ['Pending', 'Approved', 'Resubmission Required'].includes(ticket.requestStatus)),
+      },
+      completed: {
+        title: 'Completed Work',
+        rows: centerTickets.filter((ticket) => ticket.status === 'Completed' || ticket.requestStatus === 'Completed'),
+      },
+      cancelled: {
+        title: 'Cancelled / No Show Work',
+        rows: centerTickets.filter((ticket) => ticket.status === 'Cancelled' || ['No Show', 'NoShow', 'no_show'].includes(ticket.status)),
+      },
+      male: {
+        title: 'Male Citizen Records',
+        rows: centerTickets.filter((ticket) => citizenGenderKey(ticket) === 'male'),
+      },
+      female: {
+        title: 'Female Citizen Records',
+        rows: centerTickets.filter((ticket) => citizenGenderKey(ticket) === 'female'),
+      },
+    };
+    const activeCenterView = centerViewConfig[centerView] || centerViewConfig.all;
+    const centerBasePath = `/dashboard/admin/reports/service-centers/${selectedCenter?.id || params.centerId}`;
+
+    return (
+      <PageShell
+        title={selectedCenter ? selectedCenter.label : 'Center Report'}
+        description={selectedCenter ? `${selectedCenter.district} District center performance, citizens, requests, and queue status.` : 'The selected center could not be found.'}
+        actions={<ExportActions onExport={() => csvDownload('nqs-center-report.csv', [
+          ['Ticket', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
+          ...centerTickets.map((ticket) => [
+            ticket.ref,
+            citizenName(ticket),
+            citizenGender(ticket),
+            requestTypeLabels[ticket.requestType] || 'New ID Registration',
+            serviceName(ticket),
+            centerName(ticket),
+            ticket.date,
+            ticket.status,
+            ticket.requestStatus,
+          ]),
+        ])} />}
+      >
+        <Link to="/dashboard/admin/reports/service-centers" className="inline-flex w-max rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50">
+          Back to all centers
+        </Link>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total Work" value={summary.total} icon={FaClipboardList} to={`${centerBasePath}/all`} active={centerView === 'all'} />
+          <StatCard label="Waiting" value={summary.waiting} icon={FaClock} accent="amber" to={`${centerBasePath}/waiting`} active={centerView === 'waiting'} />
+          <StatCard label="Completed" value={summary.completed} icon={FaChartLine} accent="green" to={`${centerBasePath}/completed`} active={centerView === 'completed'} />
+          <StatCard label="Cancelled / No Show" value={summary.cancelled + summary.noShow} icon={FaShieldAlt} accent="red" to={`${centerBasePath}/cancelled`} active={centerView === 'cancelled'} />
+          <StatCard label="New Registration" value={summary.newRegistration} icon={FaClipboardList} accent="blue" to={`${centerBasePath}/new-registration`} active={centerView === 'new-registration'} />
+          <StatCard label="Update Information" value={summary.update} icon={FaClipboardList} accent="navy" to={`${centerBasePath}/update-information`} active={centerView === 'update-information'} />
+          <StatCard label="Lost ID Replacement" value={summary.lost} icon={FaClipboardList} accent="amber" to={`${centerBasePath}/lost-id`} active={centerView === 'lost-id'} />
+          <StatCard label="Male Citizens" value={summary.male} icon={FaUsers} accent="blue" to={`${centerBasePath}/male`} active={centerView === 'male'} />
+          <StatCard label="Female Citizens" value={summary.female} icon={FaUsers} accent="green" to={`${centerBasePath}/female`} active={centerView === 'female'} />
+        </div>
+        <RequestsTable rows={activeCenterView.rows} title={activeCenterView.title} />
+      </PageShell>
+    );
+  }
+
+  if (routeKey === 'service-detail') {
+    const serviceRows = selectedRequestType
+      ? tickets.filter((ticket) => (selectedRequestType === 'new_national_id' ? ticket.requestType === 'new_national_id' || !ticket.requestType : ticket.requestType === selectedRequestType))
+      : tickets;
+    const summary = buildSummaryRows(serviceRows);
+
+    return (
+      <PageShell
+        title={`${requestTypeLabels[selectedRequestType] || 'Service'} Report`}
+        description="This page shows only this service, with its own citizens, queue status, center distribution, and gender counts."
+        actions={<ExportActions onExport={() => csvDownload('nqs-service-report.csv', [
+          ['Ticket', 'Citizen', 'Gender', 'Center', 'Date', 'Status', 'Request Status'],
+          ...serviceRows.map((ticket) => [
+            ticket.ref,
+            citizenName(ticket),
+            citizenGender(ticket),
+            centerName(ticket),
+            ticket.date,
+            ticket.status,
+            ticket.requestStatus,
+          ]),
+        ])} />}
+      >
+        <Link to="/dashboard/admin/reports/applications" className="inline-flex w-max rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50">
+          Back to services
+        </Link>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total Requests" value={summary.total} icon={FaClipboardList} to={`/dashboard/admin/reports/services/${serviceSlug}`} />
+          <StatCard label="Waiting" value={summary.waiting} icon={FaClock} accent="amber" to="/dashboard/admin/reports/queue?status=waiting" />
+          <StatCard label="Completed" value={summary.completed} icon={FaChartLine} accent="green" to="/dashboard/admin/reports/queue?status=completed" />
+          <StatCard label="Cancelled / No Show" value={summary.cancelled + summary.noShow} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/queue?status=cancelled" />
+          <StatCard label="Male" value={summary.male} icon={FaUsers} accent="blue" to="/dashboard/admin/reports/citizens/male" />
+          <StatCard label="Female" value={summary.female} icon={FaUsers} accent="green" to="/dashboard/admin/reports/citizens/female" />
+        </div>
+        <RequestsTable rows={serviceRows} title={`${requestTypeLabels[selectedRequestType] || 'Service'} Records`} />
+        <ServiceCenterTable rows={reportData.centerPerformanceRows.map((center) => {
+          const centerServiceTickets = center.tickets.filter((ticket) => (selectedRequestType === 'new_national_id' ? ticket.requestType === 'new_national_id' || !ticket.requestType : ticket.requestType === selectedRequestType));
+          const centerSummary = buildSummaryRows(centerServiceTickets);
+          return { ...center, ...centerSummary, label: center.label, id: center.id, district: center.district };
+        })} clickable />
+      </PageShell>
+    );
+  }
+
   if (routeKey === 'applications') {
     const newRegistration = tickets.filter((ticket) => ticket.requestType === 'new_national_id').length;
     const lostReplacement = tickets.filter((ticket) => ticket.requestType === 'lost_replacement').length;
@@ -777,6 +1176,7 @@ const Reports = () => {
         description="Review all National ID applications with filters by service, center, status, and date range."
         actions={<ExportActions onExport={exportTickets} />}
       >
+        <Filters filters={filters} setFilters={setFilters} options={reportData.options} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Total Applications"
@@ -790,24 +1190,21 @@ const Reports = () => {
             value={newRegistration}
             icon={FaClipboardList}
             accent="green"
-            onClick={() => applyApplicationFilter({ requestType: 'new_national_id' })}
-            active={isApplicationFilterActive({ requestType: 'new_national_id' })}
+            to="/dashboard/admin/reports/services/new-registration"
           />
           <StatCard
             label="Lost ID Replacement"
             value={lostReplacement}
             icon={FaClipboardList}
             accent="amber"
-            onClick={() => applyApplicationFilter({ requestType: 'lost_replacement' })}
-            active={isApplicationFilterActive({ requestType: 'lost_replacement' })}
+            to="/dashboard/admin/reports/services/lost-id"
           />
           <StatCard
             label="Update Information"
             value={updateInformation}
             icon={FaClipboardList}
             accent="navy"
-            onClick={() => applyApplicationFilter({ requestType: 'update_information' })}
-            active={isApplicationFilterActive({ requestType: 'update_information' })}
+            to="/dashboard/admin/reports/services/update-information"
           />
           <StatCard
             label="Pending"
@@ -859,7 +1256,6 @@ const Reports = () => {
           />
         </div>
         <div id="applications-requests-table" className="space-y-4">
-          <Filters filters={filters} setFilters={setFilters} options={reportData.options} />
           <RequestsTable rows={reportData.filteredTickets} />
         </div>
       </PageShell>
@@ -867,9 +1263,15 @@ const Reports = () => {
   }
 
   if (routeKey === 'operators') {
-    const onlineOperators = operators.filter((operator) => operator.status === 'active').length;
-    const inactiveOperators = operators.filter((operator) => operator.status === 'inactive').length;
-    const leaderboard = [...reportData.operatorActivityRows].sort((a, b) => b.completed - a.completed).slice(0, 6);
+    const operatorRows = reportData.operatorActivityRows.filter((operator) => String(operator.role || '').toLowerCase() === 'operator');
+    const statusKey = (status = '') => String(status || '').trim().toLowerCase().replace(/\s+/g, '_');
+    const activeOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'active').length;
+    const inactiveOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'inactive').length;
+    const pendingOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'pending_approval').length;
+    const filteredOperatorRows = operatorStatusFilter
+      ? operatorRows.filter((operator) => statusKey(operator.status) === operatorStatusFilter)
+      : operatorRows;
+    const operatorFilterTitle = operatorStatusFilter ? `${statusLabel(operatorStatusFilter)} Operators` : 'All Operators';
 
     return (
       <PageShell
@@ -877,43 +1279,89 @@ const Reports = () => {
         description="Review operator status, completed tickets, cancellations, and login or activity records."
         actions={<ExportActions onExport={exportOperators} />}
       >
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total Operators" value={operators.length} icon={FaUserCog} />
-          <StatCard label="Online Operators" value={onlineOperators} icon={FaUserCog} accent="green" />
-          <StatCard label="Offline Operators" value={Math.max(operators.length - onlineOperators, 0)} icon={FaUserCog} accent="amber" />
-          <StatCard label="Inactive Operators" value={inactiveOperators} icon={FaUserCog} accent="red" />
-          <StatCard label="Avg Service Time" value={`${reportData.avgProcessing} min`} icon={FaChartLine} accent="navy" />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Total Operators" value={operatorRows.length} icon={FaUserCog} onClick={() => showOperatorRows('')} active={!operatorStatusFilter} />
+          <StatCard label="Active Operators" value={activeOperators} icon={FaUserCog} accent="green" onClick={() => showOperatorRows('active')} active={operatorStatusFilter === 'active'} />
+          <StatCard label="Pending Operators" value={pendingOperators} icon={FaUserCog} accent="amber" onClick={() => showOperatorRows('pending_approval')} active={operatorStatusFilter === 'pending_approval'} />
+          <StatCard label="Inactive Operators" value={inactiveOperators} icon={FaUserCog} accent="red" onClick={() => showOperatorRows('inactive')} active={operatorStatusFilter === 'inactive'} />
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ChartCard title="Completed Tickets by Operator">
-            <Bar data={barData(reportData.operatorActivityRows.map((row) => ({ label: row.name, count: row.completed })), 'Completed')} options={chartOptions} />
-          </ChartCard>
-          <ChartCard title="Cancelled Tickets by Operator">
-            <Bar data={barData(reportData.operatorActivityRows.map((row) => ({ label: row.name, count: row.cancelled })), 'Cancelled')} options={chartOptions} />
-          </ChartCard>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <h2 className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">{operatorFilterTitle}</h2>
+          {operatorStatusFilter && (
+            <button
+              type="button"
+              onClick={() => showOperatorRows('')}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"
+            >
+              ← Back to all operators
+            </button>
+          )}
         </div>
-        <motion.div variants={item} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-black text-[#0B3A75]">Operator Leaderboard</h2>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {leaderboard.map((operator, index) => (
-              <div key={operator._id || operator.id} className="rounded-lg border border-slate-200 p-3">
-                <p className="text-xs font-bold text-blue-700">#{index + 1}</p>
-                <p className="font-black text-slate-950">{operator.name}</p>
-                <p className="text-xs text-slate-500">{operator.center?.name || 'No assigned center'}</p>
-                <p className="mt-2 text-sm font-bold text-emerald-700">{operator.completed} completed tickets</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-        <AuditTable logs={audits.filter((log) => ['operator', 'super_operator'].includes(log.role)).slice(0, 50)} />
+        <OperatorsTable rows={filteredOperatorRows} />
+      </PageShell>
+    );
+  }
+
+  if (routeKey === 'service-centers') {
+    return (
+      <PageShell
+        title="Service Centers Report"
+        description="All 18 Banaadir district centers. Open any center to view only that center's full work report."
+        actions={<ExportActions onExport={exportTickets} />}
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard label="Service Centers" value={reportData.centerPerformanceRows.length} icon={FaBuilding} to="/dashboard/admin/reports/service-centers" />
+          <StatCard label="Active Appts" value={reportData.activeAppointments} icon={FaClipboardList} accent="amber" to="/dashboard/admin/reports/queue?status=active" />
+          <StatCard label="Completed" value={reportData.completed} icon={FaChartLine} accent="green" to="/dashboard/admin/reports/queue?status=completed" />
+          <StatCard label="Waiting" value={reportData.waiting} icon={FaClock} accent="amber" to="/dashboard/admin/reports/queue?status=waiting" />
+          <StatCard label="Cancelled / No Show" value={reportData.cancelled + reportData.noShow} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/queue?status=cancelled" />
+        </div>
+        <CenterDirectory rows={reportData.centerPerformanceRows} />
+        <ServiceCenterTable rows={reportData.centerPerformanceRows} clickable />
+      </PageShell>
+    );
+  }
+
+  if (routeKey === 'queue') {
+    const queueStatusFilter = new URLSearchParams(location.search).get('status');
+    const queueRows = tickets.filter((ticket) => {
+      if (queueStatusFilter === 'active') return !['Completed', 'Cancelled', 'Rejected', 'Expired', 'No Show'].includes(ticket.status) && !['Completed', 'Rejected', 'Cancelled'].includes(ticket.requestStatus);
+      if (queueStatusFilter === 'waiting') return ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress'].includes(ticket.status) || ['Pending', 'Approved', 'Resubmission Required'].includes(ticket.requestStatus);
+      if (queueStatusFilter === 'completed') return ticket.status === 'Completed' || ticket.requestStatus === 'Completed';
+      if (queueStatusFilter === 'cancelled') return ticket.status === 'Cancelled' || ['No Show', 'NoShow', 'no_show'].includes(ticket.status);
+      if (queueStatusFilter === 'no-show') return ['No Show', 'NoShow', 'no_show'].includes(ticket.status);
+      return ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress', 'Completed', 'Cancelled', 'No Show'].includes(ticket.status);
+    });
+    const queueTitle = {
+      active: 'Active Appointment Records',
+      waiting: 'Waiting Queue Records',
+      completed: 'Completed Queue Records',
+      cancelled: 'Cancelled / No Show Queue Records',
+      'no-show': 'No Show Queue Records',
+    }[queueStatusFilter] || 'Queue Records';
+    return (
+      <PageShell
+        title="Queue Analytics Report"
+        description="Queue status, active appointments, completed services, waiting work, cancellations, and no-shows."
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard label="Active Appts" value={reportData.activeAppointments} icon={FaClipboardList} accent="amber" to="/dashboard/admin/reports/queue?status=active" active={queueStatusFilter === 'active'} />
+          <StatCard label="Completed" value={reportData.completed} icon={FaChartLine} accent="green" to="/dashboard/admin/reports/queue?status=completed" active={queueStatusFilter === 'completed'} />
+          <StatCard label="Waiting" value={reportData.waiting} icon={FaClock} accent="amber" to="/dashboard/admin/reports/queue?status=waiting" active={queueStatusFilter === 'waiting'} />
+          <StatCard label="Cancelled" value={reportData.cancelled} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/queue?status=cancelled" active={queueStatusFilter === 'cancelled'} />
+          <StatCard label="No Show" value={reportData.noShow} icon={FaShieldAlt} accent="navy" to="/dashboard/admin/reports/queue?status=no-show" active={queueStatusFilter === 'no-show'} />
+        </div>
+        <RequestsTable rows={queueRows} title={queueTitle} />
       </PageShell>
     );
   }
 
   if (routeKey === 'citizens') {
     const citizenReportsBase = '/dashboard/admin/reports/citizens';
-    const maleCitizens = tickets.filter((ticket) => citizenGenderKey(ticket) === 'male').length;
-    const femaleCitizens = tickets.filter((ticket) => citizenGenderKey(ticket) === 'female').length;
+    const maleRows = tickets.filter((ticket) => citizenGenderKey(ticket) === 'male');
+    const femaleRows = tickets.filter((ticket) => citizenGenderKey(ticket) === 'female');
+    const maleCitizens = uniqueCitizenCount(maleRows);
+    const femaleCitizens = uniqueCitizenCount(femaleRows);
     const demographicRows = citizenReportMode === 'male'
       ? tickets.filter((ticket) => citizenGenderKey(ticket) === 'male')
       : citizenReportMode === 'female'
@@ -934,7 +1382,7 @@ const Reports = () => {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Total Citizens"
-            value={stats?.totalCitizens || 0}
+            value={stats?.totalCitizens || uniqueCitizenCount(tickets)}
             icon={FaUsers}
             to={`${citizenReportsBase}/all`}
             active={citizenReportMode === 'all'}
@@ -964,23 +1412,6 @@ const Reports = () => {
             active={citizenReportMode === 'districts'}
           />
         </div>
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ChartCard title="Gender Distribution">
-            <Doughnut data={doughnutData(reportData.genderRows)} options={doughnutOptions} />
-          </ChartCard>
-          <ChartCard title="Age Groups">
-            <Bar data={barData(reportData.ageRows, 'Citizens')} options={chartOptions} />
-          </ChartCard>
-          <ChartCard title="Citizens by District">
-            <Bar data={barData(reportData.districtRows, 'Requests')} options={chartOptions} />
-          </ChartCard>
-          <ChartCard title="Citizens by Selected Center">
-            <Bar data={barData(reportData.centerRows, 'Requests')} options={chartOptions} />
-          </ChartCard>
-          <ChartCard title="Service Usage by Citizens">
-            <Doughnut data={doughnutData(reportData.serviceRows)} options={doughnutOptions} />
-          </ChartCard>
-        </div>
         {isDetailPage && (
           <div className="space-y-3">
             <Link
@@ -994,6 +1425,12 @@ const Reports = () => {
             ) : (
               <RequestsTable rows={demographicRows} title={demographicTitle} />
             )}
+          </div>
+        )}
+        {!isDetailPage && (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <DistrictBreakdownTable rows={reportData.districtRows} />
+            <RequestsTable rows={tickets} title="All Citizen Records" />
           </div>
         )}
       </PageShell>
@@ -1016,67 +1453,130 @@ const Reports = () => {
           <StatCard label="Operator Actions" value={reportData.security.operatorActions} icon={FaShieldAlt} accent="blue" />
           <StatCard label="Critical Actions" value={reportData.security.criticalActions} icon={FaShieldAlt} accent="red" />
         </div>
-        <ChartCard title="Audit Actions Breakdown">
-          <Bar data={barData(reportData.actionRows.slice(0, 10), 'Actions')} options={chartOptions} />
-        </ChartCard>
-        <AuditTable logs={audits} />
       </PageShell>
     );
   }
 
   return (
-    <PageShell
-      title="Reports Home"
-      description="Professional admin report overview for National ID applications, operators, citizens, and security."
-      actions={<ExportActions onExport={exportTickets} />}
+    <motion.div
+      className="min-h-screen bg-[#eaf1f8] p-3 text-slate-950 sm:p-4"
+      variants={container}
+      initial="hidden"
+      animate="show"
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Citizens" value={stats?.totalCitizens || 0} icon={FaUsers} to="/dashboard/admin/reports/citizens" />
-        <StatCard label="Total Appointments" value={stats?.totalAppointments || tickets.length} icon={FaClipboardList} to="/dashboard/admin/reports/applications" />
-        <StatCard label="Today's Bookings" value={stats?.dailyBookings || tickets.filter((ticket) => ticket.date === todayKey).length} icon={FaClipboardList} accent="green" to="/admin-appointments?date=today" />
-        <StatCard label="Pending Requests" value={reportData.pending} icon={FaClipboardList} accent="amber" to="/dashboard/admin/reports/applications" />
-        <StatCard label="Completed Requests" value={reportData.completed} icon={FaChartLine} accent="green" to="/dashboard/admin/reports/applications" />
-        <StatCard label="Cancelled Requests" value={reportData.cancelled} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/applications" />
-        <StatCard label="Active Operators" value={operators.filter((operator) => operator.status === 'active').length} icon={FaUserCog} accent="navy" to="/dashboard/admin/reports/operators" />
-        <StatCard label="Active Centers" value={stats?.serviceCenters || 0} icon={FaChartLine} accent="blue" to="/center-management" />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
-        <div className="xl:col-span-3">
-          <ChartCard title="Weekly Appointment Chart">
-            <Line data={weeklyLineData} options={chartOptions} />
-          </ChartCard>
-        </div>
-        <div className="xl:col-span-2">
-          <ChartCard title="Service Breakdown Chart">
-            <Doughnut data={doughnutData(reportData.serviceRows)} options={doughnutOptions} />
-          </ChartCard>
-        </div>
-      </div>
-
-      <motion.div variants={item} className="grid grid-cols-1 gap-3 lg:grid-cols-5">
-        {reportCards.map((card) => (
-          <Link key={card.path} to={card.path} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-            <card.icon className="mb-3 text-2xl text-blue-700" />
-            <h2 className="text-sm font-black text-[#0B3A75]">{card.title}</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-600">{card.description}</p>
-          </Link>
-        ))}
-      </motion.div>
-
-      <motion.div variants={item} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-black text-[#0B3A75]">Recent Activity</h2>
-        <div className="space-y-2">
-          {(stats?.recentActivities || []).map((activity) => (
-            <div key={activity.id || activity.ref} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-              <p className="text-sm font-semibold text-slate-900">{activity.action}</p>
-              <p className="text-xs text-slate-500">{formatDate(activity.time)} - {activity.status}</p>
+      <div className="mx-auto max-w-[1500px] overflow-hidden rounded-2xl border border-slate-300 bg-[#f7fafc] shadow-2xl shadow-slate-300/40">
+        <div className="bg-[#3f94cf] text-white">
+          <div className="flex items-center justify-between gap-4 px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-xl font-black">NQS</div>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-black uppercase tracking-wide sm:text-lg">
+                  Somali National ID & Queue Management System | National Citizen & Operational Analytics
+                </h1>
+              </div>
             </div>
-          ))}
-          {!(stats?.recentActivities || []).length && <p className="text-sm text-slate-500">No recent activity recorded.</p>}
+            <div className="hidden items-center gap-2 text-sm font-bold md:flex">
+              <span className="rounded-full bg-white/20 px-3 py-1">Asma (Admin)</span>
+              <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            </div>
+          </div>
+          <div className="flex overflow-x-auto border-t border-white/20 bg-[#2f82bd] px-3">
+            {reportCards.map((card) => (
+              <Link
+                key={card.path}
+                to={card.path}
+                className={`inline-flex min-w-max items-center gap-2 border-b-4 px-4 py-3 text-sm font-bold transition ${
+                  card.path === '/dashboard/admin/reports'
+                    ? 'border-white bg-white/10 text-white'
+                    : 'border-transparent text-blue-50 hover:bg-white/10'
+                }`}
+              >
+                <card.icon />
+                {card.title}
+              </Link>
+            ))}
+            <button
+              type="button"
+              onClick={exportTickets}
+              className="inline-flex min-w-max items-center gap-2 border-b-4 border-transparent px-4 py-3 text-sm font-bold text-blue-50 hover:bg-white/10"
+            >
+              <FaDownload /> Export Reports
+            </button>
+          </div>
         </div>
-      </motion.div>
-    </PageShell>
+
+        <div className="space-y-4 p-4">
+          <motion.div variants={item} className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm md:grid-cols-3 xl:grid-cols-7">
+            <input
+              type="text"
+              value={`${filters.startDate || '01/01/2026'} - ${filters.endDate || todayKey}`}
+              readOnly
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800"
+            />
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) navigate(`/dashboard/admin/reports/service-centers/${event.target.value}`);
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+            >
+              <option value="">Center: All Centers</option>
+              {reportData.centerPerformanceRows.map((center) => (
+                <option key={center.id} value={center.id}>{center.label}</option>
+              ))}
+            </select>
+            <select value={filters.district} onChange={(event) => setFilters((current) => ({ ...current, district: event.target.value }))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold">
+              <option value="">District: All</option>
+              {reportData.options.districts.map((district) => <option key={district} value={district}>{district}</option>)}
+            </select>
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) navigate(`/dashboard/admin/reports/services/${requestTypeSlugs[event.target.value]}`);
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+            >
+              <option value="">Service: All</option>
+              {Object.entries(requestTypeLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <select
+              value=""
+              onChange={(event) => {
+                if (event.target.value) navigate(`/dashboard/admin/reports/citizens/${event.target.value}`);
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+            >
+              <option value="">Gender: All</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold">
+              <option value="">Status: All</option>
+              {reportData.options.statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+            <button type="button" onClick={exportTickets} className="rounded-lg bg-[#3f94cf] px-3 py-2 text-xs font-black text-white hover:bg-[#2f82bd]">
+              Export (PDF/Excel)
+            </button>
+          </motion.div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {adminOverviewCards.map((card) => (
+              <StatCard
+                key={card.label}
+                label={card.label}
+                value={card.value}
+                icon={card.icon}
+                accent={card.accent}
+                to={card.to}
+              />
+            ))}
+          </div>
+
+        </div>
+      </div>
+    </motion.div>
   );
 };
 

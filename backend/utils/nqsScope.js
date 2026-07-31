@@ -32,6 +32,27 @@ export const NATIONAL_ID_CORE_SERVICES = [
 
 export const NATIONAL_ID_SERVICE_NAMES = NATIONAL_ID_CORE_SERVICES.map((service) => service.name);
 
+export const BANAADIR_DISTRICTS = [
+  'Abdulaziz',
+  'Boondheere',
+  'Dayniile',
+  'Dharkenley',
+  'Garasbaaley',
+  'Heliwaa',
+  'Hodan',
+  'Howlwadaag',
+  'Kaaraan',
+  'Kaxda',
+  'Shangaani',
+  'Shibis',
+  'Waaberi',
+  'Wadajir',
+  'Wardhiigley',
+  'Xamar Jajab',
+  'Xamar Weyne',
+  'Yaqshiid'
+];
+
 export const BANAADIR_CENTER_NAMES = [
   'Banaadir National ID Center',
   'Hodan National ID Center',
@@ -61,9 +82,49 @@ export const BANAADIR_CENTER_NAMES = [
   'Yaqshid National ID Center'
 ];
 
+const districtKey = (value = '') => String(value)
+  .toLowerCase()
+  .replace(/\bdistrict\b/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+const DISTRICT_ALIASES = {
+  hawlwadaag: 'Howlwadaag',
+  howlwadaag: 'Howlwadaag',
+  hamarweyne: 'Xamar Weyne',
+  xamarweyne: 'Xamar Weyne',
+  hamarjajab: 'Xamar Jajab',
+  xamarjajab: 'Xamar Jajab',
+  waberi: 'Waaberi',
+  waaberi: 'Waaberi',
+  karan: 'Kaaraan',
+  karaan: 'Kaaraan',
+  yaqshid: 'Yaqshiid',
+  yaqshiid: 'Yaqshiid'
+};
+
+export const normalizeBanaadirDistrict = (value = '') => {
+  const key = districtKey(value);
+  return BANAADIR_DISTRICTS.find((district) => districtKey(district) === key) || DISTRICT_ALIASES[key] || '';
+};
+
+export const districtFromCenterName = (name = '') => {
+  const base = String(name).replace(/\s+National ID Center$/i, '').trim();
+  if (/^Banaadir$/i.test(base)) return 'Hodan';
+  return normalizeBanaadirDistrict(base);
+};
+
+export const getCenterDistrict = (center) => (
+  normalizeBanaadirDistrict(center?.district) || String(center?.district || '').trim() || districtFromCenterName(center?.name) || ''
+);
+
 export const isNationalIdService = (service) => {
   if (!service) return false;
-  return NATIONAL_ID_SERVICE_NAMES.includes(service.name) && service.category === NATIONAL_ID_CATEGORY;
+  return service.category === NATIONAL_ID_CATEGORY;
+};
+
+export const isNewNationalIdRegistrationService = (service) => {
+  if (!service) return false;
+  return service.name === NATIONAL_ID_SERVICE_NAME && service.category === NATIONAL_ID_CATEGORY;
 };
 
 export const isLostNationalIdReplacementService = (service) => {
@@ -78,5 +139,5 @@ export const isUpdateNationalIdInformationService = (service) => {
 
 export const isBanaadirNationalIdCenter = (center) => {
   if (!center) return false;
-  return center.city === 'Banaadir' && BANAADIR_CENTER_NAMES.includes(center.name);
+  return center.city === 'Banaadir';
 };

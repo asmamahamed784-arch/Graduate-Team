@@ -31,6 +31,30 @@ const getCitizenNameFromTicket = (ticket) => (
 
 const CURRENT_STATUSES = new Set(['Pending', 'Scheduled', 'Waiting', 'On Hold', 'Now Serving', 'Resubmitted']);
 const HISTORY_STATUSES = new Set(['Completed', 'Cancelled', 'Expired']);
+const CANCEL_WINDOW_MS = 60 * 60 * 1000;
+
+const getCancelWindowRemainingMs = (ticket) => {
+  const createdAt = new Date(ticket?.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return 0;
+  return CANCEL_WINDOW_MS - (Date.now() - createdAt.getTime());
+};
+
+const canCitizenCancelTicket = (ticket) => {
+  if (!['Pending', 'Waiting', 'Scheduled'].includes(ticket.currentStatus)) return false;
+  return getCancelWindowRemainingMs(ticket) > 0;
+};
+
+const formatCancelWindowRemaining = (ticket) => {
+  const remainingMs = getCancelWindowRemainingMs(ticket);
+  if (remainingMs <= 0) return '';
+  const totalMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  return `${totalMinutes} min`;
+};
 
 const normalizeStatus = (status) => {
   const value = String(status || 'Pending').trim().toLowerCase();
@@ -71,6 +95,7 @@ const normalizeTicket = (ticket) => ({
   centerName: asName(ticket.center, ticket.centerName || 'Not assigned'),
   appointmentDate: ticket.date || ticket.appointmentDate,
   appointmentTime: ticket.timeSlot || ticket.time || ticket.appointmentTime,
+  createdAt: ticket.createdAt,
   currentStatus: normalizeStatus(ticket.status || ticket.requestStatus),
   queueNumber: queueNumberOf(ticket),
 });
@@ -144,6 +169,7 @@ const UserAppointments = () => {
     () => sortAppointments(bookings.filter((ticket) => HISTORY_STATUSES.has(ticket.currentStatus))),
     [bookings]
   );
+  const hasAnyAppointmentRecord = bookings.length > 0;
 
   const fetchAppointments = useCallback(async () => {
     try {
@@ -229,7 +255,14 @@ const UserAppointments = () => {
 
   const handleCancelAppointment = async (ticket) => {
     if (!ticket?.id) return;
-    const confirmed = window.confirm(`Cancel appointment ${ticket.ref}?`);
+    if (!canCitizenCancelTicket(ticket)) {
+      toast.error('You can cancel an appointment only within 1 hour after booking.');
+      return;
+    }
+    const remaining = formatCancelWindowRemaining(ticket);
+    const confirmed = window.confirm(
+      `Cancel appointment ${ticket.ref}?\n\nCancellation is only allowed within 1 hour of booking${remaining ? ` (${remaining} left)` : ''}.`
+    );
     if (!confirmed) return;
 
     try {
@@ -278,7 +311,7 @@ const UserAppointments = () => {
             {currentAppointments.length ? (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {currentAppointments.map((ticket) => {
-                  const canCancel = ['Pending', 'Waiting'].includes(ticket.currentStatus);
+                  const canCancel = canCitizenCancelTicket(ticket);
                   const qrCodeUrl = qrCodes[ticket.ref];
                   return (
                     <article key={ticket.id || ticket.ref} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -335,10 +368,20 @@ const UserAppointments = () => {
                           Download Ticket
                         </ActionButton>
                         {canCancel && (
-                          <ActionButton onClick={() => handleCancelAppointment(ticket)} className="nqs-danger-outline border border-red-200 bg-white text-red-600">
-                            <FaTimesCircle />
-                            Cancel
-                          </ActionButton>
+                          <div className="flex flex-col gap-1">
+                            <ActionButton onClick={() => handleCancelAppointment(ticket)} className="nqs-danger-outline border border-red-200 bg-white text-red-600">
+                              <FaTimesCircle />
+                              Cancel
+                            </ActionButton>
+                            <p className="text-[11px] font-semibold text-slate-500">
+                              Cancel available for {formatCancelWindowRemaining(ticket)} (within 1 hour of booking).
+                            </p>
+                          </div>
+                        )}
+                        {!canCancel && ['Pending', 'Waiting', 'Scheduled'].includes(ticket.currentStatus) && (
+                          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                            Cancel window closed. Appointments can only be cancelled within 1 hour after booking.
+                          </p>
                         )}
                       </div>
                     </article>
@@ -349,10 +392,16 @@ const UserAppointments = () => {
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                 <FaIdCard className="mx-auto text-4xl text-blue-200" />
                 <h3 className="mt-4 text-xl font-black text-[#06194A]">No current appointment</h3>
-                <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">Book a National ID service to receive your queue ticket.</p>
-                <Link to="/dashboard/user/new-id-registration" className="mt-5 inline-flex rounded-lg bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
-                  Book Appointment
-                </Link>
+                <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+                  {hasAnyAppointmentRecord
+                    ? 'You already have an appointment record. Please use your existing request or check your appointment history below.'
+                    : 'Book a National ID service to receive your queue ticket.'}
+                </p>
+                {!hasAnyAppointmentRecord && (
+                  <Link to="/dashboard/user/new-id-registration" className="mt-5 inline-flex rounded-lg bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
+                    Book Appointment
+                  </Link>
+                )}
               </div>
             )}
           </section>

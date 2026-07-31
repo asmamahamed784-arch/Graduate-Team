@@ -1,77 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   FiCheckCircle,
   FiArrowLeft,
+  FiBriefcase,
+  FiChevronRight,
+  FiCreditCard,
+  FiEdit3,
   FiEye,
   FiSearch,
   FiSlash,
+  FiUserPlus,
   FiXCircle
 } from 'react-icons/fi';
 import api from '../api/axiosInstance';
+import { canCancelAppointment, canCompleteAppointment } from '../utils/appointmentActions';
+import { INCORRECT_FIELD_OPTIONS } from '../utils/cancellationFields';
+import { getChangedUpdateFields } from '../utils/updateRequestFields';
 
 const statusOptions = ['', 'Waiting', 'Being Served', 'On Hold', 'Completed', 'Cancelled'];
 const requestStatusOptions = ['', 'Pending', 'Approved', 'Rejected', 'Completed', 'Resubmission Required'];
 const requestTabs = [
-  { key: 'new_national_id', label: 'New Registration' },
-  { key: 'update_information', label: 'Update Information' },
-  { key: 'lost_replacement', label: 'Lost ID Replacement' }
+  { key: 'new_national_id', label: 'New Registration', icon: FiUserPlus },
+  { key: 'update_information', label: 'Update Information', icon: FiEdit3 },
+  { key: 'lost_replacement', label: 'Lost ID Replacement', icon: FiCreditCard }
 ];
-const BANAADIR_DISTRICTS = [
-  'Hodan',
-  'Howlwadaag',
-  'Wadajir',
-  'Dharkenley',
-  'Dayniile',
-  'Heliwaa',
-  'Yaqshiid',
-  'Kaaraan',
-  'Shibis',
-  'Boondheere',
-  'Xamar Weyne',
-  'Xamar Jajab',
-  'Waaberi',
-  'Wardhiigley',
-  'Abdulaziz',
-  'Shangaani',
-  'Kaxda',
-  'Garasbaaley'
-];
-const cancellationReasons = [
-  'Name is incorrect',
-  'Mother’s name is incorrect',
-  'Birth date is incorrect',
-  'Phone number is incorrect',
-  'Missing document',
-  'Other reason'
-];
-
-const cancellationReasonOptions = [
-  ...cancellationReasons.filter(() => false),
-  'Incorrect personal information',
-  'Missing required documents',
-  'Invalid supporting document',
-  'Duplicate registration',
-  'Citizen already has a National ID',
-  'Incorrect appointment service',
-  'Wrong district or service center',
-  'Appointment date is unavailable',
-  'Information does not match existing records',
-  'Identity verification failed',
-  'Citizen did not attend the appointment',
-  'Application requirements are incomplete',
-  'Other'
-];
-
 const getCancellationReasonList = (item = {}) => {
   const reasons = Array.isArray(item.cancellationReasons) ? item.cancellationReasons : [];
-  const additional = String(item.additionalCancellationReason || '').trim();
-  const filtered = reasons
-    .filter((reason) => reason && reason !== 'Other')
-    .concat(reasons.includes('Other') && additional ? [additional] : []);
-
-  if (filtered.length) return filtered;
+  if (reasons.length) return reasons.filter(Boolean);
   return item.cancellationReason ? [item.cancellationReason] : [];
 };
 
@@ -131,12 +89,19 @@ const getAppointmentCenterId = (appointment) => {
   return appointment.center._id || appointment.center.id || '';
 };
 
+const normalizeCenterKey = (value = '') => String(value).trim().toLowerCase().replace(/\s+/g, ' ');
+
+const getCenterRecordId = (center = {}) => String(center._id || center.id || '');
+
 function AdminAppointments() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const isCenterDetailPage = location.pathname.startsWith('/admin-appointments/center');
   const requestedCenterName = searchParams.get('centerName') || '';
+  const requestedTicketRef = String(searchParams.get('ticket') || '').trim().toUpperCase();
+  const requestedTicketId = String(searchParams.get('ticketId') || '').trim();
+  const autoOpenedTicketRef = useRef('');
   const [appointments, setAppointments] = useState([]);
   const [centers, setCenters] = useState([]);
   const [activeTab, setActiveTab] = useState('new_national_id');
@@ -201,36 +166,109 @@ function AdminAppointments() {
     [centers, filters.district]
   );
 
+  const districtOptions = useMemo(
+    () => [...new Set(centers.map((center) => center.district).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [centers]
+  );
+
+  // Cards come only from centers created in Center Management — never from orphan appointment names.
   const groupedAppointments = useMemo(() => {
-    const groups = appointments.reduce((map, appointment) => {
+    const byCenterId = new Map();
+    const byNameDistrict = new Map();
+
+    appointments.forEach((appointment) => {
+      const centerId = String(getAppointmentCenterId(appointment) || '');
       const district = getAppointmentDistrict(appointment);
       const centerName = getAppointmentCenterName(appointment);
-      const key = `${district}__${centerName}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          key,
-          district,
-          centerName,
-          centerId: getAppointmentCenterId(appointment),
-          appointments: []
-        });
-      }
-      map.get(key).appointments.push(appointment);
-      return map;
-    }, new Map());
+      const nameKey = `${normalizeCenterKey(district)}__${normalizeCenterKey(centerName)}`;
 
-    return [...groups.values()].sort((a, b) => (
-      a.district.localeCompare(b.district) || a.centerName.localeCompare(b.centerName)
-    ));
-  }, [appointments]);
+      if (centerId) {
+        if (!byCenterId.has(centerId)) byCenterId.set(centerId, []);
+        byCenterId.get(centerId).push(appointment);
+      }
+
+      if (!byNameDistrict.has(nameKey)) byNameDistrict.set(nameKey, []);
+      byNameDistrict.get(nameKey).push(appointment);
+    });
+
+    const visibleCenters = filters.district
+      ? centers.filter((center) => center.district === filters.district)
+      : centers;
+
+    return visibleCenters
+      .map((center) => {
+        const centerId = getCenterRecordId(center);
+        const nameKey = `${normalizeCenterKey(center.district)}__${normalizeCenterKey(center.name)}`;
+        const matched = byCenterId.get(centerId) || byNameDistrict.get(nameKey) || [];
+        return {
+          key: centerId || nameKey,
+          district: center.district || 'Not provided',
+          centerName: center.name || 'Unnamed center',
+          centerId,
+          appointments: matched
+        };
+      })
+      .filter((group) => group.appointments.length > 0)
+      .sort((a, b) => (
+        a.district.localeCompare(b.district) || a.centerName.localeCompare(b.centerName)
+      ));
+  }, [appointments, centers, filters.district]);
 
   const selectedGroup = useMemo(() => {
     if (!isCenterDetailPage) return null;
-    if (requestedCenterName) {
-      return groupedAppointments.find((group) => group.centerName === requestedCenterName) || groupedAppointments[0] || null;
+
+    const requestedCenter = searchParams.get('center') || filters.center || '';
+    if (requestedCenter) {
+      const byCenterId = groupedAppointments.find((group) => String(group.centerId || '') === String(requestedCenter));
+      if (byCenterId) return byCenterId;
     }
+
+    if (requestedCenterName) {
+      const byName = groupedAppointments.find((group) => group.centerName === requestedCenterName);
+      if (byName) return byName;
+    }
+
+    if (requestedTicketRef || requestedTicketId) {
+      const byTicket = groupedAppointments.find((group) => group.appointments.some((appointment) => (
+        String(appointment.ref || '').toUpperCase() === requestedTicketRef
+        || String(appointment._id || '') === requestedTicketId
+        || String(appointment.id || '') === requestedTicketId
+      )));
+      if (byTicket) return byTicket;
+    }
+
     return groupedAppointments[0] || null;
-  }, [groupedAppointments, isCenterDetailPage, requestedCenterName]);
+  }, [
+    filters.center,
+    groupedAppointments,
+    isCenterDetailPage,
+    requestedCenterName,
+    requestedTicketId,
+    requestedTicketRef,
+    searchParams
+  ]);
+
+  useEffect(() => {
+    if (!isCenterDetailPage || !selectedGroup?.appointments?.length) return;
+    if (!requestedTicketRef && !requestedTicketId) return;
+
+    const lookupKey = requestedTicketRef || requestedTicketId;
+    if (autoOpenedTicketRef.current === lookupKey) return;
+
+    const matched = selectedGroup.appointments.find((appointment) => (
+      String(appointment.ref || '').toUpperCase() === requestedTicketRef
+      || String(appointment._id || '') === requestedTicketId
+      || String(appointment.id || '') === requestedTicketId
+    ));
+
+    if (matched) {
+      autoOpenedTicketRef.current = lookupKey;
+      if (matched.requestType && requestTabs.some((tab) => tab.key === matched.requestType)) {
+        setActiveTab(matched.requestType);
+      }
+      setSelectedAppointment(matched);
+    }
+  }, [isCenterDetailPage, requestedTicketId, requestedTicketRef, selectedGroup]);
 
   useEffect(() => {
     const requestedType = searchParams.get('requestType');
@@ -288,6 +326,20 @@ function AdminAppointments() {
   };
 
   const updateAppointmentStatus = async (appointment, status, extra = {}) => {
+    if (status === 'Completed' && !canCompleteAppointment({
+      ...appointment,
+      displayStatus: getDisplayStatus(appointment)
+    })) {
+      toast.info('This appointment is already completed or closed.');
+      return;
+    }
+    if (status === 'Cancelled' && !canCancelAppointment({
+      ...appointment,
+      displayStatus: getDisplayStatus(appointment)
+    })) {
+      toast.info('This appointment is already closed and cannot be cancelled.');
+      return;
+    }
     try {
       setUpdatingId(appointment._id);
       const res = await api.put(`/api/bookings/admin/${appointment._id}/status`, { status, ...extra });
@@ -305,6 +357,13 @@ function AdminAppointments() {
   };
 
   const openCancelModal = (appointment) => {
+    if (!canCancelAppointment({
+      ...appointment,
+      displayStatus: getDisplayStatus(appointment)
+    })) {
+      toast.info('This appointment is already closed and cannot be cancelled.');
+      return;
+    }
     setCancelTarget(appointment);
     setSelectedCancelReasons([]);
     setCustomCancelReason('');
@@ -329,22 +388,41 @@ function AdminAppointments() {
     ));
   };
 
-  const selectedReasonLabels = () => {
-    const labels = selectedCancelReasons.filter((reason) => reason !== 'Other');
-    if (selectedCancelReasons.includes('Other') && customCancelReason.trim()) {
-      labels.push(customCancelReason.trim());
-    }
-    return labels;
-  };
+  const selectedReasonLabels = () =>
+    selectedCancelReasons.filter((reason) => INCORRECT_FIELD_OPTIONS.includes(reason));
 
   const confirmCancelAppointment = async () => {
     if (!cancelTarget) return;
-    if (!selectedCancelReasons.length) {
-      toast.error('Please select at least one cancellation reason.');
+    const isUpdateReq = cancelTarget.requestType === 'update_information';
+    const changedUpdateFields = getChangedUpdateFields(cancelTarget);
+
+    if (isUpdateReq) {
+      if (changedUpdateFields.length === 0) {
+        toast.error('No changes detected. Cancellation is not required.');
+        return;
+      }
+      if (!customCancelReason.trim()) {
+        toast.error('Please enter a cancellation reason.');
+        return;
+      }
+      if (!showCancelConfirmation) {
+        setShowCancelConfirmation(true);
+        return;
+      }
+      const reason = customCancelReason.trim();
+      await updateAppointmentStatus(cancelTarget, 'Cancelled', {
+        cancellationReasons: [reason],
+        additionalReason: '',
+        additionalNotes: '',
+        cancellationReason: reason
+      });
+      closeCancelModal();
       return;
     }
-    if (selectedCancelReasons.includes('Other') && !customCancelReason.trim()) {
-      toast.error('Please enter the additional cancellation reason.');
+
+    const validReasons = selectedReasonLabels();
+    if (!validReasons.length) {
+      toast.error('Please select at least one incorrect field.');
       return;
     }
     if (!showCancelConfirmation) {
@@ -352,17 +430,23 @@ function AdminAppointments() {
       return;
     }
 
-    const reasonsForDisplay = selectedReasonLabels();
     await updateAppointmentStatus(cancelTarget, 'Cancelled', {
-      cancellationReasons: selectedCancelReasons,
-      additionalReason: customCancelReason.trim(),
+      cancellationReasons: validReasons,
+      additionalReason: '',
       additionalNotes: cancelNotes.trim(),
-      cancellationReason: reasonsForDisplay.join(', ')
+      cancellationReason: validReasons.join(', ')
     });
     closeCancelModal();
   };
 
   const updateRequestStatus = async (appointment, requestStatus) => {
+    if (requestStatus === 'Completed' && !canCompleteAppointment({
+      ...appointment,
+      displayStatus: getDisplayStatus(appointment)
+    })) {
+      toast.info('This appointment is already completed or closed.');
+      return;
+    }
     try {
       setUpdatingId(appointment._id);
       const res = await api.put(`/api/bookings/admin/${appointment._id}/request-status`, { requestStatus });
@@ -414,35 +498,43 @@ function AdminAppointments() {
     const isManagedRequest = appointment.requestType !== 'new_national_id';
     const displayStatus = getDisplayStatus(appointment);
     const submissionDate = formatDate(appointment.createdAt || appointment.submissionDate || appointment.date);
+    const actionTicket = {
+      ...appointment,
+      status: displayStatus,
+      requestStatus: appointment.requestStatus || displayStatus,
+      displayStatus
+    };
+    const canComplete = canCompleteAppointment(actionTicket);
+    const canCancel = canCancelAppointment(actionTicket);
 
     return (
-      <tr key={appointment._id} className="nqs-admin-appointment-row hover:bg-slate-800/60">
-        <td className="px-4 py-3 font-mono font-bold text-[#4189DD]">{appointment.ref}</td>
-        <td className="px-4 py-3 font-semibold text-white">
+      <tr key={appointment._id} className="nqs-admin-appointment-row bg-white hover:bg-[#f8fbff]">
+        <td className="px-4 py-3 font-mono font-bold text-[#2563eb]">{appointment.ref}</td>
+        <td className="px-4 py-3 font-semibold text-[#06194a]">
           {citizen.name || appointment.citizenName || '--'}
         </td>
 
         {activeTab === 'new_national_id' ? (
           <>
-            <td className="px-4 py-3 text-slate-300">{citizen.phone || appointment.registrationDetails?.phone || '--'}</td>
-            <td className="px-4 py-3 text-slate-300">
+            <td className="px-4 py-3 text-[#243b63]">{citizen.phone || appointment.registrationDetails?.phone || '--'}</td>
+            <td className="px-4 py-3 text-[#243b63]">
               {formatDate(appointment.date)}
-              {appointment.timeSlot ? <span className="block text-xs text-slate-400">{appointment.timeSlot}</span> : null}
+              {appointment.timeSlot ? <span className="block text-xs text-[#62708a]">{appointment.timeSlot}</span> : null}
             </td>
-            <td className="px-4 py-3 font-mono font-semibold text-slate-200">{getQueueNumber(appointment.ref)}</td>
+            <td className="px-4 py-3 font-mono font-semibold text-[#06194a]">{getQueueNumber(appointment.ref)}</td>
           </>
         ) : activeTab === 'update_information' ? (
           <>
-            <td className="px-4 py-3 text-slate-300">{appointment.updateDetails?.nationalIdNumber || '--'}</td>
-            <td className="px-4 py-3 text-slate-300">{getUpdatedFields(appointment)}</td>
-            <td className="px-4 py-3 text-slate-300">{submissionDate}</td>
+            <td className="px-4 py-3 text-[#243b63]">{appointment.updateDetails?.nationalIdNumber || '--'}</td>
+            <td className="px-4 py-3 text-[#243b63]">{getUpdatedFields(appointment)}</td>
+            <td className="px-4 py-3 text-[#243b63]">{submissionDate}</td>
           </>
         ) : (
           <>
-            <td className="px-4 py-3 text-slate-300">{appointment.replacementDetails?.nationalIdNumber || '--'}</td>
-            <td className="px-4 py-3 text-slate-300">{appointment.replacementDetails?.policeReportNumber || '--'}</td>
-            <td className="px-4 py-3 text-slate-300">{appointment.replacementDetails?.policeReportDocument || '--'}</td>
-            <td className="px-4 py-3 text-slate-300">{submissionDate}</td>
+            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.nationalIdNumber || '--'}</td>
+            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.policeReportNumber || '--'}</td>
+            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.policeReportDocument || '--'}</td>
+            <td className="px-4 py-3 text-[#243b63]">{submissionDate}</td>
           </>
         )}
 
@@ -454,26 +546,30 @@ function AdminAppointments() {
             <button
               type="button"
               onClick={() => setSelectedAppointment(appointment)}
-              className="inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-[#4189DD] hover:bg-slate-800"
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
             >
               <FiEye /> View
             </button>
-            <button
-              type="button"
-              disabled={isBusy || (isManagedRequest ? appointment.requestStatus === 'Completed' : appointment.status === 'Completed')}
-              onClick={() => isManagedRequest ? updateRequestStatus(appointment, 'Completed') : updateAppointmentStatus(appointment, 'Completed')}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <FiCheckCircle /> Complete
-            </button>
-            <button
-              type="button"
-              disabled={isBusy || appointment.status === 'Cancelled'}
-              onClick={() => openCancelModal(appointment)}
-              className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <FiXCircle /> Cancel
-            </button>
+            {canComplete && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => isManagedRequest ? updateRequestStatus(appointment, 'Completed') : updateAppointmentStatus(appointment, 'Completed')}
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <FiCheckCircle /> Complete
+              </button>
+            )}
+            {canCancel && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => openCancelModal(appointment)}
+                className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <FiXCircle /> Cancel
+              </button>
+            )}
           </div>
         </td>
       </tr>
@@ -481,32 +577,32 @@ function AdminAppointments() {
   };
 
   return (
-    <div className="nqs-admin-appointments min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4 text-white sm:p-6 lg:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="nqs-admin-appointments-card rounded-2xl border border-slate-800 bg-slate-900/85 p-6 shadow-xl shadow-black/10 backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Appointments</h1>
-              <p className="mt-1 text-sm text-slate-300">
+    <div className="nqs-admin-appointments min-h-screen bg-[var(--nqs-bg,#fff)] p-0 text-[var(--nqs-text,#06194a)]">
+      <div className="mx-auto max-w-none">
+        <div className="nqs-admin-appointments-hero border-b border-[var(--nqs-border,#cbd8ea)] bg-[var(--nqs-card,#fff)] px-8 py-9">
+          <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-xs">
+              <h1 className="text-2xl font-black tracking-tight text-[var(--nqs-text,#06194a)] sm:text-3xl">Admin Appointments</h1>
+              <p className="mt-4 text-base leading-7 text-[var(--nqs-muted,#243b63)]">
                 Review and manage National ID bookings from the database.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <label className="relative block">
-                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#06194a]" />
                 <input
                   value={filters.search}
                   onChange={(event) => updateFilter('search', event.target.value)}
-                  placeholder="Search ticket or name"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                  placeholder="Search ticket #"
+                  className="nqs-admin-filter-control w-full rounded-md border border-[#bfd0e6] bg-white py-3 pl-11 pr-3 text-sm font-medium text-[#06194a] outline-none placeholder:text-[#62708a] focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
                 />
               </label>
 
               <select
                 value={filters.status}
                 onChange={(event) => updateFilter('status', event.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               >
                 {statusOptions.map((status) => (
                   <option key={status || 'all'} value={status}>
@@ -518,7 +614,7 @@ function AdminAppointments() {
               <select
                 value={filters.requestStatus}
                 onChange={(event) => updateFilter('requestStatus', event.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               >
                 {requestStatusOptions.map((status) => (
                   <option key={status || 'all-request-statuses'} value={status}>
@@ -530,10 +626,10 @@ function AdminAppointments() {
               <select
                 value={filters.district}
                 onChange={(event) => updateFilter('district', event.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               >
                 <option value="">All districts</option>
-                {BANAADIR_DISTRICTS.map((district) => (
+                {districtOptions.map((district) => (
                   <option key={district} value={district}>{district}</option>
                 ))}
               </select>
@@ -541,30 +637,34 @@ function AdminAppointments() {
               <select
                 value={filters.center}
                 onChange={(event) => updateFilter('center', event.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               >
                 <option value="">All centers</option>
-                {centerOptions.map((center) => (
-                  <option key={center._id} value={center._id}>
-                    {center.name}
-                  </option>
-                ))}
+                {centerOptions.map((center) => {
+                  const centerId = getCenterRecordId(center);
+                  return (
+                    <option key={centerId} value={centerId}>
+                      {center.name}
+                    </option>
+                  );
+                })}
               </select>
 
               <input
                 type="date"
                 value={filters.date}
                 onChange={(event) => updateFilter('date', event.target.value)}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               />
             </div>
           </div>
         </div>
 
-        <div className="nqs-admin-appointments-card rounded-2xl border border-slate-800 bg-slate-900/85 p-2 shadow-xl shadow-black/10 backdrop-blur">
-          <div className="nqs-admin-request-tabs mb-4 flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-2">
+        <div className="nqs-admin-appointments-body bg-white px-8 py-7">
+          <div className="nqs-admin-request-tabs mb-6 flex flex-wrap gap-3">
             {requestTabs.map((tab) => {
               const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.key}
@@ -575,8 +675,9 @@ function AdminAppointments() {
                       navigate(`/admin-appointments?requestType=${tab.key}`);
                     }
                   }}
-                  className={`nqs-admin-request-tab rounded-xl px-4 py-2 text-sm font-semibold transition-all ${isActive ? 'is-active bg-[#4189DD] text-white shadow-lg shadow-blue-500/20' : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                  className={`nqs-admin-request-tab inline-flex items-center gap-3 rounded-md border px-5 py-3 text-sm font-black transition-all ${isActive ? 'is-active border-[#2563eb] bg-[#2563eb] text-white shadow-sm' : 'border-[#bfd0e6] bg-white text-[#06194a] hover:border-[#2563eb] hover:text-[#2563eb]'}`}
                 >
+                  <Icon className="h-5 w-5" />
                   {tab.label}
                 </button>
               );
@@ -584,43 +685,57 @@ function AdminAppointments() {
           </div>
 
           {loading && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center text-slate-400">
+            <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
               Loading appointments...
             </div>
           )}
 
           {!loading && appointments.length === 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-10 text-center text-slate-400">
+            <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
               No appointments match the selected filters.
+            </div>
+          )}
+
+          {!loading && appointments.length > 0 && groupedAppointments.length === 0 && !isCenterDetailPage && (
+            <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
+              No appointments found for your created centers. Create centers in Manage Centers, or check that bookings use those centers.
             </div>
           )}
 
           {!loading && groupedAppointments.length > 0 && !isCenterDetailPage && (
             <div className="space-y-4">
               <div>
-                <p className="nqs-admin-muted mb-3 text-sm font-semibold text-slate-300">
+                <p className="nqs-admin-muted mb-6 text-sm font-semibold text-[#243b63]">
                   Select a district center to open its appointment page.
                 </p>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {groupedAppointments.map((group) => (
                       <button
                         key={group.key}
                         type="button"
                         onClick={() => openCenterAppointmentsPage(group)}
-                        className="nqs-admin-center-card rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-left shadow-lg transition-all hover:-translate-y-0.5 hover:border-[#4189DD]/60 hover:shadow-xl"
+                        className="nqs-admin-center-card rounded-md border border-[#d7e1ee] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#2563eb] hover:shadow-md"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="nqs-admin-center-district text-xs font-black uppercase tracking-[0.18em] text-[#7CB8FF]">
-                              {group.district} District
-                            </p>
-                            <h2 className="nqs-admin-center-name mt-2 text-base font-black text-white">{group.centerName}</h2>
-                            <p className="nqs-admin-center-helper mt-1 text-xs font-semibold text-slate-400">
-                              Click to view this center's records only
+                        <div className="grid grid-cols-[54px_1fr_auto] items-center gap-5">
+                          <span className="flex h-14 w-14 items-center justify-center rounded-md border border-[#e5ebf4] bg-[#f5f8ff] text-[#2563eb]">
+                            <FiBriefcase className="h-7 w-7" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="nqs-admin-center-district text-xs font-black uppercase tracking-[0.06em] text-[#2563eb]">
+                                {group.district} District
+                              </p>
+                              <span className="nqs-admin-center-count rounded-md border border-[#d7e1ee] bg-white px-2 py-0.5 text-xs font-black text-[#06194a]">
+                                {group.appointments.length}
+                              </span>
+                            </div>
+                            <h2 className="nqs-admin-center-name mt-3 truncate text-xl font-black text-[#06194a]">{group.centerName}</h2>
+                            <p className="nqs-admin-center-helper mt-2 text-sm font-medium leading-6 text-[#243b63]">
+                              Click to view this center&apos;s records only
                             </p>
                           </div>
-                          <span className="nqs-admin-center-count shrink-0 rounded-full bg-[#4189DD]/20 px-3 py-1 text-xs font-black text-[#7CB8FF]">
-                            {group.appointments.length}
+                          <span className="text-[#06194a]">
+                            <FiChevronRight className="h-6 w-6" />
                           </span>
                         </div>
                       </button>
@@ -631,44 +746,44 @@ function AdminAppointments() {
           )}
 
           {!loading && isCenterDetailPage && !selectedGroup && (
-            <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-4 py-10 text-center text-slate-400">
+            <div className="rounded-md border border-dashed border-[#bfd0e6] bg-white px-4 py-10 text-center text-[#62708a]">
               No appointments found for this center.
             </div>
           )}
 
           {!loading && isCenterDetailPage && selectedGroup && (
             <section
-              className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/85 shadow-lg shadow-black/10"
+              className="overflow-hidden rounded-md border border-[#d7e1ee] bg-white shadow-sm"
             >
-              <div className="flex flex-col gap-3 border-b border-slate-800 bg-blue-950/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="nqs-admin-center-detail-bar flex flex-col gap-3 border-b border-[var(--nqs-border,#d7e1ee)] bg-[var(--nqs-card-soft,#f8fbff)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <button
                     type="button"
                     onClick={backToCenterCards}
-                    className="mb-3 inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-black text-[#7CB8FF] hover:bg-slate-800"
+                    className="mb-3 inline-flex items-center gap-2 rounded-md border border-[var(--nqs-border,#bfd0e6)] bg-[var(--nqs-card,#fff)] px-3 py-1.5 text-xs font-black text-[#2563eb] hover:border-[#2563eb]"
                   >
                     <FiArrowLeft /> Back to centers
                   </button>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#7CB8FF]">
+                  <p className="nqs-admin-center-district text-xs font-black uppercase tracking-[0.08em] text-[#2563eb]">
                     {selectedGroup.district} District
                   </p>
-                  <h2 className="mt-1 text-base font-black text-white">{selectedGroup.centerName}</h2>
+                  <h2 className="mt-1 text-lg font-black text-[var(--nqs-text,#06194a)]">{selectedGroup.centerName}</h2>
                 </div>
-                <span className="w-fit rounded-full bg-[#4189DD]/20 px-3 py-1 text-xs font-black text-[#7CB8FF]">
+                <span className="nqs-admin-center-count w-fit rounded-md border border-[var(--nqs-border,#bfd0e6)] bg-[var(--nqs-card,#fff)] px-3 py-1 text-xs font-black text-[var(--nqs-text,#06194a)]">
                   {selectedGroup.appointments.length} appointment{selectedGroup.appointments.length === 1 ? '' : 's'}
                 </span>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
-                  <thead className="bg-slate-950/80 text-xs uppercase tracking-wide text-slate-300">
+                  <thead className="bg-[#f5f8ff] text-xs uppercase tracking-wide text-[#62708a]">
                     <tr>
                       {tableHeadings.map((heading) => (
                         <th key={heading} className="px-4 py-3 font-bold">{heading}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-[#d7e1ee]">
                     {selectedGroup.appointments.map(renderAppointmentRow)}
                   </tbody>
                 </table>
@@ -678,15 +793,29 @@ function AdminAppointments() {
         </div>
       </div>
 
-      {cancelTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+      <footer className="nqs-admin-page-footer mt-auto flex items-center justify-between border-t border-[#cbd8ea] bg-white px-8 py-6 text-sm text-[#243b63]">
+        <span>© 2026 NQS National ID. All rights reserved.</span>
+        <span>Version 1.0.0</span>
+      </footer>
+
+      {cancelTarget && (() => {
+        const isUpdateReq = cancelTarget.requestType === 'update_information';
+        const changedFields = isUpdateReq ? getChangedUpdateFields(cancelTarget) : [];
+        const hasNoChanges = isUpdateReq && changedFields.length === 0;
+
+        return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
+          <div className={`max-h-[92vh] w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white ${isUpdateReq ? 'max-w-lg' : 'max-w-2xl'}`}>
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Admin Action</p>
-                <h2 className="mt-1 text-2xl font-black">Cancel Appointment</h2>
+                <h2 className="mt-1 text-2xl font-black">
+                  {isUpdateReq ? 'Cancel Update Request' : 'Cancel Appointment'}
+                </h2>
                 <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  Select a clear reason. The citizen will receive this feedback and can resubmit from their dashboard.
+                  {isUpdateReq
+                    ? 'Review the changed information and provide a cancellation reason for this update request.'
+                    : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.'}
                 </p>
               </div>
               <button
@@ -700,7 +829,7 @@ function AdminAppointments() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950/40">
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-slate-500">Ticket Reference</p>
                   <p className="mt-1 font-mono text-sm font-black text-blue-700 dark:text-[#7CB8FF]">{cancelTarget.ref}</p>
@@ -720,68 +849,106 @@ function AdminAppointments() {
               </div>
             </div>
 
-            <div className="mt-5">
-              <span className="text-sm font-bold">Cancellation reasons</span>
-              <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-2">
-                {cancellationReasonOptions.map((reason) => {
-                  const checked = selectedCancelReasons.includes(reason);
-                  return (
-                    <label
-                      key={reason}
-                      className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                        checked
-                          ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-[#7CB8FF] dark:bg-blue-950/40 dark:text-[#B9D9FF]'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleCancelReason(reason)}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
-                      />
-                      <span>{reason}</span>
-                    </label>
-                  );
-                })}
+            {isUpdateReq ? (
+              <div className="mt-5 space-y-4">
+                {hasNoChanges ? (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-bold text-amber-900 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
+                    No changes detected. Cancellation is not required.
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Changed Information</span>
+                    <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100 font-black uppercase text-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                          <tr>
+                            <th className="px-3 py-2">Field</th>
+                            <th className="px-3 py-2">Previous Information</th>
+                            <th className="px-3 py-2">Requested Information</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-950">
+                          {changedFields.map((field, index) => (
+                            <tr key={`${field.field}-${index}`}>
+                              <td className="px-3 py-2 font-bold text-blue-700 dark:text-[#7CB8FF]">{field.field}</td>
+                              <td className="px-3 py-2 text-slate-500 line-through dark:text-slate-400">{field.oldValue}</td>
+                              <td className="px-3 py-2 font-bold text-emerald-600 dark:text-emerald-400">{field.newValue}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {!hasNoChanges && (
+                  <label className="block">
+                    <span className="text-sm font-bold">Cancellation Reason</span>
+                    <textarea
+                      value={customCancelReason}
+                      onChange={(event) => {
+                        setShowCancelConfirmation(false);
+                        setCustomCancelReason(event.target.value);
+                      }}
+                      rows={3}
+                      placeholder="Enter the reason for cancelling this update request"
+                      className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-900/40"
+                    />
+                  </label>
+                )}
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="mt-5">
+                  <span className="text-sm font-bold">Select incorrect fields</span>
+                  <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-2">
+                    {INCORRECT_FIELD_OPTIONS.map((reason) => {
+                      const checked = selectedCancelReasons.includes(reason);
+                      return (
+                        <label
+                          key={reason}
+                          className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                            checked
+                              ? 'border-blue-500 bg-blue-50 text-blue-800 dark:border-[#7CB8FF] dark:bg-blue-950/40 dark:text-[#B9D9FF]'
+                              : 'border-slate-200 bg-white text-slate-700 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCancelReason(reason)}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500"
+                          />
+                          <span>{reason}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            {selectedCancelReasons.includes('Other') && (
-              <label className="mt-4 block">
-                <span className="text-sm font-bold">Additional cancellation reason</span>
-                <textarea
-                  value={customCancelReason}
-                  onChange={(event) => {
-                    setShowCancelConfirmation(false);
-                    setCustomCancelReason(event.target.value);
-                  }}
-                  rows={3}
-                  placeholder="Enter the additional cancellation reason"
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-900/40"
-                />
-              </label>
+                <label className="mt-4 block">
+                  <span className="text-sm font-bold">Additional notes</span>
+                  <textarea
+                    value={cancelNotes}
+                    onChange={(event) => {
+                      setShowCancelConfirmation(false);
+                      setCancelNotes(event.target.value);
+                    }}
+                    rows={3}
+                    placeholder="Citizen may submit a corrected request."
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-900/40"
+                  />
+                </label>
+              </>
             )}
-
-            <label className="mt-4 block">
-              <span className="text-sm font-bold">Additional notes</span>
-              <textarea
-                value={cancelNotes}
-                onChange={(event) => {
-                  setShowCancelConfirmation(false);
-                  setCancelNotes(event.target.value);
-                }}
-                rows={3}
-                placeholder="Citizen may submit a corrected request."
-                className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:ring-blue-900/40"
-              />
-            </label>
 
             {showCancelConfirmation && (
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
                 <p className="font-black">Confirm cancellation</p>
                 <p className="mt-2">
-                  You selected the following cancellation reasons: {selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment/request?
+                  {isUpdateReq
+                    ? `Cancellation reason: ${customCancelReason.trim()}. Are you sure you want to cancel this update request?`
+                    : `You selected the following incorrect fields: ${selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment?`}
                 </p>
               </div>
             )}
@@ -797,15 +964,16 @@ function AdminAppointments() {
               <button
                 type="button"
                 onClick={confirmCancelAppointment}
-                disabled={updatingId === cancelTarget._id}
+                disabled={updatingId === cancelTarget._id || hasNoChanges}
                 className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {updatingId === cancelTarget._id ? 'Cancelling...' : 'Confirm Cancellation'}
+                {updatingId === cancelTarget._id ? 'Cancelling...' : (isUpdateReq ? 'Confirm Cancel Update' : 'Confirm Cancellation')}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {selectedAppointment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm">

@@ -115,7 +115,7 @@ export default function AppointmentTable({
                             <FaEye className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {onCancel && appt.status !== 'Cancelled' && (
+                        {onCancel && appt.status !== 'Cancelled' && appt.status !== 'Completed' && appt.status !== 'Rejected' && appt.status !== 'Expired' && (
                           <button
                             type="button"
                             onClick={() => onCancel(appt.id)}

@@ -1,19 +1,25 @@
 # NQS National ID System Deployment Guide
 
-This guide prepares the National Queue System for National ID services for MongoDB Atlas, Render, Vercel, and SMTP email notifications.
+This guide prepares the National Queue System for National ID services for PostgreSQL, Render, Vercel, and SMTP email notifications.
 
-## 1. MongoDB Atlas
+## 1. PostgreSQL Database
 
-1. Create a MongoDB Atlas account and project.
-2. Create a cluster.
-3. Create a database user with a strong password.
-4. Add your Render backend IP access rule. For simple student/demo deployment, Atlas can allow `0.0.0.0/0`, but restrict this before real production use.
-5. Copy the connection string.
-6. Set it as:
+Use PostgreSQL locally or a hosted PostgreSQL provider such as Render PostgreSQL, Railway, Neon, Supabase, or your university server.
+
+Create a database named `nqs` for local development:
+
+```bash
+createdb -U postgres nqs
+```
+
+Set the backend database URL:
 
 ```env
-MONGO_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/nqs-national-id
+DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/nqs
+POSTGRES_SSL=false
 ```
+
+For hosted PostgreSQL, copy the provider connection string into `DATABASE_URL`. Set `POSTGRES_SSL=true` only if the provider requires SSL.
 
 Do not hardcode the database URL in code.
 
@@ -42,7 +48,8 @@ npm start
 6. Add environment variables:
 
 ```env
-MONGO_URI=
+DATABASE_URL=
+POSTGRES_SSL=true
 JWT_SECRET=
 PORT=5001
 FRONTEND_URL=https://your-vercel-app.vercel.app
@@ -73,14 +80,14 @@ Emails are sent for:
 
 - User registration
 - Booking confirmation
-- Queue ticket generation when an email is provided
+- Queue ticket generation when contact details are available
 - Appointment approval
 - Appointment cancellation
 - Appointment completion
 
-Every delivery attempt is saved in MongoDB `emaillogs` with `Sent` or `Failed` status.
+Every delivery attempt is saved in PostgreSQL `doc_emaillogs` with `Sent` or `Failed` status.
 
-SMS is currently log-only in MongoDB. A real SMS provider can be added later in `backend/services/smsLogService.js`.
+SMS is currently log-only in PostgreSQL. A real SMS provider can be added later in `backend/services/smsLogService.js`.
 
 ## 4. Vercel Frontend
 
@@ -116,16 +123,16 @@ Local development can leave `VITE_API_URL` empty and use the Vite proxy to the l
 From the repository root:
 
 ```bash
-npm run install:all   # installs root tooling + backend + frontend
-npm run seed:full     # seeds demo data (services, centers, users, tickets)
-npm run dev           # runs backend and frontend together
+npm run install:all
+node backend/utils/seed.js
+npm run dev
 ```
 
 Or run each side separately:
 
 ```bash
-cd backend && npm run dev     # API on http://localhost:5001
-cd frontend && npm run dev    # SPA on http://localhost:5173
+cd backend && npm run dev
+cd frontend && npm run dev
 ```
 
 Open:
@@ -138,25 +145,24 @@ http://localhost:5173
 
 After deployment, test these flows:
 
-- Register a citizen account and confirm an email log is created.
-- Login as admin, operator, and citizen.
+- Register a citizen account.
+- Login as admin, operator, center manager, and citizen.
 - Load Services and Centers pages.
 - Book a National ID appointment.
-- Confirm the booking email is sent or logged.
+- Confirm the booking appears in the citizen dashboard and admin appointments.
 - Check the ticket on Track Queue.
 - Verify the ticket on QR Verify as admin/operator.
-- Open Admin Appointments and approve/cancel a booking.
-- Confirm approval/cancellation email logs.
+- Approve/cancel a booking from Admin Appointments.
+- Confirm cancellation notification appears only for the correct citizen.
 - Complete a ticket from Queue Management.
-- Confirm completion email logs.
 - Submit the Contact form and verify the message appears in Contact Messages.
-- Open Reports and confirm real database counts load.
+- Open Reports and confirm real PostgreSQL counts load.
 - Open Activity Logs and confirm audit events are listed.
 
 ## 7. Production Notes
 
 - Use a strong `JWT_SECRET`.
-- Restrict Atlas network access before real production use.
+- Restrict PostgreSQL network access before real production use.
 - Set `FRONTEND_URL` to the final Vercel URL so CORS is restricted.
 - Set `VITE_API_URL` to the final Render backend URL.
 - Do not commit real `.env` files or SMTP credentials.

@@ -13,8 +13,9 @@ export const useAuth = () => {
 
   const { user, role, login, register, logout, updateUser, loading } = context;
 
-  const isAdmin = role === 'admin';
-  const isOperator = role === 'operator' || role === 'super_operator';
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isOperator = role === 'operator' || role === 'super_operator' || role === 'center_manager';
+  const isUserManager = role === 'user_manager';
   const isCitizen = role === 'citizen';
   const isUser = isCitizen;
 
@@ -34,6 +35,7 @@ export const useAuth = () => {
     loading,
     isAdmin,
     isOperator,
+    isUserManager,
     isCitizen,
     isUser,
     hasRole

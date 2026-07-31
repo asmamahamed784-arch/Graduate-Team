@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import EmailLog from '../models/EmailLog.js';
+import prisma from '../config/prisma.js';
 
 const requiredSmtpKeys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM'];
 
@@ -7,11 +7,13 @@ const hasSmtpConfig = () => requiredSmtpKeys.every((key) => Boolean(process.env[
 
 const safeLogEmail = async ({ recipient, subject, content, status }) => {
   try {
-    return await EmailLog.create({
-      recipient,
-      subject,
-      content,
-      status
+    return await prisma.emailLog.create({
+      data: {
+        recipient,
+        subject,
+        content,
+        status
+      }
     });
   } catch (error) {
     console.error(`Email log could not be saved: ${error.message}`);

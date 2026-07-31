@@ -1,28 +1,26 @@
-import mongoose from 'mongoose';
-import Center from '../models/Center.js';
-import AuditLog from '../models/AuditLog.js';
-import Ticket from '../models/Ticket.js';
-import { BANAADIR_CENTER_NAMES } from '../utils/nqsScope.js';
+import prisma from '../config/prisma.js';
+import bcrypt from 'bcryptjs';
+import { getAssignedCenterId, isAdminRole, normalizeRole } from '../utils/rbac.js';
 
 const BANAADIR_DISTRICTS = [
+  'Abdulaziz',
+  'Boondheere',
+  'Dayniile',
+  'Dharkenley',
+  'Garasbaaley',
+  'Heliwaa',
   'Hodan',
   'Howlwadaag',
-  'Wadajir',
-  'Dharkenley',
-  'Dayniile',
-  'Heliwaa',
-  'Yaqshiid',
   'Kaaraan',
-  'Shibis',
-  'Boondheere',
-  'Xamar Weyne',
-  'Xamar Jajab',
-  'Waaberi',
-  'Wardhiigley',
-  'Abdulaziz',
-  'Shangaani',
   'Kaxda',
-  'Garasbaaley'
+  'Shangaani',
+  'Shibis',
+  'Waaberi',
+  'Wadajir',
+  'Wardhiigley',
+  'Xamar Jajab',
+  'Xamar Weyne',
+  'Yaqshiid'
 ];
 
 const WEEK_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -43,6 +41,8 @@ const normalizeDistrict = (value = '') => {
   return BANAADIR_DISTRICTS.find((district) => district.toLowerCase().replace(/[^a-z0-9]/g, '') === key) || aliases[key] || '';
 };
 
+const cleanDistrict = (value = '') => normalizeDistrict(value) || String(value || '').trim();
+
 const districtFromCenterName = (name = '') => {
   const base = String(name).replace(/\s+National ID Center$/i, '').trim();
   return normalizeDistrict(base) || (/^Banaadir$/i.test(base) ? 'Hodan' : '');
@@ -59,6 +59,14 @@ const normalizeDateList = (dates = []) => (
     : []
 );
 
+const todayKey = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today.toISOString().slice(0, 10);
+};
+
+const hasPastDate = (dates = []) => dates.some((date) => date < todayKey());
+
 const normalizeTime = (value, fallback) => {
   const text = String(value || '').trim();
   if (/^\d{2}:\d{2}$/.test(text)) return text;
@@ -73,6 +81,38 @@ const normalizeTime = (value, fallback) => {
 };
 
 const formatHours = (startTime, endTime) => `${startTime} - ${endTime}`;
+
+const serializeCenter = (center = {}) => ({
+  ...center,
+  _id: center.id,
+  schedule: {
+    workingDays: center.workingDays || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+    startTime: center.startTime || '08:00',
+    endTime: center.endTime || '16:00',
+    breakTime: center.breakTime || { start: '', end: '' },
+    slotDuration: Number(center.slotDuration || 30),
+    maxBookingsPerSlot: Number(center.maxBookingsPerSlot || 5),
+    maxAppointmentsPerDay: Number(center.maxAppointmentsPerDay || center.capacity || 100),
+    closedDays: center.closedDays || ['Friday', 'Saturday'],
+    closedDates: center.closedDates || [],
+    specialUnavailableDates: center.specialUnavailableDates || [],
+    isActive: center.isActive !== false
+  }
+});
+
+const scheduleFromCenter = (center = {}) => ({
+  workingDays: center.workingDays,
+  startTime: center.startTime,
+  endTime: center.endTime,
+  breakTime: center.breakTime,
+  slotDuration: center.slotDuration,
+  maxBookingsPerSlot: center.maxBookingsPerSlot,
+  maxAppointmentsPerDay: center.maxAppointmentsPerDay,
+  closedDays: center.closedDays,
+  closedDates: center.closedDates,
+  specialUnavailableDates: center.specialUnavailableDates,
+  isActive: center.isActive
+});
 
 const normalizeSchedule = (schedule = {}, existingSchedule = {}) => {
   const workingDays = normalizeDayList(
@@ -105,9 +145,9 @@ const normalizeSchedule = (schedule = {}, existingSchedule = {}) => {
 };
 
 const buildCenterPayload = (body, existingCenter = {}) => {
-  const schedule = normalizeSchedule(body.schedule || {}, existingCenter.schedule || {});
+  const schedule = normalizeSchedule(body.schedule || {}, existingCenter.schedule || scheduleFromCenter(existingCenter));
   const name = String(body.name ?? existingCenter.name ?? '').trim();
-  const district = normalizeDistrict(body.district ?? existingCenter.district) || districtFromCenterName(name);
+  const district = cleanDistrict(body.district ?? existingCenter.district) || districtFromCenterName(name);
   const status = body.status || existingCenter.status || 'Active';
 
   return {
@@ -120,12 +160,30 @@ const buildCenterPayload = (body, existingCenter = {}) => {
     capacity: Math.max(1, Number(body.capacity ?? schedule.maxAppointmentsPerDay)),
     hours: body.hours || formatHours(schedule.startTime, schedule.endTime),
     status,
-    schedule: {
-      ...schedule,
-      isActive: status === 'Active' && schedule.isActive !== false
-    }
+    workingDays: schedule.workingDays,
+    startTime: schedule.startTime,
+    endTime: schedule.endTime,
+    breakTime: schedule.breakTime,
+    slotDuration: schedule.slotDuration,
+    maxBookingsPerSlot: schedule.maxBookingsPerSlot,
+    maxAppointmentsPerDay: schedule.maxAppointmentsPerDay,
+    closedDays: schedule.closedDays,
+    closedDates: schedule.closedDates,
+    specialUnavailableDates: schedule.specialUnavailableDates,
+    isActive: status === 'Active' && schedule.isActive !== false
   };
 };
+
+const normalizeSomaliPhone = (value = '') => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('252')) return `+${digits.slice(0, 12)}`;
+  if (digits.startsWith('0')) return `+252${digits.slice(1, 10)}`;
+  if (digits.startsWith('6')) return `+252${digits.slice(0, 9)}`;
+  return '';
+};
+
+const isValidSomaliPhone = (value = '') => /^\+2526\d{7,8}$/.test(normalizeSomaliPhone(value));
 
 const timeToMinutes = (value) => {
   const [hour, minute] = String(value || '').split(':').map(Number);
@@ -137,12 +195,152 @@ const validateCenterPayload = (payload) => {
   if (!payload.name) return 'Center name is required.';
   if (!payload.address) return 'Address is required.';
   if (!payload.phone) return 'Phone number is required.';
-  if (!payload.district) return 'Please select a valid Banaadir district.';
-  if (!payload.schedule.workingDays.length) return 'Select at least one working day.';
-  const start = timeToMinutes(payload.schedule.startTime);
-  const end = timeToMinutes(payload.schedule.endTime);
+  if (!payload.district) return 'District is required.';
+  if (!payload.workingDays.length) return 'Select at least one working day.';
+  if (hasPastDate(payload.closedDates)) return 'Closed dates cannot be in the past.';
+  if (hasPastDate(payload.specialUnavailableDates)) return 'Unavailable dates cannot be in the past.';
+  const start = timeToMinutes(payload.startTime);
+  const end = timeToMinutes(payload.endTime);
   if (start === null || end === null || start >= end) return 'Opening time must be before closing time.';
   return '';
+};
+
+const centerReferenceWhere = (center) => ({
+  OR: [
+    { center: center.id },
+    { center: center.name }
+  ]
+});
+
+const deleteCenterCascade = async (tx, center) => {
+  const tickets = await tx.ticket.findMany({
+    where: centerReferenceWhere(center),
+    select: { id: true, ref: true, citizen: true }
+  });
+  const ticketIds = tickets.map((ticket) => ticket.id);
+  const ticketRefs = tickets.map((ticket) => ticket.ref).filter(Boolean);
+
+  const staffUsers = await tx.user.findMany({
+    where: {
+      OR: [
+        { center: center.id },
+        { center: center.name },
+        { accountProfile: { center: center.id } },
+        { accountProfile: { center: center.name } }
+      ],
+      role: { in: ['operator', 'super_operator', 'center_manager'] }
+    },
+    select: { id: true }
+  });
+  const staffUserIds = staffUsers.map((user) => user.id);
+
+  await tx.notification.deleteMany({
+    where: {
+      OR: [
+        { relatedEntity: center.id },
+        { relatedEntity: center.name },
+        ...(ticketIds.length ? [{ relatedEntity: { in: ticketIds } }] : []),
+        ...(ticketRefs.length ? [{ referenceNumber: { in: ticketRefs } }] : [])
+      ]
+    }
+  });
+
+  if (ticketIds.length) {
+    await tx.document.deleteMany({ where: { ticket: { in: ticketIds } } });
+    await tx.feedback.deleteMany({ where: { ticket: { in: ticketIds } } });
+    await tx.otpCode.deleteMany({ where: { ticket: { in: ticketIds } } });
+  }
+
+  if (ticketRefs.length) {
+    await tx.qRScan.deleteMany({ where: { ticketRef: { in: ticketRefs } } });
+    await tx.queueHistory.deleteMany({ where: { ticketRef: { in: ticketRefs } } });
+  }
+
+  await tx.queueHistory.deleteMany({
+    where: {
+      OR: [
+        { center: center.id },
+        { center: center.name }
+      ]
+    }
+  });
+  await tx.counter.deleteMany({
+    where: {
+      OR: [
+        { center: center.id },
+        { center: center.name }
+      ]
+    }
+  });
+
+  await tx.ticket.deleteMany({ where: centerReferenceWhere(center) });
+
+  await tx.citizen.updateMany({
+    where: {
+      OR: [
+        { center: center.id },
+        { center: center.name }
+      ]
+    },
+    data: { center: null }
+  });
+
+  await tx.user.updateMany({
+    where: {
+      role: 'citizen',
+      OR: [
+        { center: center.id },
+        { center: center.name }
+      ]
+    },
+    data: { center: null }
+  });
+
+  if (staffUserIds.length) {
+    await tx.activeSession.deleteMany({ where: { user: { in: staffUserIds } } });
+    await tx.setting.deleteMany({ where: { user: { in: staffUserIds } } });
+    await tx.otpCode.deleteMany({ where: { user: { in: staffUserIds } } });
+    await tx.user.deleteMany({ where: { id: { in: staffUserIds } } });
+  }
+
+  await tx.accountProfile.deleteMany({
+    where: {
+      OR: [
+        { center: center.id },
+        { center: center.name }
+      ]
+    }
+  });
+
+  await tx.center.delete({ where: { id: center.id } });
+
+  return {
+    tickets: ticketIds.length,
+    staffUsers: staffUserIds.length
+  };
+};
+
+const ensureCenterDistricts = async (centers) => {
+  const updates = centers
+    .filter((center) => !center.district)
+    .map(async (center) => {
+      const district = districtFromCenterName(center.name);
+      if (district) {
+        await prisma.center.update({
+          where: { id: center.id },
+          data: { district }
+        });
+        return { ...center, district };
+      }
+      return center;
+    });
+
+  if (updates.length) {
+    const resolvedUpdates = await Promise.all(updates);
+    const updatedCentersMap = new Map(resolvedUpdates.map(c => [c.id, c]));
+    return centers.map(c => updatedCentersMap.get(c.id) || c);
+  }
+  return centers;
 };
 
 // @desc    Get all centers
@@ -150,11 +348,27 @@ const validateCenterPayload = (payload) => {
 // @access  Public
 export const listCenters = async (req, res) => {
   try {
-    const centers = await Center.find({
-      name: { $in: BANAADIR_CENTER_NAMES },
-      city: 'Banaadir'
-    });
-    return res.json({ success: true, count: centers.length, data: centers });
+    const { district = '' } = req.query;
+    await ensureCenterDistricts(await prisma.center.findMany({ where: { district: '' } }));
+    const query = {};
+    const normalizedDistrict = cleanDistrict(district);
+    if (normalizedDistrict) {
+      query.district = normalizedDistrict;
+    }
+    if (req.user && !isAdminRole(req.user.role)) {
+      const assignedCenterId = getAssignedCenterId(req.user);
+      if (assignedCenterId) {
+        query.id = assignedCenterId;
+      } else if (normalizeRole(req.user.role) !== 'citizen') {
+        return res.json({ success: true, count: 0, data: [] });
+      }
+    }
+    const centers = await ensureCenterDistricts(await prisma.center.findMany({ where: query }));
+    const sortedCenters = [...centers].sort((a, b) => (
+      String(a.district || '').localeCompare(String(b.district || '')) ||
+      String(a.name || '').localeCompare(String(b.name || ''))
+    ));
+    return res.json({ success: true, count: sortedCenters.length, data: sortedCenters.map(serializeCenter) });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -165,17 +379,35 @@ export const listCenters = async (req, res) => {
 // @access  Public
 export const getCenterById = async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(404).json({ success: false, message: 'Center not found' });
-    }
-    const center = await Center.findById(req.params.id);
+    const center = await prisma.center.findUnique({ where: { id: req.params.id } });
     if (!center) {
       return res.status(404).json({ success: false, message: 'Center not found' });
     }
-    if (center.city !== 'Banaadir' || !BANAADIR_CENTER_NAMES.includes(center.name)) {
-      return res.status(404).json({ success: false, message: 'Center is outside the NQS scope' });
+    if (req.user && !isAdminRole(req.user.role)) {
+      const assignedCenterId = getAssignedCenterId(req.user);
+      if (!assignedCenterId || assignedCenterId !== center.id) {
+        return res.status(403).json({ success: false, message: 'You are not authorized to access another center.' });
+      }
     }
-    return res.json({ success: true, data: center });
+    return res.json({ success: true, data: serializeCenter(center) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getAssignedCenter = async (req, res) => {
+  try {
+    const assignedCenterId = getAssignedCenterId(req.user);
+    if (!assignedCenterId) {
+      return res.status(404).json({ success: false, message: 'No center is assigned to this account.' });
+    }
+
+    const center = await prisma.center.findUnique({ where: { id: assignedCenterId } });
+    if (!center) {
+      return res.status(404).json({ success: false, message: 'Assigned center not found.' });
+    }
+
+    return res.json({ success: true, data: serializeCenter(center) });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -187,36 +419,104 @@ export const getCenterById = async (req, res) => {
 export const createCenter = async (req, res) => {
   try {
     const payload = buildCenterPayload(req.body);
+    const managerCredentials = req.body.managerCredentials || {};
 
     const validationError = validateCenterPayload(payload);
     if (validationError) {
       return res.status(400).json({ success: false, message: validationError });
     }
 
-    if (!BANAADIR_CENTER_NAMES.includes(payload.name)) {
+    const managerName = String(managerCredentials.name || '').trim();
+    const managerUsername = String(managerCredentials.username || '').trim().toLowerCase();
+    const managerPhone = normalizeSomaliPhone(managerCredentials.phone || payload.phone || '');
+    const temporaryPassword = String(managerCredentials.temporaryPassword || '').trim();
+
+    if (!managerName || !managerUsername || !managerPhone || !temporaryPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Only approved Banaadir National ID centers are allowed'
+        message: 'Center manager name, username, phone, and temporary password are required.'
       });
     }
 
-    const centerExists = await Center.findOne({ name: payload.name });
+    if (temporaryPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Temporary password must be at least 6 characters.' });
+    }
+
+    if (!isValidSomaliPhone(managerPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Center manager phone must be a valid Somali number, for example 61XXXXXXX.'
+      });
+    }
+
+    const centerExists = await prisma.center.findFirst({ where: { name: payload.name } });
     if (centerExists) {
       return res.status(400).json({ success: false, message: 'Center name already exists' });
     }
 
-    const center = await Center.create(payload);
+    const userExists = await prisma.user.findFirst({
+      where: { phone: managerPhone }
+    });
+    if (userExists) {
+      return res.status(400).json({ success: false, message: 'Phone number is already in use.' });
+    }
 
-    // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Create Center',
-      details: `Created new service center: ${payload.name}`,
-      ipAddress: req.ip || '127.0.0.1'
+    const result = await prisma.$transaction(async (tx) => {
+      const center = await tx.center.create({ data: payload });
+      const manager = await tx.user.create({
+        data: {
+          name: managerName,
+          username: managerUsername,
+          email: managerCredentials.email ? String(managerCredentials.email).trim().toLowerCase() : undefined,
+          phone: managerPhone,
+          password: await bcrypt.hash(temporaryPassword, 10),
+          role: 'center_manager',
+          operatorType: 'center_manager',
+          status: 'active',
+          center: center.id,
+          assignedDistrict: payload.district,
+          mustChangePassword: false,
+          accountProfile: {
+            create: {
+              name: managerName,
+              email: managerCredentials.email ? String(managerCredentials.email).trim().toLowerCase() : null,
+              phone: managerPhone,
+              status: 'active',
+              operatorType: 'center_manager',
+              center: center.id,
+              assignedDistrict: payload.district,
+              district: payload.district,
+              mustChangePassword: false
+            }
+          }
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          user: req.user.id,
+          role: req.user.role,
+          action: 'Create Center',
+          details: `Created new service center: ${payload.name} and manager username ${managerUsername}`,
+          ipAddress: req.ip || '127.0.0.1'
+        }
+      });
+
+      return { center, manager };
     });
 
-    return res.status(201).json({ success: true, data: center });
+    return res.status(201).json({
+      success: true,
+      data: {
+        ...serializeCenter(result.center),
+        managerCredentials: {
+          id: result.manager.id,
+          username: result.manager.username,
+          role: result.manager.role,
+          mustChangePassword: result.manager.mustChangePassword
+        }
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -227,7 +527,7 @@ export const createCenter = async (req, res) => {
 // @access  Private/Admin
 export const updateCenter = async (req, res) => {
   try {
-    const center = await Center.findById(req.params.id);
+    const center = await prisma.center.findUnique({ where: { id: req.params.id } });
 
     if (!center) {
       return res.status(404).json({ success: false, message: 'Center not found' });
@@ -239,29 +539,23 @@ export const updateCenter = async (req, res) => {
       return res.status(400).json({ success: false, message: validationError });
     }
 
-    if (!BANAADIR_CENTER_NAMES.includes(payload.name)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Only approved Banaadir National ID centers are allowed'
-      });
-    }
-
-    const updatedCenter = await Center.findByIdAndUpdate(
-      req.params.id,
-      payload,
-      { new: true, runValidators: true }
-    );
-
-    // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Update Center',
-      details: `Updated center ID: ${center._id} (${center.name})`,
-      ipAddress: req.ip || '127.0.0.1'
+    const updatedCenter = await prisma.center.update({
+      where: { id: req.params.id },
+      data: payload
     });
 
-    return res.json({ success: true, data: updatedCenter });
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Update Center',
+        details: `Updated center ID: ${center.id} (${center.name})`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
+    });
+
+    return res.json({ success: true, data: serializeCenter(updatedCenter) });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -272,33 +566,37 @@ export const updateCenter = async (req, res) => {
 // @access  Private/Admin
 export const deleteCenter = async (req, res) => {
   try {
-    const center = await Center.findById(req.params.id);
+    const center = await prisma.center.findUnique({ where: { id: req.params.id } });
 
     if (!center) {
       return res.status(404).json({ success: false, message: 'Center not found' });
     }
 
-    const linkedTickets = await Ticket.countDocuments({ center: center._id });
-    if (linkedTickets > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete a center that has queue tickets'
+    const deleted = await prisma.$transaction(async (tx) => {
+      const result = await deleteCenterCascade(tx, center);
+
+      await tx.auditLog.create({
+        data: {
+          user: req.user.id,
+          role: req.user.role,
+          action: 'Delete Center',
+          details: `Deleted center name: ${center.name}; removed ${result.tickets} ticket(s) and ${result.staffUsers} staff account(s).`,
+          ipAddress: req.ip || '127.0.0.1'
+        }
       });
-    }
 
-    await Center.findByIdAndDelete(req.params.id);
-
-    // Audit log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Delete Center',
-      details: `Deleted center name: ${center.name}`,
-      ipAddress: req.ip || '127.0.0.1'
+      return result;
     });
 
-    return res.json({ success: true, message: 'Center removed.' });
+    return res.json({
+      success: true,
+      message: 'Center and linked database records removed.',
+      deleted
+    });
   } catch (error) {
+    if (error.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Center already removed.' });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 };

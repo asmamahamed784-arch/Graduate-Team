@@ -49,10 +49,18 @@ export const QueueProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const socketRef = useRef(null);
-  const { isAuthenticated, role, loading: authLoading } = useAuth();
+  const { isAuthenticated, role, user, loading: authLoading } = useAuth();
+  const isStaffRole = ['operator', 'super_operator', 'center_manager'].includes(role);
+  const assignedCenterId =
+    (typeof user?.assignedCenter === 'object' ? user.assignedCenter?._id || user.assignedCenter?.id : user?.assignedCenter) ||
+    (typeof user?.center === 'object' ? user.center?._id || user.center?.id : user?.center) ||
+    user?.assignedCenterId ||
+    user?.centerId ||
+    '';
+  const canAutoLoadQueue = isAuthenticated && (!isStaffRole || Boolean(assignedCenterId));
 
   const refreshQueue = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!canAutoLoadQueue) {
       setTickets([]);
       setError(null);
       return;
@@ -61,7 +69,7 @@ export const QueueProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      const endpoint = role === 'operator' || role === 'super_operator'
+      const endpoint = isStaffRole
         ? '/api/operator/queue'
         : '/api/queue/list';
       const res = await apiClient.get(endpoint);
@@ -71,12 +79,12 @@ export const QueueProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, role]);
+  }, [canAutoLoadQueue, isStaffRole]);
 
   useEffect(() => {
     if (authLoading) return;
 
-    if (!isAuthenticated) {
+    if (!canAutoLoadQueue) {
       setTickets([]);
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -103,7 +111,7 @@ export const QueueProvider = ({ children }) => {
     return () => {
       if (socket) socket.disconnect();
     };
-  }, [authLoading, isAuthenticated, refreshQueue]);
+  }, [authLoading, canAutoLoadQueue, refreshQueue]);
 
   const addTicket = async (serviceName, citizenName = 'Citizen', centerName = 'Banaadir National ID Center') => {
     if (!isAuthenticated) {
@@ -157,7 +165,7 @@ export const QueueProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      const isOperatorRole = role === 'operator' || role === 'super_operator';
+      const isOperatorRole = role === 'operator' || role === 'super_operator' || role === 'center_manager';
       const endpoint = isOperatorRole ? '/api/operator/call-next' : '/api/queue/call-next';
       const payload = { counter: `Counter ${counter}` };
 

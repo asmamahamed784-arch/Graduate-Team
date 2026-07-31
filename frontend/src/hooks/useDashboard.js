@@ -140,12 +140,23 @@ export const useDashboard = () => {
     if (!isAdmin || !stats) return null;
     return {
       totalUsers: stats.totalCitizens || 0,
+      totalBookings: stats.totalBookings || stats.totalAppointments || 0,
+      totalOperators: stats.totalOperators || 0,
+      waitingQueue: stats.waitingQueue || 0,
+      nowServing: stats.nowServing || 0,
+      completedServices: stats.completedServices || 0,
+      cancelledAppointments: stats.cancelledAppointments || 0,
+      lostIdRequests: stats.lostIdRequests || 0,
+      updateRequests: stats.updateRequests || 0,
+      activeOperators: stats.activeOperators || 0,
+      pendingOperators: stats.pendingOperators || 0,
       activeServices: stats.activeServices || 0,
-      serviceCenters: stats.serviceCenters || 0,
+      serviceCenters: stats.totalServiceCenters || stats.serviceCenters || 0,
       todayAppointmentsCount: stats.dailyVisitors || 0,
       queueEfficiency: stats.efficiency || '0%',
       systemUptime: 'Online',
-      averageWaitTimeGlobal: '0 min',
+      averageWaitTimeGlobal: `${stats.averageWaitingTime || 0} min`,
+      averageServiceTimeGlobal: `${stats.averageServiceTime || 0} min`,
       recentLogs: stats.recentActivities || []
     };
   }, [isAdmin, stats]);

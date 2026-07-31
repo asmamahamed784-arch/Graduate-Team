@@ -3,14 +3,28 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiClient } from '../api/apiClient';
 import { getToken, setToken, clearToken } from '../auth/jwtUtils';
 
-const normalizeRole = (role) => (role === 'user' ? 'citizen' : role);
+const normalizeRole = (role) => {
+  const value = String(role || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (value === 'user') return 'citizen';
+  if (['user_management', 'user_management_role', 'user_manager'].includes(value)) return 'user_manager';
+  return value;
+};
 const ROLE_KEY = 'role';
+const setStoredRole = (nextRole) => {
+  localStorage.removeItem(ROLE_KEY);
+  if (nextRole) {
+    sessionStorage.setItem(ROLE_KEY, nextRole);
+  } else {
+    sessionStorage.removeItem(ROLE_KEY);
+  }
+};
 
 export const AuthContext = createContext({
   user: null,
   isAuthenticated: false,
   role: null,
   login: async () => {},
+  verifyLoginOtp: async () => {},
   register: async () => {},
   logout: () => {},
   updateUser: () => {},
@@ -31,10 +45,10 @@ export const AuthProvider = ({ children }) => {
           const nextRole = normalizeRole(res.data.role);
           setUser({ ...res.data, role: nextRole });
           setRole(nextRole);
-          localStorage.setItem(ROLE_KEY, nextRole);
+          setStoredRole(nextRole);
         } catch {
           clearToken();
-          localStorage.removeItem(ROLE_KEY);
+          setStoredRole(null);
         }
       }
       setLoading(false);
@@ -46,10 +60,14 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       const res = await apiClient.post('/api/auth/login', { username, password });
+      if (res.data?.otpRequired) {
+        setLoading(false);
+        return res.data;
+      }
       const { token, user } = res.data;
       const nextRole = normalizeRole(user.role);
       setToken(token);
-      localStorage.setItem(ROLE_KEY, nextRole);
+      setStoredRole(nextRole);
       setUser({ ...user, role: nextRole });
       setRole(nextRole);
       setLoading(false);
@@ -60,10 +78,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (username, password) => {
+  const verifyLoginOtp = async (loginToken, code, otpId) => {
     setLoading(true);
     try {
-      const res = await apiClient.post('/api/auth/register', { username, password });
+      const res = await apiClient.post('/api/auth/login/otp/verify', { loginToken, code, otpId });
+      const { token, user } = res.data;
+      const nextRole = normalizeRole(user.role);
+      setToken(token);
+      setStoredRole(nextRole);
+      setUser({ ...user, role: nextRole });
+      setRole(nextRole);
+      setLoading(false);
+      return user;
+    } catch (e) {
+      setLoading(false);
+      throw e;
+    }
+  };
+
+  const register = async (username, password, phone = '') => {
+    setLoading(true);
+    try {
+      const res = await apiClient.post('/api/auth/register', { username, password, phone });
       setLoading(false);
       return res.data;
     } catch (e) {
@@ -79,7 +115,7 @@ export const AuthProvider = ({ children }) => {
       // Local logout should still complete if the server is unavailable.
     }
     clearToken();
-    localStorage.removeItem(ROLE_KEY);
+    setStoredRole(null);
     setUser(null);
     setRole(null);
     window.location.href = '/login';
@@ -89,11 +125,7 @@ export const AuthProvider = ({ children }) => {
     const nextRole = normalizeRole(nextUser?.role) || null;
     setUser(nextUser ? { ...nextUser, role: nextRole } : null);
     setRole(nextRole);
-    if (nextRole) {
-      localStorage.setItem(ROLE_KEY, nextRole);
-    } else {
-      localStorage.removeItem(ROLE_KEY);
-    }
+    setStoredRole(nextRole);
   };
 
   return (
@@ -102,6 +134,7 @@ export const AuthProvider = ({ children }) => {
       isAuthenticated: !!user,
       role,
       login,
+      verifyLoginOtp,
       register,
       logout,
       updateUser,

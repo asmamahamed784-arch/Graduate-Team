@@ -6,7 +6,7 @@ import { authorize } from '../middleware/roleMiddleware.js';
 const router = express.Router();
 
 router.get('/generate', generateQR);
-router.post('/verify', protect, authorize('operator', 'admin'), verifyQR);
-router.post('/action', protect, authorize('operator', 'admin'), handleQRAction);
+router.post('/verify', protect, authorize('operator', 'super_operator', 'center_manager', 'admin'), verifyQR);
+router.post('/action', protect, authorize('operator', 'super_operator', 'center_manager', 'admin'), handleQRAction);
 
 export default router;

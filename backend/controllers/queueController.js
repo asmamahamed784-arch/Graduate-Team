@@ -1,21 +1,53 @@
-import Ticket from '../models/Ticket.js';
-import Center from '../models/Center.js';
-import Service from '../models/Service.js';
-import Notification from '../models/Notification.js';
-import AuditLog from '../models/AuditLog.js';
-import User from '../models/User.js';
+import prisma from '../config/prisma.js';
 import { generateRef } from '../utils/generateReference.js';
-import { isBanaadirNationalIdCenter, isNationalIdService } from '../utils/nqsScope.js';
-import { canAccessTicket, getAssignedCenterId, normalizeRole } from '../utils/rbac.js';
+import { getCenterDistrict, isBanaadirNationalIdCenter, isNationalIdService, normalizeBanaadirDistrict } from '../utils/nqsScope.js';
+import { canAccessTicket, getAssignedCenterId, isAdminRole, normalizeRole } from '../utils/rbac.js';
 import {
   sendAppointmentCompletionEmail,
   sendQueueTicketGeneratedEmail
 } from '../services/emailService.js';
 import { logSmsOnly } from '../services/smsLogService.js';
+import { normalizeOtpPhone, verifyOtpToken } from '../services/otpService.js';
+import { issueNationalIdForCompletedRegistration } from '../utils/nationalIdIssuer.js';
+
+const STAFF_QUEUE_ROLES = ['operator', 'super_operator', 'center_manager'];
+
+const hydrateTickets = async (tickets = []) => {
+  const serviceIds = [...new Set(tickets.map((ticket) => ticket.service).filter(Boolean))];
+  const centerIds = [...new Set(tickets.map((ticket) => ticket.center).filter(Boolean))];
+  const citizenIds = [...new Set(tickets.map((ticket) => ticket.citizen).filter(Boolean))];
+  const [services, centers, citizens] = await Promise.all([
+    serviceIds.length
+      ? prisma.service.findMany({ where: { id: { in: serviceIds } }, select: { id: true, name: true, category: true, duration: true } })
+      : [],
+    centerIds.length
+      ? prisma.center.findMany({ where: { id: { in: centerIds } }, select: { id: true, name: true, address: true, city: true, district: true, phone: true } })
+      : [],
+    citizenIds.length
+      ? prisma.user.findMany({ where: { id: { in: citizenIds } }, select: { id: true, name: true, phone: true, nationalId: true, citizenProfile: { select: { nationalId: true } } } })
+      : []
+  ]);
+  const servicesById = new Map(services.map((service) => [service.id, service]));
+  const centersById = new Map(centers.map((center) => [center.id, center]));
+  const citizensById = new Map(citizens.map((citizen) => [citizen.id, {
+    ...citizen,
+    nationalId: citizen.citizenProfile?.nationalId || citizen.nationalId
+  }]));
+  return tickets.map((ticket) => ({
+    ...ticket,
+    service: servicesById.get(ticket.service) || ticket.service,
+    center: centersById.get(ticket.center) || ticket.center,
+    citizen: citizensById.get(ticket.citizen) || ticket.citizen,
+    nationalIdNumber: ticket.nationalIdNumber || citizensById.get(ticket.citizen)?.nationalId || ''
+  }));
+};
 
 const logSmsForCitizen = async (citizenId, message) => {
   if (!citizenId) return;
-  const citizen = await User.findById(citizenId).select('email phone');
+  const citizen = await prisma.user.findUnique({
+    where: { id: citizenId },
+    select: { email: true, phone: true }
+  });
   await logSmsOnly({ recipient: citizen?.phone, message });
 };
 
@@ -26,8 +58,8 @@ export const generateWalkInTicket = async (req, res) => {
   try {
     const { serviceId, centerId, citizenName, citizenEmail, citizenPhone, timeSlot } = req.body;
 
-    const service = await Service.findById(serviceId);
-    const center = await Center.findById(centerId);
+    const service = await prisma.service.findUnique({ where: { id: serviceId } });
+    const center = await prisma.center.findUnique({ where: { id: centerId } });
 
     if (!service || !center) {
       return res.status(404).json({ success: false, message: 'Service or Center not found' });
@@ -40,27 +72,32 @@ export const generateWalkInTicket = async (req, res) => {
       });
     }
 
-    if (normalizeRole(req.user.role) === 'operator' && getAssignedCenterId(req.user) !== centerId.toString()) {
-      return res.status(403).json({ success: false, message: 'Operators can only generate tickets for their assigned center.' });
+    if (STAFF_QUEUE_ROLES.includes(normalizeRole(req.user.role)) && getAssignedCenterId(req.user) !== centerId.toString()) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to access another center’s data.' });
     }
 
     const refCode = await generateRef();
-    const activeWaiting = await Ticket.countDocuments({
-      center: centerId,
-      status: 'Waiting',
-      date: new Date().toISOString().slice(0, 10)
+    const activeWaiting = await prisma.ticket.count({
+      where: {
+        center: centerId,
+        status: 'Waiting',
+        date: new Date().toISOString().slice(0, 10)
+      }
     });
     const waitMins = activeWaiting * service.duration;
 
-    const ticket = await Ticket.create({
-      ref: refCode,
-      service: serviceId,
-      citizenName: citizenName || 'Walk-in Citizen',
-      center: centerId,
-      date: new Date().toISOString().slice(0, 10),
-      timeSlot: timeSlot || null,
-      waitTime: waitMins > 0 ? `${waitMins} min` : '10 min',
-      status: 'Waiting'
+    const ticket = await prisma.ticket.create({
+      data: {
+        ref: refCode,
+        service: serviceId,
+        citizenName: citizenName || 'Walk-in Citizen',
+        center: centerId,
+        district: getCenterDistrict(center),
+        date: new Date().toISOString().slice(0, 10),
+        timeSlot: timeSlot || null,
+        waitTime: waitMins > 0 ? `${waitMins} min` : '10 min',
+        status: 'Waiting'
+      }
     });
 
     await Promise.all([
@@ -78,12 +115,14 @@ export const generateWalkInTicket = async (req, res) => {
     ]);
 
     // Audit Log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Generate Ticket',
-      details: `Generated walk-in ticket ${refCode} at center ${center.name}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Generate Ticket',
+        details: `Generated walk-in ticket ${refCode} at center ${center.name}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     // Socket.io Real-time update
@@ -106,58 +145,68 @@ export const callNextTicket = async (req, res) => {
     let { centerId, counter } = req.body;
     const userCenterId = getAssignedCenterId(req.user);
 
-    if (normalizeRole(req.user.role) === 'operator' && !centerId) {
+    if (STAFF_QUEUE_ROLES.includes(normalizeRole(req.user.role)) && !centerId) {
       centerId = userCenterId;
     }
 
-    const center = await Center.findById(centerId);
+    const center = await prisma.center.findUnique({ where: { id: centerId } });
     if (!center) {
       return res.status(404).json({ success: false, message: 'Center not found' });
     }
 
-    if (normalizeRole(req.user.role) === 'operator' && getAssignedCenterId(req.user) !== centerId.toString()) {
-      return res.status(403).json({ success: false, message: 'Operators can only call tickets for their assigned center.' });
+    if (STAFF_QUEUE_ROLES.includes(normalizeRole(req.user.role)) && getAssignedCenterId(req.user) !== centerId.toString()) {
+      return res.status(403).json({ success: false, message: 'You are not authorized to access another center’s data.' });
     }
 
     // Find next ticket that is 'Waiting' for today at this center
-    const nextTicket = await Ticket.findOne({
-      center: centerId,
-      status: 'Waiting',
-      date: new Date().toISOString().slice(0, 10)
-    }).sort({ createdAt: 1 });
+    const nextTicket = await prisma.ticket.findFirst({
+      where: {
+        center: centerId,
+        status: 'Waiting',
+        date: new Date().toISOString().slice(0, 10)
+      },
+      orderBy: { createdAt: 'asc' }
+    });
 
     if (!nextTicket) {
       return res.status(400).json({ success: false, message: 'No waiting tickets in the queue' });
     }
 
     // Update ticket
-    nextTicket.status = 'Being Served';
-    nextTicket.counter = counter || 'Counter 1';
-    nextTicket.calledAt = new Date();
-    await nextTicket.save();
+    const updatedTicket = await prisma.ticket.update({
+      where: { id: nextTicket.id },
+      data: {
+        status: 'Being Served',
+        counter: counter || 'Counter 1'
+      }
+    });
 
     // Create Notification if ticket is linked to registered user
     let notif = null;
-    if (nextTicket.citizen) {
-      notif = await Notification.create({
-        user: nextTicket.citizen,
-        title: 'Queue Alert',
-        desc: `Your ticket ${nextTicket.ref} is being called to ${nextTicket.counter}.`,
-        category: 'Queue'
+    if (updatedTicket.citizen) {
+      notif = await prisma.notification.create({
+        data: {
+          user: updatedTicket.citizen,
+          title: 'Queue Alert',
+          desc: `Your ticket ${updatedTicket.ref} is being called to ${updatedTicket.counter}.`,
+          category: 'Queue'
+        }
       });
       await logSmsForCitizen(
-        nextTicket.citizen,
-        `Your ticket ${nextTicket.ref} is being called to ${nextTicket.counter}.`
+        updatedTicket.citizen,
+        `Your ticket ${updatedTicket.ref} is being called to ${updatedTicket.counter}.`
       );
     }
 
     // Audit Log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Call Next Ticket',
-      details: `Operator called ticket ${nextTicket.ref} to ${nextTicket.counter}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Call Next Ticket',
+        details: `Operator called ticket ${updatedTicket.ref} to ${updatedTicket.counter}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     // Socket.io updates
@@ -167,19 +216,19 @@ export const callNextTicket = async (req, res) => {
       io.to(centerId.toString()).emit('queueUpdate', { centerId });
       // Notify TV display screen room with voice call data
       io.to(centerId.toString()).emit('voiceCallNext', {
-        ref: nextTicket.ref,
-        counter: nextTicket.counter,
-        service: nextTicket.service
+        ref: updatedTicket.ref,
+        counter: updatedTicket.counter,
+        service: updatedTicket.service
       });
       // Notify individual ticket tracker
-      io.to(nextTicket.ref).emit('ticketUpdate', nextTicket);
+      io.to(updatedTicket.ref).emit('ticketUpdate', updatedTicket);
       // User individual feed
-      if (nextTicket.citizen && notif) {
-        io.emit(`notification-${nextTicket.citizen}`, notif);
+      if (updatedTicket.citizen && notif) {
+        io.emit(`notification-${updatedTicket.citizen}`, notif);
       }
     }
 
-    return res.json({ success: true, data: nextTicket });
+    return res.json({ success: true, data: updatedTicket });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -190,26 +239,30 @@ export const callNextTicket = async (req, res) => {
 // @access  Private/Operator or Admin
 export const holdTicket = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    let ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
 
     if (!canAccessTicket(req.user, ticket)) {
-      return res.status(403).json({ success: false, message: 'You are not authorized to update this ticket.' });
+      return res.status(403).json({ success: false, message: 'You are not authorized to access another center’s data.' });
     }
 
-    ticket.status = 'On Hold';
-    await ticket.save();
+    ticket = await prisma.ticket.update({
+      where: { id: req.params.id },
+      data: { status: 'On Hold' }
+    });
 
     let notif = null;
     if (ticket.citizen) {
-      notif = await Notification.create({
-        user: ticket.citizen,
-        title: 'Queue Update',
-        desc: `Your ticket ${ticket.ref} has been placed on hold. Please wait for the next update.`,
-        category: 'Queue'
+      notif = await prisma.notification.create({
+        data: {
+          user: ticket.citizen,
+          title: 'Queue Update',
+          desc: `Your ticket ${ticket.ref} has been placed on hold. Please wait for the next update.`,
+          category: 'Queue'
+        }
       });
       await logSmsForCitizen(
         ticket.citizen,
@@ -218,12 +271,14 @@ export const holdTicket = async (req, res) => {
     }
 
     // Audit Log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Hold Ticket',
-      details: `Operator put ticket ${ticket.ref} on hold`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Hold Ticket',
+        details: `Operator put ticket ${ticket.ref} on hold`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     // Socket.io Updates
@@ -247,36 +302,76 @@ export const holdTicket = async (req, res) => {
 // @access  Private/Operator or Admin
 export const completeTicket = async (req, res) => {
   try {
-    const ticket = await Ticket.findById(req.params.id);
+    let ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
 
     if (!canAccessTicket(req.user, ticket)) {
-      return res.status(403).json({ success: false, message: 'You are not authorized to complete this ticket.' });
+      return res.status(403).json({ success: false, message: 'You are not authorized to access another center’s data.' });
     }
 
-    ticket.status = 'Completed';
-    if (ticket.requestType !== 'new_national_id') {
-      ticket.requestStatus = 'Completed';
+    const citizenUserForOtp = ticket.citizen
+      ? await prisma.user.findUnique({ where: { id: ticket.citizen }, select: { phone: true } })
+      : null;
+    const citizenPhone = normalizeOtpPhone(
+      ticket.registrationDetails?.phone ||
+      ticket.updateDetails?.phone ||
+      ticket.replacementDetails?.phone ||
+      citizenUserForOtp?.phone
+    );
+    if (!verifyOtpToken({
+      token: req.body.otpToken,
+      purpose: 'complete_service',
+      userId: req.user.id,
+      ticketId: ticket.id,
+      phone: citizenPhone
+    })) {
+      return res.status(401).json({ success: false, message: 'OTP verification required before completing this service.' });
     }
-    ticket.completedAt = new Date();
-    await ticket.save();
+
+    const dataToUpdate = {
+      status: 'Completed'
+    };
+    if (ticket.requestType !== 'new_national_id') {
+      dataToUpdate.requestStatus = 'Completed';
+    }
+
+    ticket = await prisma.ticket.update({
+      where: { id: req.params.id },
+      data: dataToUpdate
+    });
+    if (ticket.requestType === 'new_national_id') {
+      const nationalIdNumber = await issueNationalIdForCompletedRegistration(ticket);
+      ticket = await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: {
+          nationalIdNumber,
+          registrationDetails: {
+            ...(ticket.registrationDetails || {}),
+            nationalIdNumber
+          },
+          requestStatus: 'Completed'
+        }
+      });
+    }
 
     // Create Notification
     let notif = null;
     if (ticket.citizen) {
-      notif = await Notification.create({
-        user: ticket.citizen,
-        title: 'Service Completed',
-        desc: `Thank you for visiting. Your service session for ${ticket.ref} has been completed.`,
-        category: 'Queue'
+      notif = await prisma.notification.create({
+        data: {
+          user: ticket.citizen,
+          title: 'Service Completed',
+          desc: `Thank you for visiting. Your service session for ${ticket.ref} has been completed.`,
+          category: 'Queue'
+        }
       });
       const [citizenUser, service, center] = await Promise.all([
-        User.findById(ticket.citizen).select('name email phone'),
-        Service.findById(ticket.service).select('name category duration'),
-        Center.findById(ticket.center).select('name address city phone')
+        prisma.user.findUnique({ where: { id: ticket.citizen }, select: { name: true, email: true, phone: true } }),
+        prisma.service.findUnique({ where: { id: ticket.service }, select: { name: true, category: true, duration: true } }),
+        prisma.center.findUnique({ where: { id: ticket.center }, select: { name: true, address: true, city: true, district: true, phone: true } })
       ]);
       await Promise.all([
         sendAppointmentCompletionEmail({
@@ -293,12 +388,14 @@ export const completeTicket = async (req, res) => {
     }
 
     // Audit Log
-    await AuditLog.create({
-      user: req.user._id,
-      role: req.user.role,
-      action: 'Complete Ticket',
-      details: `Operator completed session for ticket ${ticket.ref}`,
-      ipAddress: req.ip || '127.0.0.1'
+    await prisma.auditLog.create({
+      data: {
+        user: req.user.id,
+        role: req.user.role,
+        action: 'Complete Service',
+        details: `Operator completed session for ticket ${ticket.ref}`,
+        ipAddress: req.ip || '127.0.0.1'
+      }
     });
 
     // Socket.io Updates
@@ -324,13 +421,14 @@ export const getLiveQueue = async (req, res) => {
   try {
     const { centerId } = req.params;
 
-    const tickets = await Ticket.find({
-      center: centerId,
-      status: { $in: ['Waiting', 'Being Served', 'On Hold'] },
-      date: new Date().toISOString().slice(0, 10)
-    })
-      .populate('service')
-      .sort({ createdAt: 1 });
+    const tickets = await hydrateTickets(await prisma.ticket.findMany({
+      where: {
+        center: centerId,
+        status: { in: ['Waiting', 'Being Served', 'On Hold'] },
+        date: new Date().toISOString().slice(0, 10)
+      },
+      orderBy: { createdAt: 'asc' }
+    }));
 
     return res.json({ success: true, count: tickets.length, data: tickets });
   } catch (error) {
@@ -345,7 +443,7 @@ export const trackTicket = async (req, res) => {
   try {
     const { ref } = req.params;
 
-    const ticket = await Ticket.findOne({ ref }).populate('service').populate('center');
+    const [ticket] = await hydrateTickets(await prisma.ticket.findMany({ where: { ref } }));
 
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket reference code not found' });
@@ -355,11 +453,14 @@ export const trackTicket = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not authorized to track this ticket.' });
     }
 
-    const nowServing = await Ticket.findOne({
-      center: ticket.center._id,
-      status: 'Being Served',
-      date: ticket.date
-    }).sort({ calledAt: -1, updatedAt: -1 });
+    const nowServing = await prisma.ticket.findFirst({
+      where: {
+        center: ticket.center.id,
+        status: 'Being Served',
+        date: ticket.date
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
 
     const nowServingPayload = nowServing
       ? {
@@ -390,11 +491,13 @@ export const trackTicket = async (req, res) => {
     }
 
     // Count how many tickets are Waiting before this one at the same center
-    const aheadCount = await Ticket.countDocuments({
-      center: ticket.center._id,
-      status: 'Waiting',
-      date: ticket.date,
-      createdAt: { $lt: ticket.createdAt }
+    const aheadCount = await prisma.ticket.count({
+      where: {
+        center: ticket.center.id,
+        status: 'Waiting',
+        date: ticket.date,
+        createdAt: { lt: ticket.createdAt }
+      }
     });
 
     const position = aheadCount + 1;
@@ -429,18 +532,38 @@ export const trackTicket = async (req, res) => {
 export const listTickets = async (req, res) => {
   try {
     const role = normalizeRole(req.user.role);
+    const { center = '', centerId = '', district = '' } = req.query;
+    const requestedCenter = center || centerId;
     let query = {};
     if (role === 'citizen') {
-      query = { citizen: req.user._id };
+      query = { citizen: req.user.id };
     }
-    if (role === 'operator') {
+    if (STAFF_QUEUE_ROLES.includes(role)) {
       const assignedCenterId = getAssignedCenterId(req.user);
       if (!assignedCenterId) {
         return res.status(403).json({ success: false, message: 'Operator account is not assigned to a center.' });
       }
+      if (requestedCenter && requestedCenter !== assignedCenterId) {
+        return res.status(403).json({ success: false, message: 'You are not authorized to access another center’s data.' });
+      }
       query = { center: assignedCenterId };
+    } else if (isAdminRole(role)) {
+      if (requestedCenter) {
+        query.center = requestedCenter;
+      }
+      const normalizedDistrict = normalizeBanaadirDistrict(district);
+      if (normalizedDistrict && !requestedCenter) {
+        const centers = await prisma.center.findMany({
+          where: { district: normalizedDistrict },
+          select: { id: true }
+        });
+        query.center = { in: centers.map((item) => item.id) };
+      }
     }
-    const tickets = await Ticket.find(query).populate('service center').sort({ createdAt: -1 });
+    const tickets = await hydrateTickets(await prisma.ticket.findMany({
+      where: query,
+      orderBy: { createdAt: 'desc' }
+    }));
     return res.json({ success: true, count: tickets.length, data: tickets });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

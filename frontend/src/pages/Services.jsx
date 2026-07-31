@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiArrowRight, FiEdit3, FiRefreshCw } from 'react-icons/fi';
-import { FaIdCard } from 'react-icons/fa';
+import { FiArrowRight } from 'react-icons/fi';
 import { apiClient } from '../api/apiClient';
 import { useAuth } from '../hooks';
 import chooseNationalImage from '../assets/images/choose national.png';
@@ -9,37 +8,13 @@ import newNationalImage from '../assets/images/new national.png';
 import updateNationalImage from '../assets/images/apdate.png';
 import lostIdImage from '../assets/images/lost ID.png';
 import {
-  LOST_ID_SERVICE_NAME,
-  NEW_ID_SERVICE_NAME,
-  UPDATE_INFO_SERVICE_NAME
-} from './appointments/appointmentShared';
-
-const serviceCards = [
-  {
-    name: NEW_ID_SERVICE_NAME,
-    title: 'New National ID Registration',
-    fallbackDescription: 'Apply for a new National ID card and book your appointment at a Banaadir center.',
-    path: '/dashboard/user/new-id-registration',
-    icon: FaIdCard,
-    image: newNationalImage
-  },
-  {
-    name: UPDATE_INFO_SERVICE_NAME,
-    title: 'Update National ID Information',
-    fallbackDescription: 'Request a correction or update to your existing National ID information.',
-    path: '/dashboard/user/update-information',
-    icon: FiEdit3,
-    image: updateNationalImage
-  },
-  {
-    name: LOST_ID_SERVICE_NAME,
-    title: 'Replace Lost National ID',
-    fallbackDescription: 'Book a replacement appointment if your National ID card is lost.',
-    path: '/dashboard/user/replace-lost-id',
-    icon: FiRefreshCw,
-    image: lostIdImage
-  }
-];
+  getServiceIcon,
+  getServiceId,
+  getServicePath,
+  isLostIdService,
+  isNewIdService,
+  isUpdateInfoService
+} from '../utils/serviceRouting';
 
 const registeredStatuses = new Set(['Waiting', 'Pending', 'Scheduled', 'Resubmitted', 'Now Serving', 'Being Served', 'In Progress', 'Completed', 'On Hold']);
 const registeredRequestStatuses = new Set(['Pending', 'Approved', 'Completed', 'Resubmission Required']);
@@ -92,16 +67,39 @@ const Services = () => {
   }, [isAuthenticated, isCitizen]);
 
   const alreadyRegistered = useMemo(
-    () => Boolean(user?.nationalId || ['ACTIVE', 'COMPLETED'].includes(user?.nationalIdStatus)) || ownBookings.some(hasNewRegistration),
-    [ownBookings, user?.nationalId, user?.nationalIdStatus]
+    () => ['ACTIVE', 'COMPLETED', 'ISSUED', 'WAITING', 'UNDER_REVIEW'].includes(String(user?.nationalIdStatus || '').toUpperCase()) || ownBookings.some(hasNewRegistration),
+    [ownBookings, user?.nationalIdStatus]
   );
-  const hasIssuedNationalId = Boolean(user?.nationalId || ['ACTIVE', 'COMPLETED'].includes(user?.nationalIdStatus));
+  const hasIssuedNationalId = ['ACTIVE', 'COMPLETED', 'ISSUED'].includes(String(user?.nationalIdStatus || '').toUpperCase());
 
   const cards = useMemo(() => {
-    return serviceCards.map((card) => ({
-      ...card,
-      service: services.find((service) => service.name === card.name)
-    }));
+    const imageFor = (service) => {
+      if (isNewIdService(service)) return newNationalImage;
+      if (isUpdateInfoService(service)) return updateNationalImage;
+      if (isLostIdService(service)) return lostIdImage;
+      return chooseNationalImage;
+    };
+
+    return [...services]
+      .filter((service) => String(service.category || '').toLowerCase().includes('national id'))
+      .sort((a, b) => {
+        const rank = (service) => {
+          if (isNewIdService(service)) return 0;
+          if (isUpdateInfoService(service)) return 1;
+          if (isLostIdService(service)) return 2;
+          return 10;
+        };
+        return rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || ''));
+      })
+      .map((service) => ({
+        service,
+        name: service.name,
+        title: isNewIdService(service) ? 'New National ID Registration' : service.name,
+        fallbackDescription: 'Book this National ID service at your selected Banaadir center.',
+        path: getServicePath(service),
+        icon: getServiceIcon(service),
+        image: imageFor(service)
+      }));
   }, [services]);
 
   return (
@@ -135,15 +133,20 @@ const Services = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {!loading && cards.length === 0 && (
+            <div className="rounded-2xl border border-blue-100 bg-white p-6 text-sm font-semibold text-slate-600 md:col-span-2 xl:col-span-3">
+              No National ID services are available yet.
+            </div>
+          )}
           {cards.map((card) => {
-            const isNewRegistrationCard = card.name === NEW_ID_SERVICE_NAME;
-            const needsIssuedId = card.name === UPDATE_INFO_SERVICE_NAME || card.name === LOST_ID_SERVICE_NAME;
+            const isNewRegistrationCard = isNewIdService(card.service);
+            const needsIssuedId = isUpdateInfoService(card.service) || isLostIdService(card.service);
             const disabled = alreadyRegistered && isNewRegistrationCard;
             const ineligible = needsIssuedId && isAuthenticated && isCitizen && !hasIssuedNationalId && !ownBookings.some((ticket) => ticket.requestType === 'new_national_id' && ticket.requestStatus === 'Completed');
             return (
             <article
-              key={card.name}
+              key={getServiceId(card.service) || card.name}
               className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition ${disabled ? 'opacity-65' : 'hover:-translate-y-0.5 hover:shadow-lg'}`}
             >
               <div className="mb-4 h-40 overflow-hidden rounded-xl bg-slate-50">
@@ -158,7 +161,7 @@ const Services = () => {
               </div>
               <h2 className="text-lg font-black text-[#082A55]">{card.title}</h2>
               <p className="mt-2 min-h-[72px] text-sm leading-6 text-slate-600">
-                {card.service?.description || card.fallbackDescription}
+                {card.service.description || card.fallbackDescription}
               </p>
               {disabled || ineligible ? (
                 <button

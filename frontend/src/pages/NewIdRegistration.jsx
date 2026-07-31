@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   FiArrowLeft,
@@ -27,10 +27,13 @@ import {
   activeCenters,
   calculateAge,
   findService,
+  formatSomaliPhone,
   formatDate,
   getDistrict,
+  isValidSomaliPhone,
+  isBeforeToday,
+  isPastTimeSlot,
   maxDateKey,
-  timeSlots,
   todayKey
 } from './appointments/appointmentShared';
 
@@ -41,40 +44,88 @@ const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-3
 const labelClass = 'mb-2 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-600';
 
 const BANAADIR_DISTRICTS = [
+  'Abdulaziz',
+  'Boondheere',
+  'Dayniile',
+  'Dharkenley',
+  'Garasbaaley',
+  'Heliwaa',
   'Hodan',
   'Howlwadaag',
-  'Wadajir',
-  'Dharkenley',
-  'Dayniile',
-  'Heliwaa',
-  'Yaqshiid',
   'Kaaraan',
-  'Shibis',
-  'Boondheere',
-  'Xamar Weyne',
-  'Xamar Jajab',
-  'Waaberi',
-  'Wardhiigley',
-  'Abdulaziz',
-  'Shangaani',
   'Kaxda',
-  'Garasbaaley'
+  'Shangaani',
+  'Shibis',
+  'Waaberi',
+  'Wadajir',
+  'Wardhiigley',
+  'Xamar Jajab',
+  'Xamar Weyne',
+  'Yaqshiid'
 ];
 
 const cleanText = (value) => String(value || '').trim();
 const cleanSpacedText = (value) => cleanText(value).replace(/\s+/g, ' ');
+const idFrom = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') return value.id || value._id || '';
+  return value;
+};
 const lettersAndSpacesOnly = (value) => /^[A-Za-z\s]+$/.test(value);
 const lettersNumbersSpacesOnly = (value) => /^[A-Za-z0-9\s]+$/.test(value);
 const addressCharsOnly = (value) => /^[A-Za-z0-9\s,]+$/.test(value);
-const somaliPhoneRegex = /^(61|62|63|65|66|68|69)\d{7}$/;
+const REQUIRED_RESUBMIT_FIELDS = new Set([
+  'fullName',
+  'motherName',
+  'dateOfBirth',
+  'phone',
+  'gender',
+  'maritalStatus',
+  'district',
+  'nearestLandmark',
+  'address',
+  'centerId',
+  'date',
+  'timeSlot'
+]);
+const NEW_ID_DRAFT_PREFIX = 'nqs_new_id_registration_draft';
+
+const getDraftKey = (user) => `${NEW_ID_DRAFT_PREFIX}:${user?.id || user?._id || user?.username || 'guest'}`;
+
+const emptyNewIdForm = (user = {}) => ({
+  fullName: user?.name || '',
+  motherName: '',
+  dateOfBirth: '',
+  age: '',
+  phone: formatSomaliPhone(user?.phone),
+  gender: '',
+  maritalStatus: user?.maritalStatus || '',
+  district: '',
+  address: user?.address || '',
+  nearestLandmark: '',
+  centerId: '',
+  date: '',
+  timeSlot: ''
+});
+
+const loadSavedNewIdDraft = (user) => {
+  try {
+    const saved = localStorage.getItem(getDraftKey(user));
+    if (!saved) return emptyNewIdForm(user);
+    const parsed = JSON.parse(saved);
+    return {
+      ...emptyNewIdForm(user),
+      ...parsed,
+      age: parsed.dateOfBirth ? calculateAge(parsed.dateOfBirth) : parsed.age || ''
+    };
+  } catch {
+    return emptyNewIdForm(user);
+  }
+};
 
 const hasMinimumWords = (value, minWords = 2) => {
   const words = String(value || '').trim().split(/\s+/).filter(Boolean);
   return words.length >= minWords;
-};
-
-const isValidSomaliPhone = (value) => {
-  return somaliPhoneRegex.test(cleanText(value));
 };
 
 const districtKey = (value) => String(value || '')
@@ -89,22 +140,93 @@ const DISTRICT_ALIASES = {
   waberi: 'Waaberi',
   karan: 'Kaaraan',
   karaan: 'Kaaraan',
+  wardhiigleey: 'Wardhiigley',
+  wardhigley: 'Wardhiigley',
+  wardhigleey: 'Wardhiigley',
   banaadir: 'Hodan'
 };
 
-const normalizeDistrictValue = (value) => {
+const normalizeDistrictValue = (value, districtOptions = BANAADIR_DISTRICTS) => {
   const key = districtKey(value);
-  return BANAADIR_DISTRICTS.find((district) => districtKey(district) === key) || DISTRICT_ALIASES[key] || '';
+  const directMatch = districtOptions.find((district) => districtKey(district) === key);
+  if (directMatch) return directMatch;
+  const alias = DISTRICT_ALIASES[key];
+  return districtOptions.find((district) => districtKey(district) === districtKey(alias)) || '';
 };
 
-const editableFieldsForReason = (reason = '') => {
-  const value = String(reason).toLowerCase();
-  if (value.includes('mother')) return new Set(['motherName']);
-  if (value.includes('birth')) return new Set(['dateOfBirth']);
-  if (value.includes('phone')) return new Set(['phone']);
-  if (value.includes('marital')) return new Set(['maritalStatus']);
-  if (value.includes('name')) return new Set(['fullName']);
-  return new Set(['fullName', 'motherName', 'dateOfBirth', 'phone', 'gender', 'maritalStatus', 'district', 'nearestLandmark', 'address', 'centerId', 'date', 'timeSlot']);
+const correctionReasonsFromTicket = (ticketOrReason = '') => {
+  if (typeof ticketOrReason === 'string') return [ticketOrReason].filter(Boolean);
+  const ticket = ticketOrReason || {};
+  const reasons = Array.isArray(ticket.cancellationReasons) ? ticket.cancellationReasons : [];
+  return [
+    ...reasons,
+    ticket.cancellationReason,
+    ticket.additionalCancellationReason,
+    ticket.cancellationNotes
+  ].filter(Boolean);
+};
+
+const editableFieldsForReason = (ticketOrReason = '') => {
+  const value = correctionReasonsFromTicket(ticketOrReason).join(' ').toLowerCase();
+  const fields = new Set();
+
+  if (value.includes('first name') || value.includes('middle name') || value.includes('last name') || value.includes('full name') || value.includes('name')) fields.add('fullName');
+  if (value.includes('mother')) fields.add('motherName');
+  if (value.includes('birth')) fields.add('dateOfBirth');
+  if (value.includes('phone')) fields.add('phone');
+  if (value.includes('gender')) fields.add('gender');
+  if (value.includes('marital')) fields.add('maritalStatus');
+  if (value.includes('district')) fields.add('district');
+  if (value.includes('address')) fields.add('address');
+  if (value.includes('landmark')) fields.add('nearestLandmark');
+  if (value.includes('center')) fields.add('centerId');
+  if (value.includes('appointment date')) fields.add('date');
+  if (value.includes('appointment time')) fields.add('timeSlot');
+
+  return fields.size
+    ? fields
+    : new Set(['fullName', 'motherName', 'dateOfBirth', 'phone', 'gender', 'maritalStatus', 'district', 'nearestLandmark', 'address', 'centerId', 'date', 'timeSlot']);
+};
+
+const unwrapBookingPayload = (payload = {}) => payload?.data?.ticket || payload?.ticket || payload?.data || payload;
+
+const canResubmitTicket = (ticket = {}) => {
+  const status = String(ticket.status || '').trim().toLowerCase();
+  const requestStatus = String(ticket.requestStatus || '').trim().toLowerCase();
+  return (
+    ['cancelled', 'canceled', 'needs_correction', 'needs correction', 'correction required', 'resubmitted'].includes(status)
+    || ['needs_correction', 'needs correction', 'correction required'].includes(requestStatus)
+    || Boolean(ticket.needsResubmission)
+  );
+};
+
+const isCancelledTicket = canResubmitTicket;
+
+const buildExistingTicketInfo = (ticket = {}) => ({
+  ticket: ticket._id || ticket.id || ticket.ref || ticket.ticketNumber || null,
+  ticketNumber: ticket.ref || ticket.ticketNumber || '',
+  queueNumber: String(ticket.ref || '').split('-').pop() || ticket.queueNumber || '',
+  serviceType: ticket.service?.name || ticket.serviceName || 'New National ID Registration',
+  centerName: ticket.center?.name || ticket.centerName || ticket.registrationDetails?.selectedCenter || '',
+  centerId: idFrom(ticket.center),
+  date: ticket.date || ticket.registrationDetails?.appointmentDate || '',
+  timeSlot: ticket.timeSlot || ticket.registrationDetails?.appointmentTime || '',
+  status: ticket.status || '',
+  needsResubmission: Boolean(ticket.needsResubmission),
+  cancellationReason: ticket.cancellationReason || '',
+  cancellationReasons: ticket.cancellationReasons || [],
+  additionalCancellationReason: ticket.additionalCancellationReason || '',
+  cancellationNotes: ticket.cancellationNotes || ''
+});
+
+const isNewRegistrationRecord = (ticket = {}) => {
+  const requestType = String(ticket.requestType || '').toLowerCase();
+  const serviceName = String(ticket.service?.name || ticket.serviceName || '').toLowerCase();
+
+  if (requestType === 'new_national_id' || requestType === 'new_registration') return true;
+  if (requestType && requestType !== 'national_id_registration') return false;
+  if (serviceName.includes('lost') || serviceName.includes('replacement') || serviceName.includes('update')) return false;
+  return serviceName.includes('new national id') || serviceName.includes('national id registration');
 };
 
 const isRealBirthDate = (value) => {
@@ -126,49 +248,71 @@ const isRealBirthDate = (value) => {
   );
 };
 
+const isFutureDate = (value) => {
+  if (!value) return false;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return date > today;
+};
+
 const NewIdRegistration = () => {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const resubmitId = searchParams.get('resubmit');
   const [services, setServices] = useState([]);
   const [centers, setCenters] = useState([]);
   const [availability, setAvailability] = useState({});
-  const [availableSlots, setAvailableSlots] = useState(timeSlots);
+  const [availableSlots, setAvailableSlots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [checkingExistingRegistration, setCheckingExistingRegistration] = useState(!resubmitId);
   const [submitting, setSubmitting] = useState(false);
   const [ticket, setTicket] = useState(null);
   const [existingTicket, setExistingTicket] = useState(null);
+  const [existingRegistrationLocked, setExistingRegistrationLocked] = useState(false);
   const [resubmitTicket, setResubmitTicket] = useState(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [reviewMode, setReviewMode] = useState(false);
   const [confirmedAccuracy, setConfirmedAccuracy] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
-  const [form, setForm] = useState({
-    fullName: user?.name || '',
-    motherName: '',
-    dateOfBirth: '',
-    age: '',
-    phone: user?.phone || '',
-    gender: '',
-    maritalStatus: user?.maritalStatus || '',
-    district: '',
-    address: user?.address || '',
-    nearestLandmark: '',
-    centerId: '',
-    date: '',
-    timeSlot: ''
-  });
+  const [form, setForm] = useState(() => loadSavedNewIdDraft(user));
 
   const service = useMemo(() => findService(services, NEW_ID_SERVICE_NAME), [services]);
   const selectedCenter = useMemo(
     () => centers.find((center) => (center._id || center.id) === form.centerId),
     [centers, form.centerId]
   );
-  const selectedDistrict = normalizeDistrictValue(form.district);
-  const filteredCenters = useMemo(
-    () => centers.filter((center) => normalizeDistrictValue(getDistrict(center)) === selectedDistrict),
-    [centers, selectedDistrict]
+  const selectedCenterDistrict = useMemo(
+    () => normalizeDistrictValue(getDistrict(selectedCenter)),
+    [selectedCenter]
   );
+  const districtOptions = useMemo(() => {
+    const options = [];
+    const addOption = (value) => {
+      const label = String(value || '').trim();
+      if (label && !options.some((item) => districtKey(item) === districtKey(label))) {
+        options.push(label);
+      }
+    };
+
+    centers.forEach((center) => {
+      const rawDistrict = getDistrict(center);
+      const normalized = normalizeDistrictValue(rawDistrict, options);
+      addOption(normalized || rawDistrict);
+
+      const centerName = String(center?.name || '').trim();
+      const isCustomDistrictCenter = centerName && !/national\s+id\s+center/i.test(centerName);
+      if (isCustomDistrictCenter) addOption(centerName);
+    });
+
+    return options.sort((a, b) => a.localeCompare(b));
+  }, [centers]);
+  const selectedDistrict = normalizeDistrictValue(form.district, districtOptions);
+  const districtCenterOptions = useMemo(() => {
+    return [...centers].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  }, [centers]);
   const bookedSlots = form.date ? availability[form.date]?.bookedSlots || [] : [];
   const availableDateOptions = useMemo(
     () => Object.entries(availability)
@@ -178,11 +322,56 @@ const NewIdRegistration = () => {
     [availability]
   );
   const editableFields = useMemo(
-    () => (resubmitTicket ? editableFieldsForReason(resubmitTicket.cancellationReason) : null),
+    () => (resubmitTicket ? editableFieldsForReason(resubmitTicket) : null),
     [resubmitTicket]
   );
-  const canEditField = (field) => !editableFields || editableFields.has(field);
-  const hasIssuedNationalId = Boolean(user?.nationalId || ['ACTIVE', 'COMPLETED'].includes(user?.nationalIdStatus));
+  const canEditField = (field) => {
+    if (!editableFields) return true;
+    if (editableFields.has(field)) return true;
+    if (resubmitTicket && REQUIRED_RESUBMIT_FIELDS.has(field) && !cleanText(form[field])) return true;
+    return false;
+  };
+  const hasIssuedNationalId = ['ACTIVE', 'COMPLETED', 'ISSUED'].includes(String(user?.nationalIdStatus || '').toUpperCase());
+
+  useEffect(() => {
+    if (!centers.length || !form.district) return;
+    if (normalizeDistrictValue(form.district, districtOptions)) return;
+    setForm((current) => ({ ...current, district: '', centerId: '', date: '', timeSlot: '' }));
+  }, [centers.length, districtOptions, form.district]);
+
+  useEffect(() => {
+    if (ticket) return;
+    try {
+      localStorage.setItem(getDraftKey(user), JSON.stringify(form));
+    } catch {
+      // Draft persistence is best-effort only.
+    }
+  }, [form, ticket, user]);
+
+  const fillFormFromCancelledTicket = useCallback((existing) => {
+    const details = existing.registrationDetails || {};
+    setResubmitTicket(existing);
+    setExistingTicket(null);
+    setExistingRegistrationLocked(false);
+    setTicket(null);
+    setReviewMode(false);
+    setConfirmedAccuracy(false);
+    setForm({
+      fullName: details.fullName || existing.citizenName || user?.name || '',
+      motherName: details.motherName || '',
+      dateOfBirth: details.dateOfBirth ? String(details.dateOfBirth).slice(0, 10) : '',
+      age: details.age || calculateAge(details.dateOfBirth),
+          phone: formatSomaliPhone(details.phone || existing.citizen?.phone || user?.phone),
+      gender: details.gender || '',
+      maritalStatus: details.maritalStatus || '',
+      district: normalizeDistrictValue(details.district),
+      address: details.fullAddress || details.address || user?.address || '',
+      nearestLandmark: details.nearestLandmark || '',
+      centerId: idFrom(existing.center),
+      date: existing.date ? String(existing.date).slice(0, 10) : '',
+      timeSlot: existing.timeSlot || ''
+    });
+  }, [user?.address, user?.name, user?.phone]);
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -203,41 +392,60 @@ const NewIdRegistration = () => {
   }, []);
 
   useEffect(() => {
+    if (resubmitId) {
+      setCheckingExistingRegistration(false);
+      return undefined;
+    }
+
+    let mounted = true;
+    const loadExistingRegistration = async () => {
+      try {
+        const res = await api.get('/api/bookings/my');
+        const records = Array.isArray(res.data?.data)
+          ? res.data.data
+          : Array.isArray(res.data)
+            ? res.data
+            : [];
+        const existingNewRegistration = records.find((record) => isNewRegistrationRecord(record));
+        if (mounted && existingNewRegistration) {
+          if (canResubmitTicket(existingNewRegistration)) {
+            fillFormFromCancelledTicket(existingNewRegistration);
+            return;
+          }
+          setExistingTicket(buildExistingTicketInfo(existingNewRegistration));
+          setExistingRegistrationLocked(true);
+        }
+      } catch {
+        // Backend validation still prevents duplicate registration if this lookup fails.
+      } finally {
+        if (mounted) {
+          setCheckingExistingRegistration(false);
+        }
+      }
+    };
+
+    loadExistingRegistration();
+    return () => {
+      mounted = false;
+    };
+  }, [fillFormFromCancelledTicket, resubmitId]);
+
+  useEffect(() => {
     if (!resubmitId || centers.length === 0) return;
 
     let mounted = true;
     const loadResubmitTicket = async () => {
       try {
         const res = await api.get(`/api/bookings/${resubmitId}`);
-        const existing = res.data?.data || res.data;
+        const existing = unwrapBookingPayload(res.data);
         if (!mounted || !existing) return;
 
-        if (existing.status !== 'Cancelled') {
-          toast.error('Only cancelled appointments can be resubmitted.');
+        if (!canResubmitTicket(existing)) {
+          toast.error('Only cancelled or correction-required appointments can be resubmitted.');
           return;
         }
 
-        const details = existing.registrationDetails || {};
-        setResubmitTicket(existing);
-        setExistingTicket(null);
-        setTicket(null);
-        setReviewMode(false);
-        setConfirmedAccuracy(false);
-        setForm({
-          fullName: details.fullName || existing.citizenName || user?.name || '',
-          motherName: details.motherName || '',
-          dateOfBirth: details.dateOfBirth ? String(details.dateOfBirth).slice(0, 10) : '',
-          age: details.age || calculateAge(details.dateOfBirth),
-          phone: details.phone || existing.citizen?.phone || user?.phone || '',
-          gender: details.gender || '',
-          maritalStatus: details.maritalStatus || '',
-          district: normalizeDistrictValue(details.district),
-          address: details.fullAddress || details.address || user?.address || '',
-          nearestLandmark: details.nearestLandmark || '',
-          centerId: existing.center?._id || existing.center || '',
-          date: existing.date ? String(existing.date).slice(0, 10) : '',
-          timeSlot: existing.timeSlot || ''
-        });
+        fillFormFromCancelledTicket(existing);
       } catch (error) {
         toast.error(error.response?.data?.message || 'Could not load the cancelled appointment.');
       }
@@ -247,12 +455,12 @@ const NewIdRegistration = () => {
     return () => {
       mounted = false;
     };
-  }, [resubmitId, centers.length, user?.address, user?.name, user?.phone]);
+  }, [centers.length, fillFormFromCancelledTicket, resubmitId]);
 
   useEffect(() => {
     if (!form.centerId) {
       setAvailability({});
-      setAvailableSlots(timeSlots);
+      setAvailableSlots([]);
       return;
     }
 
@@ -264,10 +472,10 @@ const NewIdRegistration = () => {
           end: maxDateKey()
         });
         setAvailability(res.data?.dates || {});
-        setAvailableSlots(res.data?.timeSlots?.length ? res.data.timeSlots : timeSlots);
+        setAvailableSlots(res.data?.timeSlots?.length ? res.data.timeSlots : []);
       } catch {
         setAvailability({});
-        setAvailableSlots(timeSlots);
+        setAvailableSlots([]);
       }
     };
     loadAvailability();
@@ -290,22 +498,36 @@ const NewIdRegistration = () => {
   const updateForm = (field, value) => {
     if (!canEditField(field)) return;
     setConfirmedAccuracy(false);
-    setExistingTicket(null);
+    if (!existingRegistrationLocked) {
+      setExistingTicket(null);
+    }
     setFieldErrors((current) => ({ ...current, [field]: '' }));
     setForm((current) => {
       const next = { ...current, [field]: value };
       if (field === 'dateOfBirth') {
-        next.age = calculateAge(value);
+        next.age = isFutureDate(value) ? '' : calculateAge(value);
+        if (isFutureDate(value)) {
+          setFieldErrors((errors) => ({ ...errors, dateOfBirth: 'Date of birth cannot be in the future.' }));
+        }
       }
       if (field === 'date') {
         next.timeSlot = '';
       }
       if (field === 'district') {
-        next.centerId = '';
-        next.date = '';
-        next.timeSlot = '';
+        const normalizedDistrict = normalizeDistrictValue(value, districtOptions);
+        if (!current.centerId) {
+          const recommendedCenter = centers.find((center) => normalizeDistrictValue(getDistrict(center), districtOptions) === normalizedDistrict);
+          next.centerId = recommendedCenter ? (recommendedCenter._id || recommendedCenter.id) : '';
+          next.date = '';
+          next.timeSlot = '';
+        }
       }
       if (field === 'centerId') {
+        const center = centers.find((item) => (item._id || item.id) === value);
+        const recommendedDistrict = normalizeDistrictValue(getDistrict(center), districtOptions);
+        if (recommendedDistrict && canEditField('district')) {
+          next.district = recommendedDistrict;
+        }
         next.date = '';
         next.timeSlot = '';
       }
@@ -332,8 +554,8 @@ const NewIdRegistration = () => {
     else if (!hasMinimumWords(motherName)) errors.motherName = "Mother's Name must contain at least two words.";
 
     if (!form.dateOfBirth) errors.dateOfBirth = 'Date of birth is required.';
-    else if (!isRealBirthDate(form.dateOfBirth)) errors.dateOfBirth = 'Date of birth must be a real past date.';
-    else if (Number(calculateAge(form.dateOfBirth)) < 18) errors.dateOfBirth = 'You must be at least 18 years old to book this service.';
+    else if (isFutureDate(form.dateOfBirth)) errors.dateOfBirth = 'Date of birth cannot be in the future.';
+    else if (!isRealBirthDate(form.dateOfBirth)) errors.dateOfBirth = 'Date of birth must be a real valid date.';
 
     if (!phone) errors.phone = 'Phone number is required.';
     else if (!isValidSomaliPhone(phone)) errors.phone = 'Enter a valid Somali phone number.';
@@ -345,7 +567,7 @@ const NewIdRegistration = () => {
     else if (!['SINGLE', 'MARRIED'].includes(form.maritalStatus)) errors.maritalStatus = 'Please select your marital status.';
 
     if (!district) errors.district = 'District is required.';
-    else if (!normalizeDistrictValue(district)) errors.district = 'Please select your district from the official Banaadir district list.';
+    else if (!normalizeDistrictValue(district, districtOptions)) errors.district = 'Please select your district from the list.';
 
     if (!nearestLandmark) errors.nearestLandmark = 'Nearest landmark is required.';
     else if (!lettersNumbersSpacesOnly(nearestLandmark)) errors.nearestLandmark = 'Nearest landmark can contain letters, numbers, and spaces only.';
@@ -354,13 +576,13 @@ const NewIdRegistration = () => {
     else if (!addressCharsOnly(address)) errors.address = 'Full address can contain letters, numbers, spaces, and commas only.';
 
     if (!form.centerId) errors.centerId = 'Please select a center.';
-    else if (selectedCenter && normalizeDistrictValue(getDistrict(selectedCenter)) !== normalizeDistrictValue(form.district)) {
-      errors.centerId = 'The selected center does not belong to the selected district.';
-    }
     if (!form.date) errors.date = 'Please choose an appointment date.';
+    else if (isBeforeToday(form.date)) errors.date = 'Past appointment dates cannot be selected.';
     else if (availability[form.date]?.status === 'closed') errors.date = 'This center is not available on this date.';
     else if (availability[form.date]?.status === 'full') errors.date = 'Appointments are full for this date. Please choose another date.';
     if (!form.timeSlot) errors.timeSlot = 'Please choose an appointment time.';
+    else if (isPastTimeSlot(form.date, form.timeSlot)) errors.timeSlot = 'Past appointment times cannot be selected.';
+    else if (!availableSlots.includes(form.timeSlot)) errors.timeSlot = 'Selected time is outside this center schedule.';
     else if (bookedSlots.includes(form.timeSlot)) errors.timeSlot = 'Appointments are full for this time. Please choose another available slot.';
 
     return errors;
@@ -370,7 +592,7 @@ const NewIdRegistration = () => {
     const errors = getValidationErrors();
     setFieldErrors(errors);
     if (Object.keys(errors).length) {
-      toast.error('Please correct the highlighted fields.');
+      toast.error(Object.values(errors)[0] || 'Please correct the highlighted fields.');
       return false;
     }
     return true;
@@ -388,7 +610,7 @@ const NewIdRegistration = () => {
         ...current,
         fullName: cleanSpacedText(current.fullName),
         motherName: cleanSpacedText(current.motherName),
-        phone: cleanText(current.phone),
+      phone: formatSomaliPhone(current.phone),
         district: cleanSpacedText(current.district),
         address: cleanSpacedText(current.address),
         nearestLandmark: cleanSpacedText(current.nearestLandmark)
@@ -406,7 +628,7 @@ const NewIdRegistration = () => {
     const cleanForm = {
       fullName: cleanSpacedText(form.fullName),
       motherName: cleanSpacedText(form.motherName),
-      phone: cleanText(form.phone),
+      phone: formatSomaliPhone(form.phone),
       gender: form.gender,
       maritalStatus: form.maritalStatus,
       district: cleanSpacedText(form.district),
@@ -414,7 +636,7 @@ const NewIdRegistration = () => {
       nearestLandmark: cleanSpacedText(form.nearestLandmark),
       dateOfBirth: form.dateOfBirth,
       age: Number(form.age),
-      centerId: form.centerId,
+      centerId: idFrom(form.centerId),
       date: form.date,
       timeSlot: form.timeSlot
     };
@@ -446,7 +668,7 @@ const NewIdRegistration = () => {
         }
       };
 
-      const resubmitTicketId = resubmitTicket?._id || resubmitTicket?.id;
+      const resubmitTicketId = resubmitTicket?._id || resubmitTicket?.id || resubmitTicket?.ref || resubmitId;
       if (resubmitTicketId) {
         const res = await apiClient.put(`/api/bookings/${resubmitTicketId}/resubmit`, payload);
         setTicket({
@@ -458,31 +680,58 @@ const NewIdRegistration = () => {
           status: res.data?.status || 'Waiting'
         });
         setResubmitTicket(null);
+        localStorage.removeItem(getDraftKey(user));
         toast.success('Appointment resubmitted successfully.');
         return;
       }
 
-      const res = await apiClient.post('/api/bookings', {
-        ...payload
+      const otpResponse = await api.post('/api/otp/request', {
+        purpose: 'new_id_booking',
+        phone: cleanForm.phone
       });
-      setTicket({
-        ...(res.data || {}),
-        service: 'New National ID Registration',
-        center: selectedCenter?.name,
-        date: cleanForm.date,
-        timeSlot: cleanForm.timeSlot,
-        status: res.data?.status || 'Waiting'
-      });
-      toast.success('Appointment created successfully.');
+      sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
+        purpose: 'new_id_booking',
+        phone: otpResponse.data?.data?.phone || cleanForm.phone,
+        otpId: otpResponse.data?.data?.otpId,
+        finalRequest: {
+          method: 'post',
+          url: '/api/bookings',
+          payload
+        },
+        clearDraftKey: getDraftKey(user),
+        successPath: '/dashboard/user/appointments',
+        successMessage: 'Booking Successful'
+      }));
+      localStorage.setItem(getDraftKey(user), JSON.stringify(cleanForm));
+      toast.success('OTP sent.');
+      navigate('/otp-verification?purpose=new_id_booking');
     } catch (error) {
       const duplicateTicket = error.response?.data?.data?.existingTicket;
       if (error.response?.status === 409 && duplicateTicket) {
+        if (canResubmitTicket(duplicateTicket)) {
+          const existingTicketId = duplicateTicket.ticket || duplicateTicket._id || duplicateTicket.id || duplicateTicket.ticketNumber || duplicateTicket.ref || duplicateTicket.ticketRef;
+          if (existingTicketId) {
+            try {
+              const detailRes = await apiClient.get(`/api/bookings/${existingTicketId}`);
+              fillFormFromCancelledTicket(unwrapBookingPayload(detailRes.data) || duplicateTicket);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              return;
+            } catch {
+              // Fall back to the correction summary if the full ticket cannot be loaded.
+            }
+          }
+          fillFormFromCancelledTicket(duplicateTicket);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          return;
+        }
         setExistingTicket(duplicateTicket);
+        setExistingRegistrationLocked(true);
         setReviewMode(false);
         setConfirmedAccuracy(false);
         return;
       }
       if (error.response?.status === 409) {
+        toast.error(error.response?.data?.message || 'You have already registered for a National ID service. Please use your existing ticket or contact support.');
         return;
       }
       toast.error(error.response?.data?.message || 'Could not create the appointment.');
@@ -501,17 +750,17 @@ const NewIdRegistration = () => {
     }
   };
 
-  if (loading) {
+  if (loading || checkingExistingRegistration) {
     return (
       <div className={pageClass}>
         <div className="mx-auto max-w-5xl">
-          <div className={cardClass}>Loading appointment form...</div>
+          <div className={cardClass}>Checking your appointment record...</div>
         </div>
       </div>
     );
   }
 
-  if (hasIssuedNationalId && !resubmitId && !ticket) {
+  if (hasIssuedNationalId && !resubmitId && !ticket && !resubmitTicket) {
     return (
       <div className={pageClass}>
         <div className="mx-auto max-w-3xl">
@@ -612,13 +861,17 @@ const NewIdRegistration = () => {
           </section>
         ) : existingTicket ? (
           <section className={cardClass}>
-            <div className="flex items-center gap-2 text-amber-600">
+            <div className={`flex items-center gap-2 ${isCancelledTicket(existingTicket) ? 'text-red-600' : 'text-amber-600'}`}>
               <FiCheckCircle />
-              <span className="text-sm font-bold">Existing National ID registration found</span>
+              <span className="text-sm font-bold">{isCancelledTicket(existingTicket) ? 'Correction required' : 'Existing National ID registration found'}</span>
             </div>
-            <h2 className="mt-3 text-2xl font-black text-slate-950">Use your existing ticket</h2>
+            <h2 className="mt-3 text-2xl font-black text-slate-950">
+              {isCancelledTicket(existingTicket) ? 'Correct your cancelled appointment' : 'Use your existing ticket'}
+            </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              You have already registered for a National ID service. Please use your existing ticket or contact support.
+              {isCancelledTicket(existingTicket)
+                ? 'Your previous National ID appointment was cancelled. Please correct the information requested by the office and resubmit the same appointment.'
+                : 'You have already registered for a National ID service. Please use your existing ticket or contact support.'}
             </p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Info label="Ticket Number" value={existingTicket.ticketNumber} />
@@ -629,17 +882,46 @@ const NewIdRegistration = () => {
               <Info label="Time" value={existingTicket.timeSlot} />
               <Info label="Status" value={existingTicket.status} />
             </div>
+            {isCancelledTicket(existingTicket) && correctionReasonsFromTicket(existingTicket).length > 0 && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <p className="font-black">Admin feedback</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {correctionReasonsFromTicket(existingTicket).map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-              <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
-                <FiClock /> Check Queue Status
-              </Link>
-              <button
-                type="button"
-                onClick={() => setExistingTicket(null)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Edit Details
-              </button>
+              {isCancelledTicket(existingTicket) ? (
+                <Link
+                  to={`/dashboard/user/new-id-registration?resubmit=${encodeURIComponent(existingTicket.ticket)}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700"
+                >
+                  Correct and Resubmit
+                </Link>
+              ) : (
+                <>
+                  <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
+                    <FiClock /> Check Queue Status
+                  </Link>
+                  <Link to="/dashboard/user/update-information" className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">
+                    Update Information
+                  </Link>
+                  <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">
+                    Replace Lost ID
+                  </Link>
+                </>
+              )}
+              {!existingRegistrationLocked && (
+                <button
+                  type="button"
+                  onClick={() => setExistingTicket(null)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Edit Details
+                </button>
+              )}
             </div>
           </section>
         ) : (
@@ -713,9 +995,9 @@ const NewIdRegistration = () => {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="Full Name" required placeholder="Rakia Gaashaan Ibrahim" icon={<FiUser />} value={form.fullName} error={fieldErrors.fullName} disabled={!canEditField('fullName')} onChange={(value) => updateForm('fullName', value)} />
                     <Field label="Mother's Name" required placeholder="Amina Mohamed Ali" icon={<FiUsers />} value={form.motherName} error={fieldErrors.motherName} disabled={!canEditField('motherName')} onChange={(value) => updateForm('motherName', value)} />
-                    <Field label="Date of Birth" required type="date" icon={<FiCalendar />} value={form.dateOfBirth} error={fieldErrors.dateOfBirth} disabled={!canEditField('dateOfBirth')} onChange={(value) => updateForm('dateOfBirth', value)} />
+                    <Field label="Date of Birth" required type="date" max={todayKey()} icon={<FiCalendar />} value={form.dateOfBirth} error={fieldErrors.dateOfBirth} disabled={!canEditField('dateOfBirth')} onChange={(value) => updateForm('dateOfBirth', value)} />
                     <Field label="Age" required type="number" placeholder="Auto calculated" icon={<FiHash />} value={form.age} readOnly onChange={() => {}} />
-                    <Field label="Phone Number" required type="tel" placeholder="618467774" icon={<FiPhone />} value={form.phone} error={fieldErrors.phone} inputMode="numeric" maxLength={9} disabled={!canEditField('phone')} onChange={(value) => updateForm('phone', value)} />
+                    <PhoneField value={form.phone} error={fieldErrors.phone} disabled={!canEditField('phone')} onChange={(value) => updateForm('phone', formatSomaliPhone(value))} />
                     <label className="block">
                       <RequiredLabel label="Gender" />
                       <select
@@ -744,7 +1026,7 @@ const NewIdRegistration = () => {
                       </select>
                       {fieldErrors.maritalStatus && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.maritalStatus}</p>}
                     </label>
-                    <DistrictSelect value={form.district} error={fieldErrors.district} disabled={!canEditField('district')} onChange={(value) => updateForm('district', value)} />
+                    <DistrictSelect value={form.district} districts={districtOptions} error={fieldErrors.district} disabled={!canEditField('district')} onChange={(value) => updateForm('district', value)} />
                     <Field label="Nearest Landmark" required placeholder="KM4" icon={<FiNavigation />} value={form.nearestLandmark} error={fieldErrors.nearestLandmark} disabled={!canEditField('nearestLandmark')} onChange={(value) => updateForm('nearestLandmark', value)} />
                     <label className="sm:col-span-2">
                       <RequiredLabel label="Full Address" />
@@ -779,37 +1061,41 @@ const NewIdRegistration = () => {
                       <RequiredLabel label="Selected National ID Center" />
                       <select
                         value={form.centerId}
-                        disabled={!canEditField('centerId') || !selectedDistrict}
+                        disabled={!canEditField('centerId')}
                         onChange={(event) => updateForm('centerId', event.target.value)}
                         className={`${inputClass} ${fieldErrors.centerId ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
                       >
-                        <option value="">{selectedDistrict ? `Choose a ${selectedDistrict} center` : 'Select your district first'}</option>
-                        {filteredCenters.map((center) => (
-                          <option key={center._id || center.id} value={center._id || center.id}>
-                            {center.name}
-                          </option>
-                        ))}
+                        <option value="">Choose any National ID center</option>
+                        {districtCenterOptions.map((center) => {
+                          const centerDistrict = normalizeDistrictValue(getDistrict(center), districtOptions) || getDistrict(center);
+                          return (
+                            <option key={center._id || center.id} value={center._id || center.id}>
+                              {center.name}{centerDistrict ? ` - ${centerDistrict}` : ''}
+                            </option>
+                          );
+                        })}
                       </select>
-                      {selectedDistrict && filteredCenters.length === 0 && (
-                        <p className="mt-1 text-xs font-semibold text-amber-600">No active National ID centers found for {selectedDistrict}.</p>
-                      )}
                       {fieldErrors.centerId && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.centerId}</p>}
                     </label>
                     <label className="block">
                       <RequiredLabel label="Appointment Date" />
-                      <select
+                      <input
+                        type="date"
                         value={form.date}
                         disabled={!canEditField('date') || !form.centerId}
+                        min={todayKey()}
+                        max={maxDateKey()}
                         onChange={(event) => updateForm('date', event.target.value)}
                         className={`${inputClass} ${fieldErrors.date ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
-                      >
-                        <option value="">{form.centerId ? 'Choose an available date' : 'Select a center first'}</option>
-                        {availableDateOptions.map((date) => (
-                          <option key={date} value={date}>{formatDate(date)}</option>
-                        ))}
-                      </select>
+                      />
                       {form.centerId && availableDateOptions.length === 0 && (
-                        <p className="mt-1.5 text-xs font-semibold text-amber-600">No available dates for this center in the next 30 days.</p>
+                        <p className="mt-1.5 text-xs font-semibold text-amber-600">No available dates for this center in the next 12 months.</p>
+                      )}
+                      {form.date && availability[form.date]?.status === 'closed' && (
+                        <p className="mt-1.5 text-xs font-semibold text-amber-600">This center is not available on this date.</p>
+                      )}
+                      {form.date && availability[form.date]?.status === 'full' && (
+                        <p className="mt-1.5 text-xs font-semibold text-amber-600">Appointments are full for this date. Please choose another date.</p>
                       )}
                       {fieldErrors.date && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.date}</p>}
                     </label>
@@ -822,12 +1108,23 @@ const NewIdRegistration = () => {
                         className={`${inputClass} ${fieldErrors.timeSlot ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
                       >
                         <option value="">Choose a time</option>
-                        {availableSlots.map((slot) => (
-                          <option key={slot} value={slot} disabled={!form.date || availability[form.date]?.status !== 'available' || bookedSlots.includes(slot)}>
-                            {slot}{bookedSlots.includes(slot) ? ' - Full' : ''}
-                          </option>
-                        ))}
+                        {availableSlots.map((slot) => {
+                          const slotIsFull = bookedSlots.includes(slot);
+                          const slotIsPast = isPastTimeSlot(form.date, slot);
+                          return (
+                            <option
+                              key={slot}
+                              value={slot}
+                              disabled={!form.date || availability[form.date]?.status !== 'available' || slotIsFull || slotIsPast}
+                            >
+                              {slot}{slotIsFull ? ' - Full' : slotIsPast ? ' - Past' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
+                      {form.centerId && availableSlots.length === 0 && (
+                        <p className="mt-1.5 text-xs font-semibold text-amber-600">No appointment times are configured for this center.</p>
+                      )}
                       {fieldErrors.timeSlot && <p className="mt-1 text-xs font-semibold text-red-600">{fieldErrors.timeSlot}</p>}
                     </label>
                   </div>
@@ -844,7 +1141,7 @@ const NewIdRegistration = () => {
               <div className="mt-4 space-y-3">
                 <Info label="Service" value="New National ID Registration" />
                 <Info label="Center" value={selectedCenter?.name || 'Not selected'} />
-                <Info label="District" value={selectedCenter ? getDistrict(selectedCenter) : 'Not selected'} />
+                <Info label="District" value={selectedDistrict || 'Not selected'} />
                 <Info label="Date" value={formatDate(form.date)} />
                 <Info label="Time" value={form.timeSlot || 'Not selected'} />
                 <Info label="Status" value={resubmitTicket ? 'Cancelled - correction required' : (reviewMode ? 'Ready for confirmation' : 'Draft')} />
@@ -893,7 +1190,7 @@ const RequiredLabel = ({ label, required = true }) => (
   </span>
 );
 
-const DistrictSelect = ({ value, onChange, disabled = false, error = '' }) => {
+const DistrictSelect = ({ value, onChange, disabled = false, error = '', districts = BANAADIR_DISTRICTS }) => {
   const wrapperRef = useRef(null);
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -901,9 +1198,9 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '' }) => {
 
   const filteredDistricts = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return BANAADIR_DISTRICTS;
-    return BANAADIR_DISTRICTS.filter((district) => district.toLowerCase().includes(term));
-  }, [query]);
+    if (!term) return districts;
+    return districts.filter((district) => district.toLowerCase().includes(term));
+  }, [districts, query]);
 
   useEffect(() => {
     if (!isOpen) setQuery('');
@@ -934,7 +1231,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '' }) => {
 
   const openDropdown = () => {
     if (disabled) return;
-    const selectedIndex = BANAADIR_DISTRICTS.findIndex((district) => district === value);
+    const selectedIndex = districts.findIndex((district) => district === value);
     setQuery('');
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
     setIsOpen(true);
@@ -1065,8 +1362,10 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '' }) => {
                       index === activeIndex ? 'bg-blue-50 text-blue-800' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span>{district}</span>
-                    {value === district && <FiCheckCircle className="h-4 w-4 text-emerald-600" />}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span>{district}</span>
+                    </span>
+                    {value === district && <FiCheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />}
                   </button>
                 ))}
               </>
@@ -1117,6 +1416,37 @@ const Field = ({
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         className={`${inputClass} ${icon ? 'pl-10' : ''} ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : ''}`}
+      />
+    </div>
+    {error && <p className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}
+  </label>
+);
+
+const phoneTailFromValue = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('25261')) return digits.slice(5, 12);
+  if (digits.startsWith('061')) return digits.slice(3, 10);
+  if (digits.startsWith('61')) return digits.slice(2, 9);
+  return digits.slice(0, 7);
+};
+
+const PhoneField = ({ value, onChange, error = '', disabled = false }) => (
+  <label className="block">
+    <RequiredLabel label="Phone Number" required />
+    <div className="flex overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100">
+      <span className="flex items-center gap-2 border-r border-slate-200 bg-slate-50 px-3 text-sm font-black text-slate-700">
+        <FiPhone className="h-4 w-4 text-slate-400" />
+        +252 61
+      </span>
+      <input
+        type="tel"
+        value={phoneTailFromValue(value)}
+        inputMode="numeric"
+        maxLength={7}
+        disabled={disabled}
+        placeholder="8318172"
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, '').slice(0, 7))}
+        className="min-w-0 flex-1 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
       />
     </div>
     {error && <p className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}

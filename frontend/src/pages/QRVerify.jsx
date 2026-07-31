@@ -342,7 +342,7 @@ const QRVerify = () => {
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleVerify()}
-                  placeholder="NQS-XXXX"
+                  placeholder="REQ-XXXX"
                   className="w-full pl-10 pr-4 py-3 text-sm bg-slate-950 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-100 placeholder-slate-500 font-mono"
                 />
               </div>

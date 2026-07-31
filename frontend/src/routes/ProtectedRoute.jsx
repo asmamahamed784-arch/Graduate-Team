@@ -1,6 +1,6 @@
 // src/routes/ProtectedRoute.jsx
 import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks';
 
 /**
@@ -8,8 +8,7 @@ import { useAuth } from '../hooks';
  * Displays a loading spinner if profile fetching is in progress.
  */
 export const ProtectedRoute = ({ allowedRoles }) => {
-  const { isAuthenticated, role, loading, user } = useAuth();
-  const location = useLocation();
+  const { isAuthenticated, role, loading } = useAuth();
 
   if (loading) {
     return (
@@ -30,15 +29,14 @@ export const ProtectedRoute = ({ allowedRoles }) => {
     // Role unauthorized - return to respective dashboard
     const dashboardMap = {
       admin: '/dashboard/admin',
+      super_admin: '/dashboard/admin',
       operator: '/dashboard/operator',
       super_operator: '/dashboard/operator',
+      center_manager: '/dashboard/operator',
+      user_manager: '/user-management',
       citizen: '/dashboard/user'
     };
     return <Navigate to={dashboardMap[role] || '/'} replace />;
-  }
-
-  if (user?.mustChangePassword && location.pathname !== '/profile') {
-    return <Navigate to="/profile#password" replace />;
   }
 
   return <Outlet />;

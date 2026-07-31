@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { FiX } from 'react-icons/fi';
 
 /**
@@ -11,37 +10,24 @@ import { FiX } from 'react-icons/fi';
  * @param {string} className - additional Tailwind classes for content container
  */
 const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg max-w-lg w-full mx-4 ${className}`}
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-overlay)] px-4">
+      <div className={`w-full max-w-lg rounded-lg border border-[var(--nqs-border)] bg-[var(--nqs-card)] shadow-lg ${className}`}>
+        <div className="flex items-center justify-between border-b border-[var(--nqs-border)] px-5 py-3">
+          {title && <h3 className="text-base font-semibold text-[var(--nqs-text)]">{title}</h3>}
+          <button
+            onClick={onClose}
+            className="rounded-md p-1.5 text-[var(--nqs-muted)] hover:bg-[var(--nqs-card-soft)] hover:text-[var(--nqs-text)]"
+            aria-label="Close modal"
           >
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-              {title && <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200">{title}</h3>}
-              <button
-                onClick={onClose}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                aria-label="Close modal"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 text-gray-700 dark:text-gray-300">{children}</div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            <FiX className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-5 text-sm text-[var(--nqs-muted)]">{children}</div>
+      </div>
+    </div>
   );
 };
 

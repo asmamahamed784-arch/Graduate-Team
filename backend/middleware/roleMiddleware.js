@@ -6,6 +6,9 @@ export const authorize = (...roles) => {
     const allowedRoles = roles.map(normalizeRole);
 
     const expandedRoles = [...allowedRoles];
+    if (allowedRoles.includes('admin') && !expandedRoles.includes('super_admin')) {
+      expandedRoles.push('super_admin');
+    }
     if (allowedRoles.includes('operator') && !expandedRoles.includes('super_operator')) {
       expandedRoles.push('super_operator');
     }
