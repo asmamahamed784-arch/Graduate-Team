@@ -126,6 +126,19 @@ app.use('/api/users', userRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/otp', otpRoutes);
 
+const healthCheck = (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy',
+    message: 'NQS National ID Appointment API is healthy.',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+};
+
+app.get('/health', healthCheck);
+app.get('/api/health', healthCheck);
+
 // Root route
 app.get('/', (req, res) => {
   res.json({ message: 'NQS National ID Appointment API is running.' });
