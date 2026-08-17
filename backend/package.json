@@ -7,7 +7,6 @@
   "scripts": {
     "start": "node server.js",
     "build": "prisma generate",
-    "postinstall": "prisma generate",
     "dev": "node scripts/free-port.cjs 5005 && nodemon server.js",
     "seed": "node utils/seed.js",
     "sync:citizens": "node scripts/sync-citizens-from-users.js",
