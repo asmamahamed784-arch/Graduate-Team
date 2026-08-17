@@ -8,8 +8,6 @@ import ToastProvider from './components/ToastProvider';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { NotificationProvider } from './context/NotificationContext';
-import { QueueProvider } from './context/QueueContext';
 
 // Master Dynamic Role-Based App Routing
 import AppRoutes from './routes/AppRoutes';
@@ -20,13 +18,9 @@ function App() {
       <LanguageProvider>
         <ThemeProvider>
           <Router>
-            <NotificationProvider>
-              <QueueProvider>
-                <ToastProvider>
-                  <AppRoutes />
-                </ToastProvider>
-              </QueueProvider>
-            </NotificationProvider>
+            <ToastProvider>
+              <AppRoutes />
+            </ToastProvider>
           </Router>
         </ThemeProvider>
       </LanguageProvider>

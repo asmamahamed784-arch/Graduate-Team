@@ -10,6 +10,7 @@ class AppNotification {
     this.notificationType = '',
     this.referenceNumber = '',
     this.requestType = '',
+    this.relatedEntity = '',
     this.read = false,
     this.timestamp,
     this.cancellationReason = '',
@@ -22,6 +23,7 @@ class AppNotification {
   final String notificationType;
   final String referenceNumber;
   final String requestType;
+  final String relatedEntity;
   final bool read;
   final DateTime? timestamp;
   final String cancellationReason;
@@ -34,12 +36,14 @@ class AppNotification {
         notificationType: notificationType,
         referenceNumber: referenceNumber,
         requestType: requestType,
+        relatedEntity: relatedEntity,
         read: read ?? this.read,
         timestamp: timestamp,
         cancellationReason: cancellationReason,
       );
 
-  factory AppNotification.fromJson(Map<String, dynamic> json) => AppNotification(
+  factory AppNotification.fromJson(Map<String, dynamic> json) =>
+      AppNotification(
         id: Json.idOf(json),
         title: Json.str(json['title'], 'Notification'),
         description: Json.str(json['desc'], Json.str(json['message'])),
@@ -47,6 +51,10 @@ class AppNotification {
         notificationType: Json.str(json['notificationType']),
         referenceNumber: Json.str(json['referenceNumber']),
         requestType: Json.str(json['requestType']),
+        relatedEntity: Json.str(
+          json['relatedEntity'],
+          Json.str(json['ticketId'], Json.str(json['appointmentId'])),
+        ),
         read: Json.boolOf(json['read']),
         timestamp: Json.date(json['timestamp']),
         cancellationReason: Json.str(json['cancellationReason']),

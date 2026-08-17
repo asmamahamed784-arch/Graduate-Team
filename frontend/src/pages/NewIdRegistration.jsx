@@ -37,11 +37,11 @@ import {
   todayKey
 } from './appointments/appointmentShared';
 
-const pageClass = 'nqs-new-id-page min-h-screen bg-[#F8FAFC] px-3 py-6 text-slate-950 sm:px-5 lg:px-6';
-const cardClass = 'nqs-new-id-card rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.07)] sm:p-6';
-const compactCardClass = 'nqs-new-id-receipt-row rounded-xl border border-blue-100 bg-[#F8FAFC] p-3';
-const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500';
-const labelClass = 'mb-2 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-600';
+const pageClass = 'nqs-new-id-page min-h-screen bg-[var(--bg-app)] px-3 py-6 text-[var(--text-main)] sm:px-5 lg:px-6';
+const cardClass = 'nqs-new-id-card rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-5 shadow-sm sm:p-6';
+const compactCardClass = 'nqs-new-id-receipt-row rounded-xl border border-[var(--border-light)] bg-[var(--bg-secondary)] p-3';
+const inputClass = 'w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-3 text-sm font-semibold text-[var(--text-main)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/20 disabled:cursor-not-allowed disabled:bg-[var(--bg-secondary)] disabled:text-[var(--text-muted)]';
+const labelClass = 'mb-2 block text-[11px] font-black uppercase tracking-[0.12em] text-[var(--text-muted)]';
 
 const BANAADIR_DISTRICTS = [
   'Abdulaziz',
@@ -158,11 +158,20 @@ const correctionReasonsFromTicket = (ticketOrReason = '') => {
   if (typeof ticketOrReason === 'string') return [ticketOrReason].filter(Boolean);
   const ticket = ticketOrReason || {};
   const reasons = Array.isArray(ticket.cancellationReasons) ? ticket.cancellationReasons : [];
+  const details = ticket.registrationDetails?.cancellationDetails || {};
+  const detailReasons = Array.isArray(details.cancellationReasons)
+    ? details.cancellationReasons
+    : Array.isArray(details.reasons)
+      ? details.reasons
+      : [];
   return [
     ...reasons,
+    ...detailReasons,
     ticket.cancellationReason,
     ticket.additionalCancellationReason,
-    ticket.cancellationNotes
+    ticket.cancellationNotes,
+    details.cancellationReason,
+    details.summary
   ].filter(Boolean);
 };
 
@@ -290,21 +299,13 @@ const NewIdRegistration = () => {
   );
   const districtOptions = useMemo(() => {
     const options = [];
-    const addOption = (value) => {
-      const label = String(value || '').trim();
-      if (label && !options.some((item) => districtKey(item) === districtKey(label))) {
-        options.push(label);
-      }
-    };
-
     centers.forEach((center) => {
       const rawDistrict = getDistrict(center);
       const normalized = normalizeDistrictValue(rawDistrict, options);
-      addOption(normalized || rawDistrict);
-
-      const centerName = String(center?.name || '').trim();
-      const isCustomDistrictCenter = centerName && !/national\s+id\s+center/i.test(centerName);
-      if (isCustomDistrictCenter) addOption(centerName);
+      const label = normalized || String(rawDistrict || '').trim();
+      if (label && !options.some((item) => districtKey(item) === districtKey(label))) {
+        options.push(label);
+      }
     });
 
     return options.sort((a, b) => a.localeCompare(b));
@@ -328,6 +329,7 @@ const NewIdRegistration = () => {
   const canEditField = (field) => {
     if (!editableFields) return true;
     if (editableFields.has(field)) return true;
+    if (resubmitTicket && field === 'district') return false;
     if (resubmitTicket && REQUIRED_RESUBMIT_FIELDS.has(field) && !cleanText(form[field])) return true;
     return false;
   };
@@ -364,14 +366,21 @@ const NewIdRegistration = () => {
           phone: formatSomaliPhone(details.phone || existing.citizen?.phone || user?.phone),
       gender: details.gender || '',
       maritalStatus: details.maritalStatus || '',
-      district: normalizeDistrictValue(details.district),
+      district: normalizeDistrictValue(
+        details.district ||
+        details.districtWhereYouLive ||
+        details.centerDistrict ||
+        existing.district ||
+        getDistrict(existing.center),
+        districtOptions
+      ),
       address: details.fullAddress || details.address || user?.address || '',
       nearestLandmark: details.nearestLandmark || '',
       centerId: idFrom(existing.center),
       date: existing.date ? String(existing.date).slice(0, 10) : '',
       timeSlot: existing.timeSlot || ''
     });
-  }, [user?.address, user?.name, user?.phone]);
+  }, [districtOptions, user?.address, user?.name, user?.phone]);
 
   useEffect(() => {
     const loadOptions = async () => {
@@ -699,7 +708,7 @@ const NewIdRegistration = () => {
           payload
         },
         clearDraftKey: getDraftKey(user),
-        successPath: '/dashboard/user/appointments',
+        successPath: '/dashboard/user/my-appointments',
         successMessage: 'Booking Successful'
       }));
       localStorage.setItem(getDraftKey(user), JSON.stringify(cleanForm));
@@ -731,7 +740,7 @@ const NewIdRegistration = () => {
         return;
       }
       if (error.response?.status === 409) {
-        toast.error(error.response?.data?.message || 'You have already registered for a National ID service. Please use your existing ticket or contact support.');
+        toast.error(error.response?.data?.message || 'You have already registered for a National ID service. Please use your existing request or contact support.');
         return;
       }
       toast.error(error.response?.data?.message || 'Could not create the appointment.');
@@ -744,9 +753,9 @@ const NewIdRegistration = () => {
     if (!ticket) return;
     try {
       await downloadTicketPdf(ticket);
-      toast.success('Ticket downloaded.');
+      toast.success('Request downloaded.');
     } catch (error) {
-      toast.error(error.message || 'Could not download the ticket.');
+      toast.error(error.message || 'Could not download the request.');
     }
   };
 
@@ -764,17 +773,17 @@ const NewIdRegistration = () => {
     return (
       <div className={pageClass}>
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
+          <div className="rounded-2xl border border-[var(--color-success)] bg-[var(--bg-card)] p-8 text-center shadow-sm">
             <FiShield className="mx-auto h-12 w-12 text-emerald-600" />
-            <h1 className="mt-4 text-2xl font-black text-slate-950">National ID already issued</h1>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-600">
+            <h1 className="mt-4 text-2xl font-black text-[var(--text-main)]">National ID already issued</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[var(--text-muted)]">
               You already have a National ID. You cannot register for a new National ID. You may only update your information or request a replacement for a lost ID.
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
               <Link to="/dashboard/user/update-information" className="inline-flex items-center justify-center rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white hover:bg-blue-800">
                 Update Information
               </Link>
-              <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center rounded-xl border border-blue-200 px-5 py-3 text-sm font-black text-blue-700 hover:bg-blue-50">
+              <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center rounded-xl border border-[var(--border-light)] px-5 py-3 text-sm font-black text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]">
                 Replace Lost ID
               </Link>
             </div>
@@ -787,20 +796,20 @@ const NewIdRegistration = () => {
   return (
     <div className={pageClass}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <Link to="/services" className="inline-flex items-center gap-2 text-sm font-bold text-blue-700 hover:text-[#0B3A75]">
+        <Link to="/services" className="inline-flex items-center gap-2 text-sm font-bold text-[var(--color-primary)] hover:text-[var(--text-main)]">
           <FiArrowLeft /> Back to services
         </Link>
 
-        <section className="nqs-new-id-hero rounded-3xl border border-blue-100 bg-white p-5 shadow-[0_12px_30px_rgba(15,23,42,0.07)] sm:p-7">
+        <section className="nqs-new-id-hero rounded-3xl border border-[var(--border-light)] bg-[var(--bg-card)] p-5 shadow-sm sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-3xl">
-              <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+              <span className="inline-flex rounded-full border border-[var(--border-light)] bg-[var(--color-primary-soft)] px-4 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--color-primary)]">
                 National ID Registration
               </span>
-              <h1 className="mt-5 text-3xl font-black leading-tight tracking-tight text-[#0B3A75] sm:text-4xl">
+              <h1 className="mt-5 text-3xl font-black leading-tight tracking-tight text-[var(--text-main)] sm:text-4xl">
                 {resubmitTicket ? 'Resubmit New National ID Appointment' : 'Apply for a New National ID'}
               </h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
+              <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--text-muted)]">
                 {resubmitTicket
                   ? 'Correct the information requested by the admin and submit your appointment again.'
                   : 'Complete your citizen details, choose a Banaadir National ID center, and confirm your appointment.'}
@@ -808,11 +817,11 @@ const NewIdRegistration = () => {
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:min-w-[420px]">
               {['Citizen details', 'Center', 'Date & time', 'Confirm'].map((step, index) => (
-                <div key={step} className="rounded-2xl border border-blue-100 bg-[#F8FAFC] p-3 text-center">
+                <div key={step} className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-secondary)] p-3 text-center">
                   <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-black text-white">
                     {index + 1}
                   </div>
-                  <p className="mt-2 text-xs font-black text-slate-700">{step}</p>
+                  <p className="mt-2 text-xs font-black text-[var(--text-main)]">{step}</p>
                 </div>
               ))}
             </div>
@@ -830,7 +839,7 @@ const NewIdRegistration = () => {
 
         {ticket ? (
           <section className={`${cardClass} grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]`}>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-5">
               {qrCodeUrl ? (
                 <img src={qrCodeUrl} alt="Appointment QR code" className="mx-auto h-44 w-44 object-contain" />
               ) : (
@@ -851,9 +860,9 @@ const NewIdRegistration = () => {
               </div>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button onClick={handleDownload} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
-                  <FiDownload /> Download Ticket
+                  <FiDownload /> Download Request
                 </button>
-                <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border-light)] px-4 py-2.5 text-sm font-bold text-[var(--text-main)] hover:bg-[var(--bg-secondary)]">
                   <FiClock /> Check Queue Status
                 </Link>
               </div>
@@ -865,16 +874,16 @@ const NewIdRegistration = () => {
               <FiCheckCircle />
               <span className="text-sm font-bold">{isCancelledTicket(existingTicket) ? 'Correction required' : 'Existing National ID registration found'}</span>
             </div>
-            <h2 className="mt-3 text-2xl font-black text-slate-950">
-              {isCancelledTicket(existingTicket) ? 'Correct your cancelled appointment' : 'Use your existing ticket'}
+            <h2 className="mt-3 text-2xl font-black text-[var(--text-main)]">
+              {isCancelledTicket(existingTicket) ? 'Correct your cancelled appointment' : 'Use your existing request'}
             </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
               {isCancelledTicket(existingTicket)
                 ? 'Your previous National ID appointment was cancelled. Please correct the information requested by the office and resubmit the same appointment.'
-                : 'You have already registered for a National ID service. Please use your existing ticket or contact support.'}
+                : 'You have already registered for a National ID service. Please use your existing request or contact support.'}
             </p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Info label="Ticket Number" value={existingTicket.ticketNumber} />
+              <Info label="Request Number" value={existingTicket.ticketNumber} />
               <Info label="Queue Number" value={existingTicket.queueNumber} />
               <Info label="Service Type" value={existingTicket.serviceType} />
               <Info label="Center" value={existingTicket.centerName} />
@@ -905,10 +914,10 @@ const NewIdRegistration = () => {
                   <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
                     <FiClock /> Check Queue Status
                   </Link>
-                  <Link to="/dashboard/user/update-information" className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">
+                  <Link to="/dashboard/user/update-information" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border-light)] px-4 py-2.5 text-sm font-black text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]">
                     Update Information
                   </Link>
-                  <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50">
+                  <Link to="/dashboard/user/replace-lost-id" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border-light)] px-4 py-2.5 text-sm font-black text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]">
                     Replace Lost ID
                   </Link>
                 </>
@@ -917,7 +926,7 @@ const NewIdRegistration = () => {
                 <button
                   type="button"
                   onClick={() => setExistingTicket(null)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--border-light)] px-4 py-2.5 text-sm font-bold text-[var(--text-main)] hover:bg-[var(--bg-secondary)]"
                 >
                   Edit Details
                 </button>
@@ -932,12 +941,12 @@ const NewIdRegistration = () => {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--color-success-soft)] text-emerald-700">
                           <FiShield className="h-5 w-5" />
                         </span>
                         <div>
-                          <h2 className="text-2xl font-black text-[#0B3A75]">Confirm Appointment Details</h2>
-                          <p className="mt-1 text-sm text-slate-600">
+                          <h2 className="text-2xl font-black text-[var(--text-main)]">Confirm Appointment Details</h2>
+                          <p className="mt-1 text-sm text-[var(--text-muted)]">
                         Please check every detail before creating your appointment.
                           </p>
                         </div>
@@ -949,7 +958,7 @@ const NewIdRegistration = () => {
                         setReviewMode(false);
                         setConfirmedAccuracy(false);
                       }}
-                      className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-50"
+                      className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] px-4 py-2 text-sm font-bold text-[var(--color-primary)] hover:bg-[var(--color-primary-soft)]"
                     >
                       Edit Information
                     </button>
@@ -971,7 +980,7 @@ const NewIdRegistration = () => {
                     <ReviewItem label="Appointment Time" value={form.timeSlot} />
                   </div>
 
-                  <label className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-slate-800">
+                  <label className="mt-5 flex items-start gap-3 rounded-2xl border border-[var(--color-success)] bg-[var(--color-success-soft)] p-4 text-sm font-semibold text-slate-800">
                     <input
                       type="checkbox"
                       checked={confirmedAccuracy}
@@ -983,13 +992,13 @@ const NewIdRegistration = () => {
                 </div>
               ) : (
                 <>
-                  <div className="mb-5 flex items-start gap-3 border-b border-blue-100 pb-5">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                  <div className="mb-5 flex items-start gap-3 border-b border-[var(--border-light)] pb-5">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
                       <FiUser className="h-5 w-5" />
                     </span>
                     <div>
-                      <h2 className="text-2xl font-black text-[#0B3A75]">Citizen Information</h2>
-                      <p className="mt-1 text-sm text-slate-600">Fill in the citizen details exactly as they should appear on the National ID record.</p>
+                      <h2 className="text-2xl font-black text-[var(--text-main)]">Citizen Information</h2>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">Fill in the citizen details exactly as they should appear on the National ID record.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1047,13 +1056,13 @@ const NewIdRegistration = () => {
                     </label>
                   </div>
 
-                  <div className="mb-5 mt-8 flex items-start gap-3 border-b border-blue-100 pb-5">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+                  <div className="mb-5 mt-8 flex items-start gap-3 border-b border-[var(--border-light)] pb-5">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
                       <FiBriefcase className="h-5 w-5" />
                     </span>
                     <div>
-                      <h2 className="text-2xl font-black text-[#0B3A75]">Appointment Details</h2>
-                      <p className="mt-1 text-sm text-slate-600">Choose where and when you want to visit.</p>
+                      <h2 className="text-2xl font-black text-[var(--text-main)]">Appointment Details</h2>
+                      <p className="mt-1 text-sm text-[var(--text-muted)]">Choose where and when you want to visit.</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1133,10 +1142,10 @@ const NewIdRegistration = () => {
             </section>
 
             <aside className={`${cardClass} h-fit lg:sticky lg:top-24`}>
-              <div className="rounded-2xl border border-blue-100 bg-[#F8FAFC] p-4">
-                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-700">Government service receipt</p>
-                <h2 className="mt-2 text-2xl font-black text-[#0B3A75]">Booking Summary</h2>
-                <p className="mt-1 text-sm text-slate-600">Your selected appointment details.</p>
+              <div className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-secondary)] p-4">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-primary)]">Government service receipt</p>
+                <h2 className="mt-2 text-2xl font-black text-[var(--text-main)]">Booking Summary</h2>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">Your selected appointment details.</p>
               </div>
               <div className="mt-4 space-y-3">
                 <Info label="Service" value="New National ID Registration" />
@@ -1149,7 +1158,7 @@ const NewIdRegistration = () => {
               <div className="mt-5 space-y-3">
                 <button
                   disabled={submitting || (reviewMode && !confirmedAccuracy)}
-                  className={`w-full rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:bg-slate-300 ${
+                  className={`w-full rounded-xl px-4 py-3 text-sm font-black text-white shadow-sm transition disabled:cursor-not-allowed disabled:bg-[var(--border-light)] ${
                     reviewMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
                   }`}
                 >
@@ -1162,14 +1171,14 @@ const NewIdRegistration = () => {
                       setReviewMode(false);
                       setConfirmedAccuracy(false);
                     }}
-                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                    className="w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] px-4 py-3 text-sm font-black text-[var(--color-primary)] transition hover:bg-[var(--color-primary-soft)]"
                   >
                     Previous
                   </button>
                 ) : (
                   <Link
                     to="/services"
-                    className="block w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-center text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                    className="block w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] px-4 py-3 text-center text-sm font-black text-[var(--color-primary)] transition hover:bg-[var(--color-primary-soft)]"
                   >
                     Previous
                   </Link>
@@ -1205,6 +1214,13 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
   useEffect(() => {
     if (!isOpen) setQuery('');
   }, [isOpen, value]);
+
+  useEffect(() => {
+    if (disabled) {
+      setIsOpen(false);
+      setQuery('');
+    }
+  }, [disabled]);
 
   useEffect(() => {
     if (activeIndex >= filteredDistricts.length) setActiveIndex(0);
@@ -1307,7 +1323,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
           <button
             type="button"
             onClick={clearDistrict}
-            className="absolute right-10 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-slate-100 hover:text-blue-700"
+            className="absolute right-10 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-slate-100 hover:text-[var(--color-primary)]"
             aria-label="Clear selected district"
           >
             Clear
@@ -1324,7 +1340,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
               openDropdown();
             }
           }}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-[var(--color-primary)] disabled:cursor-not-allowed disabled:text-slate-300"
           aria-label="Show Banaadir districts"
         >
           <FiChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
@@ -1334,7 +1350,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
           <div
             id="district-options"
             role="listbox"
-            className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-blue-100 bg-white p-1 shadow-xl"
+            className="absolute z-30 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] p-1 shadow-xl"
           >
             {filteredDistricts.length ? (
               <>
@@ -1343,7 +1359,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={clearDistrict}
-                    className="mb-1 flex w-full items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-blue-700 transition hover:bg-blue-100"
+                    className="mb-1 flex w-full items-center justify-between rounded-lg border border-[var(--border-light)] bg-[var(--color-primary-soft)] px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-[var(--color-primary)] transition hover:bg-blue-100"
                   >
                     Change selected district
                     <span className="normal-case tracking-normal text-slate-500">{value}</span>
@@ -1359,7 +1375,7 @@ const DistrictSelect = ({ value, onChange, disabled = false, error = '', distric
                     onClick={() => selectDistrict(district)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition ${
-                      index === activeIndex ? 'bg-blue-50 text-blue-800' : 'text-slate-700 hover:bg-slate-50'
+                      index === activeIndex ? 'bg-[var(--color-primary-soft)] text-blue-800' : 'text-[var(--text-main)] hover:bg-[var(--bg-secondary)]'
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
@@ -1433,8 +1449,8 @@ const phoneTailFromValue = (value) => {
 const PhoneField = ({ value, onChange, error = '', disabled = false }) => (
   <label className="block">
     <RequiredLabel label="Phone Number" required />
-    <div className="flex overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100">
-      <span className="flex items-center gap-2 border-r border-slate-200 bg-slate-50 px-3 text-sm font-black text-slate-700">
+    <div className="flex overflow-hidden rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] focus-within:border-[var(--border-focus)] focus-within:ring-4 focus-within:ring-[var(--border-focus)]/20">
+      <span className="flex items-center gap-2 border-r border-[var(--border-light)] bg-[var(--bg-secondary)] px-3 text-sm font-black text-[var(--text-main)]">
         <FiPhone className="h-4 w-4 text-slate-400" />
         +252 61
       </span>
@@ -1446,7 +1462,7 @@ const PhoneField = ({ value, onChange, error = '', disabled = false }) => (
         disabled={disabled}
         placeholder="8318172"
         onChange={(event) => onChange(event.target.value.replace(/\D/g, '').slice(0, 7))}
-        className="min-w-0 flex-1 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+        className="min-w-0 flex-1 bg-[var(--bg-input)] px-3 py-3 text-sm font-semibold text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] disabled:cursor-not-allowed disabled:bg-[var(--bg-secondary)] disabled:text-[var(--text-muted)]"
       />
     </div>
     {error && <p className="mt-1.5 text-xs font-semibold text-red-600">{error}</p>}
@@ -1456,14 +1472,14 @@ const PhoneField = ({ value, onChange, error = '', disabled = false }) => (
 const Info = ({ label, value }) => (
   <div className={compactCardClass}>
     <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</p>
-    <p className="mt-1 text-sm font-bold text-slate-950">{value || 'Not selected'}</p>
+    <p className="mt-1 text-sm font-bold text-[var(--text-main)]">{value || 'Not selected'}</p>
   </div>
 );
 
 const ReviewItem = ({ label, value }) => (
   <div className={compactCardClass}>
     <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{label}</p>
-    <p className="mt-1 text-sm font-bold text-slate-950">{value || '--'}</p>
+    <p className="mt-1 text-sm font-bold text-[var(--text-main)]">{value || '--'}</p>
   </div>
 );
 

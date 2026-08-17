@@ -382,7 +382,7 @@ const ReplaceLostId = () => {
             url: '/api/bookings',
             payload
           },
-          successPath: '/dashboard/user/appointments',
+          successPath: '/dashboard/user/my-appointments',
           successMessage: 'Lost ID request submitted successfully.'
         }));
         toast.success('OTP sent.');
@@ -412,9 +412,9 @@ const ReplaceLostId = () => {
     if (!ticket) return;
     try {
       await downloadTicketPdf(ticket);
-      toast.success('Ticket downloaded.');
+      toast.success('Request downloaded.');
     } catch (error) {
-      toast.error(error.message || 'Could not download the ticket.');
+      toast.error(error.message || 'Could not download the request.');
     }
   };
 
@@ -458,7 +458,7 @@ const ReplaceLostId = () => {
           <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-200">Existing registration found</p>
             <p className="mt-1 text-sm font-semibold">
-              This replacement request will be linked to ticket {existingRegistration.ref}.
+              This replacement request will be linked to request {existingRegistration.ref}.
             </p>
           </section>
         )}
@@ -506,7 +506,7 @@ const ReplaceLostId = () => {
               </div>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <button onClick={handleDownload} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-amber-400">
-                  <FiDownload /> Download Ticket
+                  <FiDownload /> Download Request
                 </button>
                 <Link to="/dashboard/user/track" className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#4189DD]/60 px-4 py-2.5 text-sm font-bold text-[#7CB8FF] hover:bg-[#4189DD]/10">
                   <FiClock /> Check Queue Status
@@ -529,7 +529,7 @@ const ReplaceLostId = () => {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="National ID Number (optional)" value={form.nationalIdNumber} onChange={(value) => updateForm('nationalIdNumber', value)} />
-                <Field label="Full Name" value={form.fullName} onChange={(value) => updateForm('fullName', value)} />
+                <Field label="Full Name" value={form.fullName} onChange={(value) => updateForm('fullName', value.replace(/[^A-Za-z\s'-]/g, ''))} />
                 <Field label="Phone" value={form.phone} onChange={(value) => updateForm('phone', formatSomaliPhone(value))} />
                 <Field label="Date Lost" type="date" value={form.dateLost} onChange={(value) => updateForm('dateLost', value)} />
                 <Field label="Place Lost" value={form.placeLost} onChange={(value) => updateForm('placeLost', value)} />

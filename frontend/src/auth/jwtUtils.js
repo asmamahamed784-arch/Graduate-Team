@@ -1,19 +1,27 @@
 // src/auth/jwtUtils.js
 export const TOKEN_KEY = 'nqs_jwt_token';
 
+const safeStorage = (storage, action, fallback = null) => {
+  try {
+    return action(storage);
+  } catch {
+    return fallback;
+  }
+};
+
 export const getToken = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  return sessionStorage.getItem(TOKEN_KEY);
+  safeStorage(localStorage, (store) => store.removeItem(TOKEN_KEY));
+  return safeStorage(sessionStorage, (store) => store.getItem(TOKEN_KEY), null);
 };
 
 export const setToken = (token) => {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.setItem(TOKEN_KEY, token);
+  safeStorage(localStorage, (store) => store.removeItem(TOKEN_KEY));
+  safeStorage(sessionStorage, (store) => store.setItem(TOKEN_KEY, token));
 };
 
 export const clearToken = () => {
-  sessionStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(TOKEN_KEY);
+  safeStorage(sessionStorage, (store) => store.removeItem(TOKEN_KEY));
+  safeStorage(localStorage, (store) => store.removeItem(TOKEN_KEY));
 };
 
 export const logout = () => {

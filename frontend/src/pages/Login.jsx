@@ -4,9 +4,10 @@ import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { FiEye, FiEyeOff, FiLock, FiUser } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiHeadphones, FiLock, FiUser } from 'react-icons/fi';
 import { useAuth } from '../hooks';
 import api from '../api/axiosInstance';
+import AuthSplitLayout from '../components/AuthSplitLayout';
 
 const schema = yup.object().shape({
   username: yup.string().min(3, 'Username or Phone must be at least 3 characters').required('Username or Phone is required'),
@@ -21,6 +22,26 @@ const dashboardMap = {
   center_manager: '/operator-dashboard',
   user_manager: '/user-management',
   citizen: '/dashboard/user',
+};
+
+const getRememberedUsername = () => {
+  try {
+    return localStorage.getItem('nqs_remembered_username') || '';
+  } catch {
+    return '';
+  }
+};
+
+const setRememberedUsername = (username, remember) => {
+  try {
+    if (remember) {
+      localStorage.setItem('nqs_remembered_username', username);
+    } else {
+      localStorage.removeItem('nqs_remembered_username');
+    }
+  } catch {
+    // Remember-me is optional; login should still work if storage is unavailable.
+  }
 };
 
 export default function Login() {
@@ -39,7 +60,7 @@ export default function Login() {
   } = useForm({ resolver: yupResolver(schema) });
 
   useEffect(() => {
-    const rememberedUsername = localStorage.getItem('nqs_remembered_username');
+    const rememberedUsername = getRememberedUsername();
     if (rememberedUsername) {
       setValue('username', rememberedUsername);
       setRememberMe(true);
@@ -57,11 +78,7 @@ export default function Login() {
     try {
       const user = await login(data.username, data.password);
 
-      if (rememberMe) {
-        localStorage.setItem('nqs_remembered_username', data.username);
-      } else {
-        localStorage.removeItem('nqs_remembered_username');
-      }
+      setRememberedUsername(data.username, rememberMe);
 
       if (user?.otpRequired) {
         sessionStorage.setItem('nqs_pending_otp_flow', JSON.stringify({
@@ -110,100 +127,103 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#071A33] px-4 py-10 text-white">
-      <div className="w-full max-w-md rounded-2xl border border-blue-400/20 bg-[#0B2344] p-8 shadow-2xl shadow-black/30">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-xl font-black text-white shadow-lg shadow-blue-900/30">
-            NQS
+    <AuthSplitLayout>
+      <div className="mb-8">
+        <p className="text-3xl font-black !text-slate-900">Welcome Back</p>
+        <p className="mt-1 text-sm !text-slate-500">Sign in to your account to continue</p>
+      </div>
+
+      <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div>
+          <label htmlFor="username" className="mb-1.5 block text-sm font-bold !text-slate-700">
+            Username or Phone
+          </label>
+          <div className="relative">
+            <FiUser className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              id="username"
+              type="text"
+              autoComplete="username"
+              placeholder="Enter your username or phone"
+              {...register('username')}
+              className={`w-full rounded-xl border bg-white px-12 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+                errors.username ? 'border-red-400' : 'border-slate-200'
+              }`}
+            />
           </div>
-          <h1 className="text-2xl font-black">Sign in to National Queue System</h1>
+          {errors.username && <p className="mt-2 text-sm font-semibold !text-red-600">{errors.username.message}</p>}
         </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div>
-            <label htmlFor="username" className="mb-2 block text-sm font-bold text-blue-100">
-              Username or Phone
-            </label>
-            <div className="relative">
-              <FiUser className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                placeholder="Username or 618318172"
-                {...register('username')}
-                className={`w-full rounded-xl border bg-white px-12 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 ${
-                  errors.username ? 'border-red-400' : 'border-transparent'
-                }`}
-              />
-            </div>
-            {errors.username && <p className="mt-2 text-sm font-semibold text-red-300">{errors.username.message}</p>}
-          </div>
-
-          <div>
-            <label htmlFor="password" className="mb-2 block text-sm font-bold text-blue-100">
-              Password
-            </label>
-            <div className="relative">
-              <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="Password"
-                {...register('password')}
-                className={`w-full rounded-xl border bg-white px-12 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 ${
-                  errors.password ? 'border-red-400' : 'border-transparent'
-                }`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((current) => !current)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <FiEyeOff /> : <FiEye />}
-              </button>
-            </div>
-            {errors.password && <p className="mt-2 text-sm font-semibold text-red-300">{errors.password.message}</p>}
-          </div>
-
-          <div className="flex items-center justify-between text-sm">
-            <label htmlFor="remember-me" className="flex items-center gap-2 text-blue-100">
-              <input
-                id="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              Remember me
-            </label>
+        <div>
+          <label htmlFor="password" className="mb-1.5 block text-sm font-bold !text-slate-700">
+            Password
+          </label>
+          <div className="relative">
+            <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              {...register('password')}
+              className={`w-full rounded-xl border bg-white px-12 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${
+                errors.password ? 'border-red-400' : 'border-slate-200'
+              }`}
+            />
             <button
               type="button"
-              onClick={handleForgotPassword}
-              className="font-bold text-blue-300 hover:text-blue-100"
+              onClick={() => setShowPassword((current) => !current)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
-              Forgot password
+              {showPassword ? <FiEyeOff /> : <FiEye />}
             </button>
           </div>
+          {errors.password && <p className="mt-2 text-sm font-semibold !text-red-600">{errors.password.message}</p>}
+        </div>
 
+        <div className="flex items-center justify-between text-sm">
+          <label htmlFor="remember-me" className="flex items-center gap-2 !text-slate-500">
+            <input
+              id="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            Remember me
+          </label>
           <button
-            type="submit"
-            disabled={loading}
-            className="flex w-full items-center justify-center rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+            type="button"
+            onClick={handleForgotPassword}
+            className="font-bold text-blue-600 hover:text-blue-800"
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            Forgot password?
           </button>
-        </form>
+        </div>
 
-        <p className="mt-6 text-center text-sm text-blue-100">
-          Do not have an account?{' '}
-          <Link to="/register" className="font-black text-blue-300 hover:text-blue-100">
-            Register
-          </Link>
-        </p>
-      </div>
-    </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1F6FC2] px-5 py-3.5 text-sm font-black !text-[#ffffff] transition hover:bg-[#17579C] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <FiUser /> {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+      </form>
+
+      <Link
+        to="/faq"
+        className="mt-6 flex items-center justify-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-800"
+      >
+        <FiHeadphones /> Need help?
+      </Link>
+
+      <p className="mt-4 text-center text-sm !text-slate-500">
+        Don&apos;t have an account?{' '}
+        <Link to="/register" className="font-black text-blue-600 hover:text-blue-800">
+          Create Account
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 }

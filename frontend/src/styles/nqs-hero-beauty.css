@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Home hero visual lock
+   Light mode stays soft and readable; dark mode stays navy with white text.
+   ========================================================================== */
+
+html body .nqs-home-portal .nqs-portal-hero.nqs-portal-hero-soft,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero.nqs-portal-hero-soft,
+html.nqs-theme-light body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero.nqs-portal-hero-soft {
+  background: linear-gradient(180deg, #EAF4FF 0%, #F6F9FC 78%, #F6F9FC 100%) !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero.nqs-portal-hero-soft,
+html.nqs-theme-dark body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero.nqs-portal-hero-soft {
+  background: #0B2E59 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel,
+html.nqs-theme-light body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel {
+  background: transparent !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel,
+html.nqs-theme-dark body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel {
+  background: transparent !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel::after,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel::after {
+  background-image: radial-gradient(circle, rgba(59, 143, 212, 0.36) 1.15px, transparent 1.15px) !important;
+  background-size: 16px 16px !important;
+  opacity: 0.52 !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-panel::after {
+  background-image: radial-gradient(circle, rgba(160, 200, 235, 0.32) 1.15px, transparent 1.15px) !important;
+  opacity: 0.62 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-media,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-media,
+html.nqs-theme-light body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-media {
+  background: #EAF4FF !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-media,
+html.nqs-theme-dark body .nqs-public-blue-lock .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-media {
+  background: #0B2E59 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-blend,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-blend {
+  background: linear-gradient(
+    to right,
+    #EAF4FF 0%,
+    rgba(234, 244, 255, 0.95) 10%,
+    rgba(234, 244, 255, 0.72) 24%,
+    rgba(234, 244, 255, 0.36) 42%,
+    rgba(234, 244, 255, 0.1) 54%,
+    transparent 68%
+  ) !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-blend {
+  background: linear-gradient(
+    to right,
+    #0B2E59 0%,
+    rgba(11, 46, 89, 0.96) 10%,
+    rgba(11, 46, 89, 0.72) 24%,
+    rgba(11, 46, 89, 0.35) 40%,
+    rgba(11, 46, 89, 0.1) 52%,
+    transparent 64%
+  ) !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy h1,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy h1 {
+  color: #0B2E59 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy p,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy p {
+  color: #4C6E90 !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy h1 {
+  color: #FFFFFF !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-hero-copy p {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.nqs-portal-hero-nira .nqs-portal-hero-kicker,
+html.nqs-theme-light .nqs-portal-hero-nira .nqs-portal-hero-kicker {
+  color: #1F6FC2 !important;
+}
+
+html.nqs-theme-dark .nqs-portal-hero-nira .nqs-portal-hero-kicker {
+  color: #8EC5F5 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-hero-btn-start,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-hero-btn-start,
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-hero-btn-start {
+  background: #1F6FC2 !important;
+  border-color: #1F6FC2 !important;
+  color: #FFFFFF !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 24px rgba(59, 143, 212, 0.28) !important;
+  font-weight: 600 !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-hero-btn-start:hover {
+  background: #2F80ED !important;
+  border-color: #2F80ED !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-arrow,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-arrow,
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-arrow {
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #0B2E59 !important;
+  border: 1px solid rgba(31, 111, 194, 0.18) !important;
+  box-shadow: 0 6px 16px rgba(15, 40, 80, 0.14) !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot {
+  background: rgba(31, 111, 194, 0.32) !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+html body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot.is-active,
+html.nqs-theme-light body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot.is-active,
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-hero-soft .nqs-portal-slider-dot.is-active {
+  background: #1F6FC2 !important;
+  width: 28px !important;
+  border-radius: 999px !important;
+}

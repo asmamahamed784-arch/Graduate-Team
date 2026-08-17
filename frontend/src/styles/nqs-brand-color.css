@@ -1,0 +1,104 @@
+/* Final NQS brand accents.
+   Keep this scoped: public page sections own their own backgrounds. */
+:root,
+html.nqs-theme-light,
+html:not(.nqs-theme-dark) {
+  --nqs-brand-blue: #1F6FC2;
+  --nqs-brand-blue-hover: #2F80ED;
+  --nqs-brand-blue-soft: #EAF4FF;
+  --nqs-brand-blue-panel: #DCEEFF;
+  --nqs-primary: var(--nqs-brand-blue);
+  --nqs-primary-hover: var(--nqs-brand-blue-hover);
+  --nqs-primary-strong: #17579C;
+  --nqs-primary-soft: rgba(31, 111, 194, 0.14);
+  --nqs-brand: var(--nqs-brand-blue);
+  --color-primary: var(--nqs-brand-blue);
+  --color-primary-hover: var(--nqs-brand-blue-hover);
+  --color-primary-500: var(--nqs-brand-blue);
+  --color-primary-600: #17579C;
+  --border-focus: var(--nqs-brand-blue);
+}
+
+html.nqs-theme-dark {
+  --nqs-brand-blue: #1F6FC2;
+  --nqs-brand-blue-hover: #2F80ED;
+  --nqs-primary: #2F80ED;
+  --nqs-primary-hover: #5FA0F5;
+  --nqs-primary-strong: #7EB8F2;
+  --nqs-primary-soft: rgba(47, 128, 237, 0.22);
+  --nqs-brand: #FFFFFF;
+  --color-primary: #2F80ED;
+  --color-primary-hover: #5FA0F5;
+  --border-focus: #2F80ED;
+}
+
+html body :is(.nqs-simple-navbar, .nqs-dashboard-header, .nqs-app-header),
+html.nqs-theme-light body :is(.nqs-simple-navbar, .nqs-dashboard-header, .nqs-app-header),
+html.nqs-theme-dark body :is(.nqs-simple-navbar, .nqs-dashboard-header, .nqs-app-header) {
+  background: #0B2E59 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #FFFFFF !important;
+}
+
+html body :is(.nqs-simple-navbar, .nqs-dashboard-header, .nqs-app-header)
+  :is(a, button, svg, span, strong, small) {
+  color: #FFFFFF !important;
+}
+
+html body .nqs-simple-navbar .nqs-nav-dropdown {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html body .nqs-simple-navbar .nqs-nav-link.is-active,
+html body .nqs-simple-navbar .nqs-nav-link:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 0 -3px 0 #FFFFFF !important;
+}
+
+html body .nqs-public-blue-lock .nqs-theme-toggle {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+html body .nqs-public-blue-lock .nqs-theme-toggle-knob {
+  background: var(--nqs-brand-blue) !important;
+}
+
+html body :is(.nqs-dashboard-link, .nqs-login-chip, .nqs-portal-cta-primary, .nqs-public-service-cta, .nqs-portal-easier-btn, .nqs-hero-btn-start),
+html body :is(button[class*="bg-blue"], a[class*="bg-blue"]) {
+  background: var(--nqs-brand-blue) !important;
+  border-color: var(--nqs-brand-blue) !important;
+  color: #FFFFFF !important;
+}
+
+html body :is(.nqs-dashboard-link, .nqs-login-chip, .nqs-portal-cta-primary, .nqs-public-service-cta, .nqs-portal-easier-btn, .nqs-hero-btn-start) *,
+html body :is(button[class*="bg-blue"], a[class*="bg-blue"]) * {
+  color: #FFFFFF !important;
+}
+
+html body :is(.nqs-dashboard-link, .nqs-login-chip, .nqs-portal-cta-primary, .nqs-public-service-cta, .nqs-portal-easier-btn, .nqs-hero-btn-start):hover,
+html body :is(button[class*="bg-blue"], a[class*="bg-blue"]):hover {
+  background: var(--nqs-brand-blue-hover) !important;
+  border-color: var(--nqs-brand-blue-hover) !important;
+}
+
+html body :is(.nqs-portal-service-icon, .nqs-public-service-icon, .nqs-portal-easier-tab.is-active .nqs-portal-easier-tab-icon, .nqs-portal-how-badge, .nqs-ad-primary-btn) {
+  background: var(--nqs-brand-blue) !important;
+  border-color: var(--nqs-brand-blue) !important;
+  color: #FFFFFF !important;
+}
+
+html body :is(.nqs-portal-service-icon, .nqs-public-service-icon, .nqs-portal-easier-tab.is-active .nqs-portal-easier-tab-icon, .nqs-portal-how-badge, .nqs-ad-primary-btn) * {
+  color: #FFFFFF !important;
+}
+
+html body .nqs-simple-footer,
+html.nqs-theme-light body .nqs-simple-footer,
+html.nqs-theme-dark body .nqs-simple-footer {
+  background: #0B2E59 !important;
+  color: #FFFFFF !important;
+}

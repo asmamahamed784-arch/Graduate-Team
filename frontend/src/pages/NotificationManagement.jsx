@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FiBell, FiCalendar, FiCheckCircle,
-  FiX, FiInbox, FiSend, FiUserCheck
+  FiAlertTriangle, FiBell, FiCalendar, FiChevronRight, FiCheckCircle,
+  FiX, FiInbox, FiMapPin, FiSend, FiUserCheck
 } from 'react-icons/fi';
 import { useAuth, useNotification } from '../hooks';
-import { buildNotificationRoute } from '../utils/notificationRouting';
+import { getNotificationDisplayMessage } from '../utils/cancellationDisplay';
 
 const filterTabs = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
-  { key: 'Appointments', label: 'Appointments' },
-  { key: 'Operator Approval', label: 'Operator Approval' },
+  { key: 'Appointments', label: 'Appointment' },
+  { key: 'Queue', label: 'Queue' },
   { key: 'System', label: 'System' },
 ];
 
@@ -20,19 +20,39 @@ const typeColors = {
   Queue: 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400',
   'Operator Approval': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
   System: 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400',
+  Alert: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400',
 };
 
-const getCategoryIcon = (category) => {
+const getCategoryIcon = (category, notification) => {
+  const text = `${notification?.title || ''} ${notification?.desc || ''}`.toLowerCase();
+  if (/action required|additional information|correction/.test(text)) return FiAlertTriangle;
   if (category === 'Appointments') return FiCalendar;
   if (category === 'Queue') return FiCheckCircle;
   if (category === 'Operator Approval') return FiUserCheck;
+  if (category === 'System' && /center/.test(text)) return FiMapPin;
   return FiBell;
 };
 
-const getNotificationMessage = (notification = {}) => notification.desc || notification.message || '';
+const getNotificationMessage = (notification = {}) => getNotificationDisplayMessage(notification);
+
+const formatRelativeTime = (value) => {
+  if (!value) return 'Just now';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
 
 const NotificationManagement = () => {
-  const { user, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const {
     notifications,
     unreadCount,
@@ -89,26 +109,26 @@ const NotificationManagement = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12">
+    <div className="min-h-screen w-full overflow-x-hidden px-3 pb-12 sm:px-5 lg:px-6">
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="mb-6"
+        className="mb-6 rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-4 shadow-sm sm:p-5"
       >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 rounded-xl relative">
-              <FiBell className="text-blue-700 dark:text-blue-400 text-xl" />
+            <div className="relative rounded-xl bg-[var(--color-primary-soft)] p-2.5">
+              <FiBell className="text-xl text-[var(--color-primary)]" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                   {unreadCount}
                 </span>
               )}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Notifications</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <h1 className="text-2xl font-black text-[var(--text-main)]">Notifications</h1>
+              <p className="text-sm font-medium text-[var(--text-muted)]">
                 {unreadCount > 0 ? `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'You\'re all caught up!'}
               </p>
             </div>
@@ -116,7 +136,7 @@ const NotificationManagement = () => {
           {unreadCount > 0 && (
             <button
               onClick={markAllRead}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-xl transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-800"
             >
               <FiCheckCircle size={15} />
               Mark all as read
@@ -130,23 +150,23 @@ const NotificationManagement = () => {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           onSubmit={handleSend}
-          className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+          className="mb-6 rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-5 shadow-sm"
         >
           <div className="mb-4 flex items-center gap-2">
-            <FiSend className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Send System Notification</h2>
+            <FiSend className="text-[var(--color-primary)]" />
+            <h2 className="text-sm font-black text-[var(--text-main)]">Send System Notification</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             <input
               value={compose.title}
               onChange={(e) => setCompose((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="Title"
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+              className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2.5 text-sm font-semibold text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
             />
             <select
               value={compose.category}
               onChange={(e) => setCompose((prev) => ({ ...prev, category: e.target.value }))}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+              className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2.5 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
             >
               <option value="System">System</option>
               <option value="Appointments">Appointments</option>
@@ -158,12 +178,12 @@ const NotificationManagement = () => {
             onChange={(e) => setCompose((prev) => ({ ...prev, desc: e.target.value }))}
             rows={3}
             placeholder="Message"
-            className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+            className="mt-3 w-full resize-y rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2.5 text-sm font-semibold text-[var(--text-main)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
           />
           <button
             type="submit"
             disabled={sending}
-            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-800 disabled:opacity-60"
           >
             <FiSend size={14} />
             {sending ? 'Sending...' : 'Send notification'}
@@ -171,7 +191,7 @@ const NotificationManagement = () => {
         </motion.form>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap gap-2 rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-2 shadow-sm">
         {filterTabs.map((tab) => (
           <button
             key={tab.key}
@@ -179,8 +199,8 @@ const NotificationManagement = () => {
             onClick={() => setActiveFilter(tab.key)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
               activeFilter === tab.key
-                ? 'bg-blue-700 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300'
+                ? 'bg-[var(--color-primary)] text-white'
+                : 'bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary)]'
             }`}
           >
             {tab.label}
@@ -194,16 +214,15 @@ const NotificationManagement = () => {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center dark:border-gray-700 dark:bg-gray-800"
+              className="rounded-2xl border border-dashed border-[var(--border-light)] bg-[var(--bg-card)] p-10 text-center"
             >
-              <FiInbox className="mx-auto mb-3 text-3xl text-gray-300 dark:text-gray-600" />
-              <p className="text-gray-500 dark:text-gray-400 font-medium">No notifications</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">New updates will appear here.</p>
+              <FiInbox className="mx-auto mb-3 text-3xl text-[var(--text-muted)]" />
+              <p className="font-bold text-[var(--text-muted)]">No notifications</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">New updates will appear here.</p>
             </motion.div>
           ) : (
             filtered.map((n) => {
-              const Icon = getCategoryIcon(n.category);
-              const route = buildNotificationRoute(n, user);
+              const Icon = getCategoryIcon(n.category, n);
               const message = getNotificationMessage(n);
               const id = n._id || n.id;
               const isOpening = openingId && String(id) === openingId;
@@ -224,55 +243,49 @@ const NotificationManagement = () => {
                   }}
                   role="button"
                   tabIndex={0}
-                  className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all group ${
+                  className={`group flex items-start gap-3 rounded-2xl border p-4 shadow-sm transition-all cursor-pointer ${
                     n.read
-                      ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                      : 'bg-blue-50/60 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/50 shadow-sm'
+                      ? 'border-[var(--border-light)] bg-[var(--bg-card)]'
+                      : 'border-[var(--border-focus)] bg-[var(--bg-card)]'
                   } hover:shadow-md`}
                 >
-                  <div className={`p-2.5 rounded-xl shrink-0 ${typeColors[n.category] || typeColors.System}`}>
-                    <Icon size={18} />
+                  <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${n.read ? 'bg-transparent' : 'bg-blue-500'}`} />
+
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${typeColors[n.category] || typeColors.System}`}>
+                    <Icon size={17} />
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      {!n.read && (
-                        <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0" />
-                      )}
-                      <h3 className={`text-sm font-semibold truncate ${
-                        n.read ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-white'
-                      }`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="truncate text-sm font-black text-[var(--text-main)]">
                         {n.title}
                       </h3>
+                      <span className="shrink-0 text-[11px] font-bold text-[var(--color-primary)]">
+                        {formatRelativeTime(n.timestamp || n.createdAt)}
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2">
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-[var(--text-muted)]">
                       {message}
                     </p>
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5">
-                      {n.timestamp || n.createdAt ? new Date(n.timestamp || n.createdAt).toLocaleString() : 'Just now'}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleOpenNotification(n);
-                      }}
-                      className="mt-3 inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/60 dark:text-blue-200 dark:hover:bg-blue-900/70"
-                    >
-                      {isOpening ? 'Opening...' : route ? 'Open related page' : 'Open'}
-                    </button>
                   </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteNotification(id);
-                    }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                    aria-label="Delete notification"
-                  >
-                    <FiX size={16} />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteNotification(id);
+                      }}
+                      className="rounded-lg p-1.5 text-[var(--text-muted)] opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                      aria-label="Delete notification"
+                    >
+                      <FiX size={16} />
+                    </button>
+                    {isOpening ? (
+                      <span className="text-[11px] font-semibold text-[var(--text-muted)]">Opening...</span>
+                    ) : (
+                      <FiChevronRight className="text-[var(--text-muted)]" />
+                    )}
+                  </div>
                 </motion.div>
               );
             })

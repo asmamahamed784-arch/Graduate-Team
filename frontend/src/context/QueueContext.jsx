@@ -39,7 +39,7 @@ const normalizeTicket = (ticket) => ({
   service: nameFrom(ticket.service, ticket.serviceName || 'National ID Registration'),
   center: nameFrom(ticket.center, ticket.centerName || 'Banaadir National ID Center'),
   citizenName: ticket.citizenName || ticket.name || 'Citizen',
-  name: ticket.ref || ticket._id || ticket.id || 'Ticket',
+  name: ticket.ref || ticket._id || ticket.id || 'Request',
   waitTime: ticket.waitTime || ticket.estimatedWait || '0 min',
   wait: Number.parseInt(ticket.waitTime || ticket.estimatedWait || '0', 10) || 0
 });
@@ -115,7 +115,7 @@ export const QueueProvider = ({ children }) => {
 
   const addTicket = async (serviceName, citizenName = 'Citizen', centerName = 'Banaadir National ID Center') => {
     if (!isAuthenticated) {
-      toast.error('Please sign in before creating queue tickets.');
+      toast.error('Please sign in before creating queue requests.');
       return undefined;
     }
 
@@ -145,12 +145,12 @@ export const QueueProvider = ({ children }) => {
       const res = await api.post(role === 'citizen' ? '/api/bookings' : '/api/queue/generate', payload);
 
       if (res.data.success) {
-        toast.success(`Ticket ${res.data.data.ref} created.`);
+        toast.success(`Request ${res.data.data.ref} created.`);
         await refreshQueue();
         return normalizeTicket(res.data.data);
       }
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'Failed to create queue ticket';
+      const errMsg = e.response?.data?.message || e.message || 'Failed to create queue request';
       toast.error(errMsg);
     } finally {
       setLoading(false);
@@ -178,11 +178,11 @@ export const QueueProvider = ({ children }) => {
 
       const res = await api.post(endpoint, payload);
       if (res.data.success) {
-        toast.success(`Calling ticket ${res.data.data.ref} to Counter ${counter}.`);
+        toast.success(`Calling request ${res.data.data.ref} to Counter ${counter}.`);
       }
       await refreshQueue();
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'Failed to call next ticket';
+      const errMsg = e.response?.data?.message || e.message || 'Failed to call next request';
       toast.info(errMsg);
     } finally {
       setLoading(false);
@@ -198,17 +198,17 @@ export const QueueProvider = ({ children }) => {
     setLoading(true);
     try {
       const ticketObj = tickets.find(t => t.ref === ticketRef);
-      if (!ticketObj) throw new Error('Ticket not found');
+      if (!ticketObj) throw new Error('Request not found');
 
       const id = ticketObj._id || ticketObj.id;
       const res = await api.put(`/api/queue/${id}/hold`);
-      
+
       if (res.data.success) {
-        toast.warning(`Ticket ${ticketRef} placed on hold.`);
+        toast.warning(`Request ${ticketRef} placed on hold.`);
       }
       await refreshQueue();
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'Failed to place ticket on hold';
+      const errMsg = e.response?.data?.message || e.message || 'Failed to place request on hold';
       toast.error(errMsg);
     } finally {
       setLoading(false);
@@ -224,17 +224,17 @@ export const QueueProvider = ({ children }) => {
     setLoading(true);
     try {
       const ticketObj = tickets.find(t => t.ref === ticketRef);
-      if (!ticketObj) throw new Error('Ticket not found');
+      if (!ticketObj) throw new Error('Request not found');
 
       const id = ticketObj._id || ticketObj.id;
       const res = await api.put(`/api/queue/${id}/complete`);
 
       if (res.data.success) {
-        toast.success(`Ticket ${ticketRef} marked as completed.`);
+        toast.success(`Request ${ticketRef} marked as completed.`);
       }
       await refreshQueue();
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'Failed to complete ticket';
+      const errMsg = e.response?.data?.message || e.message || 'Failed to complete request';
       toast.error(errMsg);
     } finally {
       setLoading(false);

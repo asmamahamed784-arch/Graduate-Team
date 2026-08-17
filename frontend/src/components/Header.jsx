@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth, useTheme } from '../hooks';
 import { FiBell, FiCalendar, FiChevronDown, FiUser, FiSettings, FiLogOut, FiHome, FiMoon, FiSun } from 'react-icons/fi';
 import { useNotifications } from '../context/NotificationContext';
+import { getNotificationDisplayMessage } from '../utils/cancellationDisplay';
+import BrandLogo from './BrandLogo';
 
 const Header = () => {
   const { user, role, logout } = useAuth();
@@ -54,6 +56,7 @@ const Header = () => {
       className="nqs-dashboard-header nqs-app-header sticky top-0 z-30 flex h-16 items-center justify-between border-b px-4 shadow-sm sm:px-5"
     >
       <div className="flex items-center space-x-2">
+        <BrandLogo className="nqs-header-logo" size={26} />
         <span className="text-sm font-extrabold tracking-tight text-[var(--nqs-brand)] sm:text-base">
           NQS National ID
         </span>
@@ -142,7 +145,7 @@ const Header = () => {
                               {notification.title || 'Notification'}
                             </p>
                             <p className="nqs-notification-dropdown-item-desc mt-1 line-clamp-2 text-[11px]">
-                              {notification.desc || notification.message || 'Open related page'}
+                              {getNotificationDisplayMessage(notification) || 'Open related page'}
                             </p>
                             <p className="nqs-notification-dropdown-item-link mt-1 text-[10px] font-semibold">
                               Click to open
@@ -192,13 +195,13 @@ const Header = () => {
               />
               <div className="nqs-profile-dropdown absolute right-0 z-50 mt-2 w-56 rounded-lg border border-[var(--nqs-border)] bg-[var(--nqs-card)] py-2 shadow-lg">
                 <div className="border-b border-[var(--nqs-border)] px-4 py-2">
-                  <p className="text-sm font-semibold text-[var(--nqs-text)]">{name}</p>
-                  <p className="truncate text-xs text-[var(--nqs-muted)]">@{username}</p>
+                  <p className="nqs-profile-dropdown-name text-sm font-semibold text-[var(--nqs-text)]">{name}</p>
+                  <p className="nqs-profile-dropdown-username truncate text-xs text-[var(--nqs-muted)]">@{username}</p>
                 </div>
                 {canOpenProfile && (
                   <Link
                     to="/profile"
-                    className="flex items-center space-x-2.5 px-4 py-2.5 text-xs font-semibold text-[var(--nqs-text)] hover:bg-[var(--nqs-card-soft)]"
+                    className="nqs-profile-dropdown-item flex items-center space-x-2.5 px-4 py-2.5 text-xs font-semibold text-[var(--nqs-text)] hover:bg-[var(--nqs-card-soft)]"
                     onClick={() => setProfileDropdownOpen(false)}
                   >
                     <FiUser className="h-4 w-4 text-[var(--nqs-muted)]" />
@@ -207,7 +210,7 @@ const Header = () => {
                 )}
                 <Link
                   to="/profile#password"
-                  className="flex items-center space-x-2.5 px-4 py-2.5 text-xs font-semibold text-[var(--nqs-text)] hover:bg-[var(--nqs-card-soft)]"
+                  className="nqs-profile-dropdown-item flex items-center space-x-2.5 px-4 py-2.5 text-xs font-semibold text-[var(--nqs-text)] hover:bg-[var(--nqs-card-soft)]"
                   onClick={() => setProfileDropdownOpen(false)}
                 >
                   <FiSettings className="h-4 w-4 text-[var(--nqs-muted)]" />
@@ -219,7 +222,7 @@ const Header = () => {
                     setProfileDropdownOpen(false);
                     logout();
                   }}
-                  className="flex w-full items-center space-x-2.5 px-4 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  className="nqs-profile-dropdown-logout flex w-full items-center space-x-2.5 px-4 py-2.5 text-left text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                 >
                   <FiLogOut className="w-4 h-4" />
                   <span>Logout</span>

@@ -1,4 +1,4 @@
-import prisma from '../config/prisma.js';
+import { DocumentService } from '../services/documentService.js';
 
 // @desc    Citizen upload document for booking verification
 // @route   POST /api/documents
@@ -6,23 +6,17 @@ import prisma from '../config/prisma.js';
 export const uploadDocument = async (req, res) => {
   try {
     const { name, fileUrl, ticketId } = req.body;
-
-    if (!name || !fileUrl) {
-      return res.status(400).json({ success: false, message: 'Document name and file URL are required' });
-    }
-
-    const doc = await prisma.document.create({
-      data: {
-        user: req.user.id,
-        ticket: ticketId || null,
-        name,
-        fileUrl,
-        status: 'Pending'
-      }
+    const doc = await DocumentService.uploadDocument({ 
+      name, 
+      fileUrl, 
+      ticketId, 
+      userId: req.user.id 
     });
-
     return res.status(201).json({ success: true, data: doc });
   } catch (error) {
+    if (error.message === 'Document name and file URL are required') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -32,15 +26,7 @@ export const uploadDocument = async (req, res) => {
 // @access  Private
 export const listDocuments = async (req, res) => {
   try {
-    const list = await prisma.document.findMany({ 
-      where: { user: req.user.id }
-    });
-    const ticketIds = [...new Set(list.map((doc) => doc.ticket).filter(Boolean))];
-    const tickets = ticketIds.length
-      ? await prisma.ticket.findMany({ where: { id: { in: ticketIds } }, select: { id: true, ref: true, status: true } })
-      : [];
-    const ticketsById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
-    const data = list.map((doc) => ({ ...doc, ticket: ticketsById.get(doc.ticket) || doc.ticket }));
+    const data = await DocumentService.listDocuments(req.user.id);
     return res.json({ success: true, count: data.length, data });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -60,7 +60,7 @@ const LiveQueue = () => {
   const announceTicket = useCallback((ticket) => {
     if (!ticket || voiceMuted || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel(); // Clear any pending speech
-    const text = `Ticket number ${ticket.ref.split('-').join(' ')}, please proceed to Counter ${ticket.counter.replace(/^0+/, '')}`;
+    const text = `Request number ${ticket.ref.split('-').join(' ')}, please proceed to Counter ${ticket.counter.replace(/^0+/, '')}`;
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.9;
     utterance.pitch = 1.05;
@@ -176,7 +176,7 @@ const LiveQueue = () => {
               </motion.div>
             </AnimatePresence>
             <p className="text-slate-300 text-base sm:text-lg uppercase tracking-widest mt-6 font-semibold">
-              {currentServed?.service || 'No active ticket'}
+              {currentServed?.service || 'No active request'}
             </p>
           </div>
 

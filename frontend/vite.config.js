@@ -9,18 +9,19 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-  port: 5173,
-  strictPort: true,
-  proxy: {
-    '/api': {
-      target: 'http://localhost:5005',
-      changeOrigin: true,
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:5005',
+        changeOrigin: true,
+      },
+      '/socket.io': {
+        target: 'http://127.0.0.1:5005',
+        ws: true,
+        changeOrigin: true,
+      },
     },
-    '/socket.io': {
-      target: 'http://localhost:5005',
-      ws: true,
-      changeOrigin: true,
-    }
-  }
-}
+  },
 })

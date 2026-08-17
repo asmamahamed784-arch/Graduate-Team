@@ -1,10 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import {
+  FaChartBar,
   FaChartLine,
   FaBuilding,
-  FaCalendarDay,
   FaClock,
   FaClipboardList,
   FaConciergeBell,
@@ -12,13 +22,14 @@ import {
   FaFilePdf,
   FaFilter,
   FaLock,
-  FaServer,
   FaShieldAlt,
   FaTable,
   FaUserCog,
   FaUsers,
 } from 'react-icons/fa';
 import api from '../api/axiosInstance';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 const reportCards = [
   {
@@ -41,7 +52,7 @@ const reportCards = [
   },
   {
     title: 'Operators',
-    description: 'Review operator activity, completed tickets, and service performance.',
+    description: 'Review operator activity, completed requests, and service performance.',
     path: '/dashboard/admin/reports/operators',
     icon: FaUserCog,
   },
@@ -50,6 +61,12 @@ const reportCards = [
     description: 'Waiting queue, active service, completed, cancelled, and no-show analysis.',
     path: '/dashboard/admin/reports/queue',
     icon: FaClock,
+  },
+  {
+    title: 'Appointment Reports',
+    description: 'Daily, weekly, and monthly appointment volume trends.',
+    path: '/dashboard/admin/reports/appointments',
+    icon: FaChartBar,
   },
 ];
 
@@ -190,7 +207,7 @@ const citizenGender = (ticket) => {
   const gender = citizenGenderKey(ticket);
   if (gender === 'male') return 'Male';
   if (gender === 'female') return 'Female';
-  return 'Not provided';
+  return '';
 };
 
 const citizenDistrict = (ticket) => (
@@ -223,8 +240,27 @@ const statusLabel = (value) => {
     active: 'Active',
     inactive: 'Inactive',
     pending_approval: 'Pending',
+    rejected: 'Rejected',
   }[key] || 'All';
 };
+
+// "Active" for a staff account means: the Super Admin has approved/enabled the account
+// AND the person actually logged in today. Anyone approved but not seen today (or
+// deactivated/pending/rejected) falls back to "Inactive" — Pending Approval stays its
+// own bucket since it still needs Super Admin review.
+const isSameCalendarDay = (a, b) => (
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+);
+
+const loggedInToday = (lastActiveAt) => {
+  if (!lastActiveAt) return false;
+  const seen = new Date(lastActiveAt);
+  return !Number.isNaN(seen.getTime()) && isSameCalendarDay(seen, new Date());
+};
+
+const isOperatorActiveToday = (operator) => (
+  String(operator.status || '').trim().toLowerCase() === 'active' && loggedInToday(operator.lastActiveAt)
+);
 
 const makeCountMap = (rows, selector) => rows.reduce((map, row) => {
   const key = selector(row) || 'Not available';
@@ -309,20 +345,34 @@ const PageShell = ({ title, description, children, actions }) => (
   </motion.div>
 );
 
+// Sitewide soft-pastel card tone system (styles/nqs-theme-system.css). The
+// `accent` prop names stay the same at every call site; only what they map to
+// changed, so every existing StatCard usage picks up the new palette for free.
 const StatCard = ({ label, value, icon: Icon, accent = 'blue', to, onClick, active = false }) => {
-  const colors = {
-    blue: 'border-blue-600 bg-blue-50 text-blue-700',
-    green: 'border-emerald-600 bg-emerald-50 text-emerald-700',
-    amber: 'border-amber-500 bg-amber-50 text-amber-700',
-    red: 'border-red-500 bg-red-50 text-red-700',
-    navy: 'border-[#0B3A75] bg-slate-50 text-[#0B3A75]',
+  const cardTone = {
+    blue: 'nqs-card-tone-blue',
+    green: 'nqs-card-tone-green',
+    amber: 'nqs-card-tone-orange',
+    red: 'nqs-card-tone-pink',
+    purple: 'nqs-card-tone-purple',
+    cyan: 'nqs-card-tone-cyan',
+    navy: 'nqs-card-tone-purple',
+  };
+  const iconTone = {
+    blue: 'nqs-card-tone-icon-blue',
+    green: 'nqs-card-tone-icon-green',
+    amber: 'nqs-card-tone-icon-orange',
+    red: 'nqs-card-tone-icon-pink',
+    purple: 'nqs-card-tone-icon-purple',
+    cyan: 'nqs-card-tone-icon-cyan',
+    navy: 'nqs-card-tone-icon-purple',
   };
   const interactive = Boolean(to || onClick);
 
   const content = (
-    <div className={`h-full rounded-xl border-l-4 bg-white p-4 shadow-sm transition ${interactive ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''} ${active ? 'ring-2 ring-blue-600 ring-offset-2' : ''} ${colors[accent] || colors.blue}`}>
+    <div className={`h-full rounded-xl border p-4 shadow-sm transition ${interactive ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md' : ''} ${active ? 'ring-2 ring-blue-600 ring-offset-2' : ''} ${cardTone[accent] || cardTone.blue}`}>
       <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${colors[accent] || colors.blue}`}>
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconTone[accent] || iconTone.blue}`}>
           <Icon className="text-lg" />
         </div>
         <div className="min-w-0">
@@ -431,12 +481,20 @@ const Filters = ({ filters, setFilters, options, showRequestType = true }) => (
       <input
         type="date"
         value={filters.startDate}
-        onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))}
+        onChange={(event) => {
+          const nextStartDate = event.target.value;
+          setFilters((current) => ({
+            ...current,
+            startDate: nextStartDate,
+            endDate: current.endDate && current.endDate < nextStartDate ? '' : current.endDate,
+          }));
+        }}
         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
       />
       <input
         type="date"
         value={filters.endDate}
+        min={filters.startDate || undefined}
         onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))}
         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
       />
@@ -460,7 +518,7 @@ const RequestsTable = ({ rows, title = 'Requests' }) => (
       <table className="w-full min-w-[980px] text-left text-sm">
         <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
           <tr>
-            {['Request Ref', 'NQS ID', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'].map((heading) => (
+            {['Request Ref', 'NQS ID', 'Full Name', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'].map((heading) => (
               <th key={heading} className="px-4 py-3 font-black">{heading}</th>
             ))}
           </tr>
@@ -505,7 +563,16 @@ const OperatorsTable = ({ rows }) => (
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.length ? rows.map((operator) => (
+          {rows.length ? rows.map((operator) => {
+            const rawStatus = String(operator.status || '').trim().toLowerCase();
+            const isPendingOrRejected = rawStatus === 'pending_approval' || rawStatus === 'rejected';
+            const displayStatus = isPendingOrRejected ? statusLabel(rawStatus) : (isOperatorActiveToday(operator) ? 'Active' : 'Inactive');
+            const badgeTone = isPendingOrRejected
+              ? 'bg-amber-50 text-amber-700'
+              : displayStatus === 'Active'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-red-50 text-red-700';
+            return (
             <tr key={operator._id || operator.id || operator.username} className="hover:bg-blue-50/50">
               <td className="px-4 py-3 font-black text-slate-950">{operator.name || 'No name'}</td>
               <td className="px-4 py-3 text-slate-700">{operator.username || '--'}</td>
@@ -514,20 +581,15 @@ const OperatorsTable = ({ rows }) => (
               <td className="px-4 py-3 text-slate-700">{operator.center?.name || operator.centerName || 'Not assigned'}</td>
               <td className="px-4 py-3 text-slate-700">{operator.center?.district || operator.district || '--'}</td>
               <td className="px-4 py-3">
-                <span className={`rounded-full px-2 py-1 text-xs font-black ${
-                  operator.status === 'active' || operator.status === 'Active'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : operator.status === 'inactive' || operator.status === 'Inactive'
-                      ? 'bg-red-50 text-red-700'
-                      : 'bg-amber-50 text-amber-700'
-                }`}>
-                  {operator.status || 'Pending'}
+                <span className={`rounded-full px-2 py-1 text-xs font-black ${badgeTone}`}>
+                  {displayStatus}
                 </span>
               </td>
               <td className="px-4 py-3 font-black text-emerald-700">{operator.completed || 0}</td>
               <td className="px-4 py-3 font-black text-red-700">{operator.cancelled || 0}</td>
             </tr>
-          )) : (
+            );
+          }) : (
             <tr>
               <td colSpan="9" className="px-4 py-8 text-center text-sm text-slate-500">No operators found.</td>
             </tr>
@@ -566,6 +628,47 @@ const DistrictBreakdownTable = ({ rows }) => (
           )) : (
             <tr>
               <td colSpan="5" className="px-4 py-8 text-center text-sm text-slate-500">No district records found.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </motion.div>
+);
+
+const CenterListTable = ({ rows }) => (
+  <motion.div variants={item} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-200 bg-white px-4 py-3">
+      <h2 className="flex items-center gap-2 text-lg font-black text-slate-950"><FaBuilding className="text-blue-700" /> Service Centers Directory</h2>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[860px] text-left text-sm">
+        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-700">
+          <tr>
+            {['District', 'Service Center', 'Phone', 'Total', 'Waiting', 'Completed', 'Stopped', 'Report'].map((heading) => (
+              <th key={heading} className="px-4 py-3 font-black">{heading}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+          {rows.length ? rows.map((row) => (
+            <tr key={row.id} className="odd:bg-white even:bg-slate-50 hover:bg-blue-50/70">
+              <td className="px-4 py-3 font-semibold text-slate-700">{row.district || 'Banaadir'}</td>
+              <td className="px-4 py-3 font-semibold text-slate-900">{row.label}</td>
+              <td className="px-4 py-3 text-slate-700">{row.phone || 'No phone recorded'}</td>
+              <td className="px-4 py-3 font-black text-slate-950">{row.total}</td>
+              <td className="px-4 py-3 font-black text-amber-700">{row.waiting}</td>
+              <td className="px-4 py-3 font-black text-emerald-700">{row.completed}</td>
+              <td className="px-4 py-3 font-black text-red-700">{row.cancelled + row.noShow}</td>
+              <td className="px-4 py-3">
+                <Link to={`/dashboard/admin/reports/service-centers/${row.id}`} className="inline-flex items-center gap-1 text-xs font-black text-blue-700 hover:underline">
+                  View <span aria-hidden="true">&rarr;</span>
+                </Link>
+              </td>
+            </tr>
+          )) : (
+            <tr>
+              <td colSpan="8" className="px-4 py-8 text-center text-sm text-slate-500">No service centers found.</td>
             </tr>
           )}
         </tbody>
@@ -622,44 +725,170 @@ const ServiceCenterTable = ({ rows, clickable = false }) => (
   </motion.div>
 );
 
-const CenterDirectory = ({ rows }) => (
-  <motion.div variants={item} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-    {rows.map((row) => (
-      <Link
-        key={row.id}
-        to={`/dashboard/admin/reports/service-centers/${row.id}`}
-        className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">{row.district} District</p>
-            <h3 className="mt-1 text-lg font-black text-slate-950">{row.label}</h3>
-            <p className="mt-1 text-xs font-semibold text-slate-500">{row.phone || 'No phone recorded'}</p>
-          </div>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{row.total} total</span>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-amber-50 px-2 py-3">
-            <p className="text-lg font-black text-amber-700">{row.waiting}</p>
-            <p className="text-[11px] font-bold text-slate-600">Waiting</p>
-          </div>
-          <div className="rounded-lg bg-emerald-50 px-2 py-3">
-            <p className="text-lg font-black text-emerald-700">{row.completed}</p>
-            <p className="text-[11px] font-bold text-slate-600">Completed</p>
-          </div>
-          <div className="rounded-lg bg-red-50 px-2 py-3">
-            <p className="text-lg font-black text-red-700">{row.cancelled + row.noShow}</p>
-            <p className="text-[11px] font-bold text-slate-600">Stopped</p>
-          </div>
-        </div>
-        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-black text-blue-700">
-          <span>Open full center report</span>
-          <span className="transition group-hover:translate-x-1">View</span>
-        </div>
-      </Link>
-    ))}
+// Categorical/status hues validated for CVD + contrast (see dataviz skill); chrome
+// (grid/axis/tooltip) stays on the app's existing slate theme for visual consistency.
+const VIZ_COLORS = {
+  primary: '#1F6FC2',
+  primaryHover: '#17579C',
+  male: '#1F6FC2',
+  female: '#16A34A',
+  unknown: '#64748B',
+  good: '#0ca30c',
+  warning: '#fab219',
+  serious: '#ec835a',
+  critical: '#d03b3b',
+};
+
+const chartAxisOptions = {
+  x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 11, weight: '600' } } },
+  y: { beginAtZero: true, ticks: { color: '#64748b', precision: 0 }, grid: { color: 'rgba(148, 163, 184, 0.15)' } },
+};
+
+const chartTooltipOptions = {
+  backgroundColor: 'rgba(15, 23, 42, 0.92)',
+  padding: 10,
+  cornerRadius: 8,
+  titleFont: { size: 12, weight: 'bold' },
+  bodyFont: { size: 12 },
+};
+
+const last14DaysTrend = (tickets) => {
+  const days = [];
+  for (let i = 13; i >= 0; i -= 1) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    days.push(toDateKey(date));
+  }
+  return days.map((key) => ({
+    label: new Date(`${key}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    count: tickets.filter((ticket) => ticket.date === key).length,
+  }));
+};
+
+const ChartCard = ({ title, description, children }) => (
+  <motion.div variants={item} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="border-b border-slate-200 px-4 py-3">
+      <h2 className="text-sm font-black text-[#0B3A75]">{title}</h2>
+      {description && <p className="mt-0.5 text-xs font-semibold text-slate-500">{description}</p>}
+    </div>
+    <div className="h-64 px-4 py-4">{children}</div>
   </motion.div>
 );
+
+const OverviewCharts = ({ tickets, summary }) => {
+  const trendRows = useMemo(() => last14DaysTrend(tickets), [tickets]);
+  const genderNotProvided = Math.max(tickets.length - summary.male - summary.female, 0);
+
+  const trendData = {
+    labels: trendRows.map((row) => row.label),
+    datasets: [{
+      label: 'Appointments',
+      data: trendRows.map((row) => row.count),
+      backgroundColor: VIZ_COLORS.primary,
+      hoverBackgroundColor: VIZ_COLORS.primaryHover,
+      borderRadius: 6,
+      borderSkipped: false,
+      maxBarThickness: 26,
+    }],
+  };
+
+  const serviceData = {
+    labels: ['New Registration', 'Lost ID Replacement', 'Update Information'],
+    datasets: [{
+      data: [summary.newRegistration, summary.lost, summary.update],
+      backgroundColor: VIZ_COLORS.primary,
+      hoverBackgroundColor: VIZ_COLORS.primaryHover,
+      borderRadius: 6,
+      borderSkipped: false,
+      maxBarThickness: 46,
+    }],
+  };
+
+  const genderData = {
+    labels: ['Male', 'Female', 'Not provided'],
+    datasets: [{
+      data: [summary.male, summary.female, genderNotProvided],
+      backgroundColor: [VIZ_COLORS.male, VIZ_COLORS.female, VIZ_COLORS.unknown],
+      borderColor: '#ffffff',
+      borderWidth: 2,
+    }],
+  };
+
+  const statusData = {
+    labels: ['Completed', 'Waiting', 'No Show', 'Cancelled'],
+    datasets: [{
+      data: [summary.completed, summary.waiting, summary.noShow, summary.cancelled],
+      backgroundColor: [VIZ_COLORS.good, VIZ_COLORS.warning, VIZ_COLORS.serious, VIZ_COLORS.critical],
+      borderRadius: 6,
+      borderSkipped: false,
+      maxBarThickness: 26,
+    }],
+  };
+
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: chartTooltipOptions },
+    scales: chartAxisOptions,
+  };
+
+  const statusOptions = {
+    ...barOptions,
+    indexAxis: 'y',
+    scales: {
+      x: { beginAtZero: true, ticks: { color: '#64748b', precision: 0 }, grid: { color: 'rgba(148, 163, 184, 0.15)' } },
+      y: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 11, weight: '600' } } },
+    },
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          color: '#334155',
+          font: { size: 11, weight: '600' },
+          padding: 12,
+          generateLabels: (chart) => {
+            const { data } = chart;
+            const total = data.datasets[0].data.reduce((sum, value) => sum + value, 0) || 1;
+            return data.labels.map((label, index) => ({
+              text: `${label} (${Math.round((data.datasets[0].data[index] / total) * 100)}%)`,
+              fillStyle: data.datasets[0].backgroundColor[index],
+              strokeStyle: '#ffffff',
+              lineWidth: 1,
+              index,
+            }));
+          },
+        },
+      },
+      tooltip: chartTooltipOptions,
+    },
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <ChartCard title="Appointment Volume (Last 14 Days)" description="Daily appointment count across all centers.">
+        {trendRows.some((row) => row.count > 0) ? (
+          <Bar data={trendData} options={barOptions} />
+        ) : (
+          <p className="flex h-full items-center justify-center text-sm text-slate-500">No appointment data yet.</p>
+        )}
+      </ChartCard>
+      <ChartCard title="Queue Status Breakdown" description="Where every appointment currently stands.">
+        <Bar data={statusData} options={statusOptions} />
+      </ChartCard>
+      <ChartCard title="Requests by Service Type" description="New registration, lost ID, and update requests.">
+        <Bar data={serviceData} options={barOptions} />
+      </ChartCard>
+      <ChartCard title="Citizen Gender Distribution" description="Gender breakdown of all appointment requests.">
+        <Doughnut data={genderData} options={doughnutOptions} />
+      </ChartCard>
+    </div>
+  );
+};
 
 const Reports = () => {
   const location = useLocation();
@@ -675,6 +904,11 @@ const Reports = () => {
   const [audits, setAudits] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
   const [operatorStatusFilter, setOperatorStatusFilter] = useState('');
+  const [operatorDistrictFilter, setOperatorDistrictFilter] = useState('');
+  const [centerDistrictFilter, setCenterDistrictFilter] = useState('');
+  const [centerActivityFilter, setCenterActivityFilter] = useState('');
+  const [queueCenterFilter, setQueueCenterFilter] = useState('');
+  const [queueRequestTypeFilter, setQueueRequestTypeFilter] = useState('');
 
   useEffect(() => {
     const dashboardScroller = document.querySelector('main');
@@ -725,6 +959,7 @@ const Reports = () => {
     if (location.pathname.endsWith('/service-centers')) return 'service-centers';
     if (location.pathname.endsWith('/operators')) return 'operators';
     if (location.pathname.endsWith('/queue')) return 'queue';
+    if (location.pathname.endsWith('/appointments')) return 'appointments';
     if (location.pathname.includes('/dashboard/admin/reports/citizens')) return 'citizens';
     if (location.pathname.endsWith('/security')) return 'security';
     return 'home';
@@ -745,8 +980,11 @@ const Reports = () => {
   const reportData = useMemo(() => {
     const filteredTickets = filterTickets(tickets, filters);
     const statuses = [...new Set(tickets.map((ticket) => ticket.status).filter(Boolean))].sort();
-    const centerOptions = [...new Set([...centers.map((center) => center.name), ...tickets.map(centerName)].filter(Boolean))].sort();
-    const districts = [...new Set([...BANAADIR_DISTRICTS, ...centers.map((center) => center.district), ...tickets.map(citizenDistrict)].filter(Boolean))].sort();
+    // Derived only from centers that exist right now — deleting a center hard-deletes
+    // it (and its tickets) in the backend, so a stale ticket-history or hardcoded
+    // district list would keep showing options for centers that are already gone.
+    const centerOptions = [...new Set(centers.map((center) => center.name).filter(Boolean))].sort();
+    const districts = [...new Set(centers.map((center) => center.district).filter(Boolean))].sort();
     const services = [...new Set(tickets.map(serviceName).filter(Boolean))].sort();
     const requestStatuses = [...new Set(tickets.map((ticket) => ticket.requestStatus).filter(Boolean))].sort();
     const pending = tickets.filter((ticket) => ticket.requestStatus === 'Pending').length;
@@ -911,7 +1149,7 @@ const Reports = () => {
   }, [analytics, audits, centers, filters, operators, tickets]);
 
   const exportTickets = () => csvDownload('nqs-applications-report.csv', [
-    ['Ticket', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
+    ['Request', 'Full Name', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
     ...reportData.filteredTickets.map((ticket) => [
       ticket.ref,
       citizenName(ticket),
@@ -992,19 +1230,16 @@ const Reports = () => {
   const selectedRequestType = slugRequestTypes[serviceSlug];
   const selectedCenter = reportData.centerPerformanceRows.find((row) => String(row.id) === String(params.centerId));
   const centerView = params.centerView || 'all';
-  const todayTickets = tickets.filter((ticket) => ticket.date === todayKey).length;
   const totalBookings = stats?.totalBookings ?? stats?.totalAppointments ?? tickets.length;
   const activeServices = stats?.activeServices ?? 0;
   const totalCenters = stats?.serviceCenters ?? stats?.totalServiceCenters ?? centers.length;
   const operatorOnlyRows = reportData.operatorActivityRows.filter((operator) => String(operator.role || '').toLowerCase() === 'operator');
   const adminOverviewCards = [
     { label: 'Citizen Accounts', value: stats?.totalUsers ?? stats?.totalCitizens ?? 0, icon: FaUsers, accent: 'blue', to: '/dashboard/admin/reports/citizens/all' },
-    { label: 'Total Bookings', value: totalBookings, icon: FaClipboardList, accent: 'blue', to: '/dashboard/admin/reports/applications' },
-    { label: 'Total Operators', value: operatorOnlyRows.length, icon: FaUserCog, accent: 'navy', to: '/dashboard/admin/reports/operators' },
+    { label: 'Total Bookings', value: totalBookings, icon: FaClipboardList, accent: 'amber', to: '/dashboard/admin/reports/applications' },
+    { label: 'Total Operators', value: operatorOnlyRows.length, icon: FaUserCog, accent: 'purple', to: '/dashboard/admin/reports/operators' },
     { label: 'Active Service', value: activeServices, icon: FaConciergeBell, accent: 'green', to: '/service-management' },
-    { label: 'Banaadir Centers', value: totalCenters, icon: FaBuilding, accent: 'navy', to: '/dashboard/admin/reports/service-centers' },
-    { label: "Today's Tickets", value: stats?.dailyBookings ?? stats?.dailyVisitors ?? todayTickets, icon: FaCalendarDay, accent: 'amber', to: { pathname: '/admin-appointments', search: '?date=today' } },
-    { label: 'API Status', value: stats?.systemUptime || 'Online', icon: FaServer, accent: 'green', to: '/settings' },
+    { label: 'Banaadir Centers', value: totalCenters, icon: FaBuilding, accent: 'cyan', to: '/dashboard/admin/reports/service-centers' },
   ];
 
   const buildSummaryRows = (rows) => ({
@@ -1088,7 +1323,7 @@ const Reports = () => {
         title={selectedCenter ? selectedCenter.label : 'Center Report'}
         description={selectedCenter ? `${selectedCenter.district} District center performance, citizens, requests, and queue status.` : 'The selected center could not be found.'}
         actions={<ExportActions onExport={() => csvDownload('nqs-center-report.csv', [
-          ['Ticket', 'Citizen', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
+          ['Request', 'Full Name', 'Gender', 'Request Type', 'Service', 'Center', 'Date', 'Status', 'Request Status'],
           ...centerTickets.map((ticket) => [
             ticket.ref,
             citizenName(ticket),
@@ -1132,7 +1367,7 @@ const Reports = () => {
         title={`${requestTypeLabels[selectedRequestType] || 'Service'} Report`}
         description="This page shows only this service, with its own citizens, queue status, center distribution, and gender counts."
         actions={<ExportActions onExport={() => csvDownload('nqs-service-report.csv', [
-          ['Ticket', 'Citizen', 'Gender', 'Center', 'Date', 'Status', 'Request Status'],
+          ['Request', 'Full Name', 'Gender', 'Center', 'Date', 'Status', 'Request Status'],
           ...serviceRows.map((ticket) => [
             ticket.ref,
             citizenName(ticket),
@@ -1265,18 +1500,35 @@ const Reports = () => {
   if (routeKey === 'operators') {
     const operatorRows = reportData.operatorActivityRows.filter((operator) => String(operator.role || '').toLowerCase() === 'operator');
     const statusKey = (status = '') => String(status || '').trim().toLowerCase().replace(/\s+/g, '_');
-    const activeOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'active').length;
-    const inactiveOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'inactive').length;
+    const districtOf = (operator) => operator.center?.district || operator.district || '';
+    const isPendingOrRejected = (operator) => ['pending_approval', 'rejected'].includes(statusKey(operator.status));
+    const activeOperators = operatorRows.filter((operator) => isOperatorActiveToday(operator)).length;
     const pendingOperators = operatorRows.filter((operator) => statusKey(operator.status) === 'pending_approval').length;
-    const filteredOperatorRows = operatorStatusFilter
-      ? operatorRows.filter((operator) => statusKey(operator.status) === operatorStatusFilter)
-      : operatorRows;
-    const operatorFilterTitle = operatorStatusFilter ? `${statusLabel(operatorStatusFilter)} Operators` : 'All Operators';
+    const inactiveOperators = operatorRows.filter((operator) => !isPendingOrRejected(operator) && !isOperatorActiveToday(operator)).length;
+    const matchesOperatorStatusFilter = (operator) => {
+      if (!operatorStatusFilter) return true;
+      if (operatorStatusFilter === 'active') return isOperatorActiveToday(operator);
+      if (operatorStatusFilter === 'inactive') return !isPendingOrRejected(operator) && !isOperatorActiveToday(operator);
+      return statusKey(operator.status) === operatorStatusFilter;
+    };
+    const filteredOperatorRows = operatorRows.filter((operator) => (
+      matchesOperatorStatusFilter(operator)
+      && (!operatorDistrictFilter || districtOf(operator) === operatorDistrictFilter)
+    ));
+    const operatorFilterTitle = [
+      operatorStatusFilter ? statusLabel(operatorStatusFilter) : 'All',
+      'Operators',
+      operatorDistrictFilter ? `— ${operatorDistrictFilter}` : '',
+    ].filter(Boolean).join(' ');
+    const clearOperatorFilters = () => {
+      setOperatorStatusFilter('');
+      setOperatorDistrictFilter('');
+    };
 
     return (
       <PageShell
         title="Operator Performance Report"
-        description="Review operator status, completed tickets, cancellations, and login or activity records."
+        description="Review operator status, completed requests, cancellations, and login or activity records."
         actions={<ExportActions onExport={exportOperators} />}
       >
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -1285,12 +1537,33 @@ const Reports = () => {
           <StatCard label="Pending Operators" value={pendingOperators} icon={FaUserCog} accent="amber" onClick={() => showOperatorRows('pending_approval')} active={operatorStatusFilter === 'pending_approval'} />
           <StatCard label="Inactive Operators" value={inactiveOperators} icon={FaUserCog} accent="red" onClick={() => showOperatorRows('inactive')} active={operatorStatusFilter === 'inactive'} />
         </div>
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
+          <select
+            value={operatorDistrictFilter}
+            onChange={(event) => setOperatorDistrictFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">District: All</option>
+            {reportData.options.districts.map((district) => <option key={district} value={district}>{district}</option>)}
+          </select>
+          <select
+            value={operatorStatusFilter}
+            onChange={(event) => setOperatorStatusFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">Status: All</option>
+            <option value="active">Active</option>
+            <option value="pending_approval">Pending Approval</option>
+            <option value="inactive">Inactive</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
         <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <h2 className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">{operatorFilterTitle}</h2>
-          {operatorStatusFilter && (
+          {(operatorStatusFilter || operatorDistrictFilter) && (
             <button
               type="button"
-              onClick={() => showOperatorRows('')}
+              onClick={clearOperatorFilters}
               className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"
             >
               ← Back to all operators
@@ -1303,6 +1576,17 @@ const Reports = () => {
   }
 
   if (routeKey === 'service-centers') {
+    const filteredCenterRows = reportData.centerPerformanceRows.filter((row) => {
+      const matchesDistrict = !centerDistrictFilter || row.district === centerDistrictFilter;
+      const matchesActivity = !centerActivityFilter
+        || (centerActivityFilter === 'active' ? row.total > 0 : row.total === 0);
+      return matchesDistrict && matchesActivity;
+    });
+    const clearCenterFilters = () => {
+      setCenterDistrictFilter('');
+      setCenterActivityFilter('');
+    };
+
     return (
       <PageShell
         title="Service Centers Report"
@@ -1316,8 +1600,41 @@ const Reports = () => {
           <StatCard label="Waiting" value={reportData.waiting} icon={FaClock} accent="amber" to="/dashboard/admin/reports/queue?status=waiting" />
           <StatCard label="Cancelled / No Show" value={reportData.cancelled + reportData.noShow} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/queue?status=cancelled" />
         </div>
-        <CenterDirectory rows={reportData.centerPerformanceRows} />
-        <ServiceCenterTable rows={reportData.centerPerformanceRows} clickable />
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2">
+          <select
+            value={centerDistrictFilter}
+            onChange={(event) => setCenterDistrictFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">District: All</option>
+            {reportData.options.districts.map((district) => <option key={district} value={district}>{district}</option>)}
+          </select>
+          <select
+            value={centerActivityFilter}
+            onChange={(event) => setCenterActivityFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">Work: All Centers</option>
+            <option value="active">Has Work (Total &gt; 0)</option>
+            <option value="idle">No Work Yet (Idle)</option>
+          </select>
+        </div>
+        {(centerDistrictFilter || centerActivityFilter) && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">
+              Showing {filteredCenterRows.length} of {reportData.centerPerformanceRows.length} centers
+            </h2>
+            <button
+              type="button"
+              onClick={clearCenterFilters}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"
+            >
+              ← Back to all centers
+            </button>
+          </div>
+        )}
+        <CenterListTable rows={filteredCenterRows} />
+        <ServiceCenterTable rows={filteredCenterRows} clickable />
       </PageShell>
     );
   }
@@ -1331,7 +1648,10 @@ const Reports = () => {
       if (queueStatusFilter === 'cancelled') return ticket.status === 'Cancelled' || ['No Show', 'NoShow', 'no_show'].includes(ticket.status);
       if (queueStatusFilter === 'no-show') return ['No Show', 'NoShow', 'no_show'].includes(ticket.status);
       return ['Waiting', 'Pending', 'On Hold', 'Being Served', 'In Progress', 'Completed', 'Cancelled', 'No Show'].includes(ticket.status);
-    });
+    }).filter((ticket) => (
+      (!queueCenterFilter || centerName(ticket) === queueCenterFilter)
+      && (!queueRequestTypeFilter || (ticket.requestType || 'new_national_id') === queueRequestTypeFilter)
+    ));
     const queueTitle = {
       active: 'Active Appointment Records',
       waiting: 'Waiting Queue Records',
@@ -1339,6 +1659,12 @@ const Reports = () => {
       cancelled: 'Cancelled / No Show Queue Records',
       'no-show': 'No Show Queue Records',
     }[queueStatusFilter] || 'Queue Records';
+    const clearQueueFilters = () => {
+      setQueueCenterFilter('');
+      setQueueRequestTypeFilter('');
+      navigate('/dashboard/admin/reports/queue');
+    };
+
     return (
       <PageShell
         title="Queue Analytics Report"
@@ -1351,7 +1677,62 @@ const Reports = () => {
           <StatCard label="Cancelled" value={reportData.cancelled} icon={FaShieldAlt} accent="red" to="/dashboard/admin/reports/queue?status=cancelled" active={queueStatusFilter === 'cancelled'} />
           <StatCard label="No Show" value={reportData.noShow} icon={FaShieldAlt} accent="navy" to="/dashboard/admin/reports/queue?status=no-show" active={queueStatusFilter === 'no-show'} />
         </div>
+        <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-3">
+          <select
+            value={queueStatusFilter || ''}
+            onChange={(event) => navigate(event.target.value ? `/dashboard/admin/reports/queue?status=${event.target.value}` : '/dashboard/admin/reports/queue')}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">Status: All</option>
+            <option value="active">Active</option>
+            <option value="waiting">Waiting</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="no-show">No Show</option>
+          </select>
+          <select
+            value={queueCenterFilter}
+            onChange={(event) => setQueueCenterFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">Center: All</option>
+            {reportData.options.centers.map((center) => <option key={center} value={center}>{center}</option>)}
+          </select>
+          <select
+            value={queueRequestTypeFilter}
+            onChange={(event) => setQueueRequestTypeFilter(event.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold"
+          >
+            <option value="">Request Type: All</option>
+            {Object.entries(requestTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </div>
+        {(queueStatusFilter || queueCenterFilter || queueRequestTypeFilter) && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-blue-700">Showing {queueRows.length} matching records</h2>
+            <button
+              type="button"
+              onClick={clearQueueFilters}
+              className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-50"
+            >
+              ← Clear filters
+            </button>
+          </div>
+        )}
         <RequestsTable rows={queueRows} title={queueTitle} />
+      </PageShell>
+    );
+  }
+
+  if (routeKey === 'appointments') {
+    return (
+      <PageShell
+        title="Appointment Reports"
+        description="Review all appointment records across all centers."
+        actions={<ExportActions onExport={exportTickets} />}
+      >
+        <Filters filters={filters} setFilters={setFilters} options={reportData.options} />
+        <RequestsTable rows={reportData.filteredTickets} title={`All Appointments (${reportData.filteredTickets.length})`} />
       </PageShell>
     );
   }
@@ -1573,6 +1954,8 @@ const Reports = () => {
               />
             ))}
           </div>
+
+          <OverviewCharts tickets={tickets} summary={buildSummaryRows(tickets)} />
 
         </div>
       </div>

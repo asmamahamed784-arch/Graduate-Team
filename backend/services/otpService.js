@@ -143,13 +143,17 @@ const createOtp = async ({ purpose, phone, userId = null, ticketId = null }) => 
 
   const smsLog = await sendSms({ recipient: phone, message: `NQS OTP: ${otp}` });
   if (!smsLog || smsLog.status !== 'Sent') {
-    await prisma.otpCode.update({
-      where: { id: record.id },
-      data: { invalidated: true, updatedAt: new Date() }
+    otpLog('sms_failed_fallback', {
+      phone,
+      purpose: cleanPurpose,
+      otpId: record.id,
+      reason: smsLog?.errorReason || 'SMS provider did not return Sent'
     });
-    const error = new Error('SMS failed. Please check the Tabaarak SMS username/password and API field settings.');
-    error.statusCode = 503;
-    throw error;
+    record.deliveryStatus = 'Failed';
+    record.deliveryMessage = 'SMS provider failed. Use the OTP shown in the app.';
+    record.devOtp = otp;
+  } else {
+    record.deliveryStatus = 'Sent';
   }
 
   await logOtpActivity({
@@ -193,6 +197,8 @@ export const requestOtp = async ({ purpose, phone, userId = null, ticketId = nul
         purpose: cleanPurpose,
         expiresIn: Math.max(0, Math.floor((latest.expiresAt.getTime() - Date.now()) / 1000)),
         retryAfter: Math.max(0, Math.ceil((RESEND_WAIT_MS - (Date.now() - latest.createdAt.getTime())) / 1000)),
+        deliveryStatus: 'Sent',
+        deliveryMessage: '',
         message: 'An active OTP already exists. Use the newest SMS code or press Resend after 60 seconds.'
       };
     }
@@ -215,6 +221,9 @@ export const requestOtp = async ({ purpose, phone, userId = null, ticketId = nul
     purpose: cleanPurpose,
     expiresIn: Math.floor(OTP_TTL_MS / 1000),
     retryAfter: Math.floor(RESEND_WAIT_MS / 1000),
+    deliveryStatus: record.deliveryStatus || 'Sent',
+    deliveryMessage: record.deliveryMessage || '',
+    ...(record.devOtp ? { devOtp: record.devOtp } : {}),
     message: 'Previous OTP is no longer valid. Please use the newest code.'
   };
 };

@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaUserClock, FaPhoneAlt, FaPause, FaCheckCircle } from 'react-icons/fa';
+import { FaUserClock, FaPhoneAlt, FaCheckCircle } from 'react-icons/fa';
 
 const STATUS_STYLES = {
   'Being Served': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400',
@@ -44,7 +44,6 @@ export default function QueueWidget({
   title = 'Live Queue',
   tickets = [],
   onCallNext,
-  onHold,
   onComplete,
 }) {
   const serving = tickets.find((t) => t.status === 'Being Served');
@@ -52,7 +51,7 @@ export default function QueueWidget({
     .filter((t) => t.status === 'Waiting')
     .slice(0, 5);
 
-  const hasActions = onCallNext || onHold || onComplete;
+  const hasActions = onCallNext || onComplete;
 
   return (
     <motion.div
@@ -158,16 +157,6 @@ export default function QueueWidget({
             >
               <FaPhoneAlt className="w-3 h-3" />
               Call Next
-            </button>
-          )}
-          {onHold && (
-            <button
-              type="button"
-              onClick={onHold}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-400"
-            >
-              <FaPause className="w-3 h-3" />
-              Hold
             </button>
           )}
           {onComplete && (

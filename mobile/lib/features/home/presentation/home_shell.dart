@@ -5,8 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/realtime_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/models/app_user.dart';
+import '../../../shared/widgets/app_surfaces.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../auth/presentation/widgets/nqs_auth_page.dart';
 import '../../notifications/application/notifications_controller.dart';
+import '../application/protected_action.dart';
 
 /// Lets child screens (e.g. home banner menu) open the shell drawer.
 class HomeShellScope extends InheritedWidget {
@@ -28,6 +32,8 @@ class HomeShellScope extends InheritedWidget {
 }
 
 /// Citizen shell: bottom tabs + side drawer (native mobile, not web admin).
+/// Guests reach this shell too — Home/Services/Centers stay open to browse;
+/// Appointments/Queue/Notifications/Profile gate through [ensureSignedIn].
 class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key, required this.navigationShell});
 
@@ -49,6 +55,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     });
   }
 
+  void _closeDrawer() {
+    if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+  }
+
   void _goBranch(int index) {
     widget.navigationShell.goBranch(
       index,
@@ -56,101 +66,158 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
+  void _tapAppointments() {
+    _closeDrawer();
+    if (!ensureSignedIn(context, ref, ProtectedAction.myAppointments)) return;
+    _goBranch(2);
+  }
+
+  void _tapQueue() {
+    _closeDrawer();
+    if (!ensureSignedIn(context, ref, ProtectedAction.trackQueue)) return;
+    context.push(AppRoutes.track);
+  }
+
+  void _tapNotifications() {
+    _closeDrawer();
+    if (!ensureSignedIn(context, ref, ProtectedAction.notifications)) return;
+    _goBranch(3);
+  }
+
+  void _tapProfile() {
+    _closeDrawer();
+    if (!ensureSignedIn(context, ref, ProtectedAction.profile)) return;
+    _goBranch(4);
+  }
+
+  void _tapServices() {
+    _closeDrawer();
+    _goBranch(1);
+  }
+
+  void _tapCenters() {
+    _closeDrawer();
+    context.go(AppRoutes.centers);
+  }
+
+  void _tapSettings() {
+    _closeDrawer();
+    context.push(AppRoutes.settings);
+  }
+
+  void _tapAbout() {
+    _closeDrawer();
+    context.push(AppRoutes.about);
+  }
+
   @override
   Widget build(BuildContext context) {
     final index = widget.navigationShell.currentIndex;
     final unread = ref.watch(unreadNotificationCountProvider);
     final user = ref.watch(currentUserProvider);
-
-    // Hard guard: never render citizen shell for staff roles.
-    if (user != null && (user.isAdmin || user.isOperator)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) return;
-        context.go(user.isAdmin ? AppRoutes.adminHome : AppRoutes.operatorHome);
-      });
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final currentPath = GoRouterState.of(context).uri.path;
+    final isQueueActive = currentPath == AppRoutes.track;
 
     // Important: no extendBody / no FAB notch — those broke scroll on home.
     return HomeShellScope(
       openDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       child: Scaffold(
         key: _scaffoldKey,
-        backgroundColor: const Color(0xFFF7F8FC),
+        backgroundColor: AppSurface.background(context),
         drawer: _NqsDrawer(
-          userName: user?.displayName ?? 'Citizen',
-          onNavigate: (route) {
-            Navigator.of(context).pop();
-            if (route.startsWith('branch:')) {
-              _goBranch(int.parse(route.split(':').last));
-              return;
-            }
-            context.push(route);
+          user: user,
+          unread: unread,
+          currentIndex: index,
+          currentPath: currentPath,
+          onHome: () {
+            _closeDrawer();
+            _goBranch(0);
           },
-          onLogout: () async {
-            Navigator.of(context).pop();
-            await ref.read(authControllerProvider.notifier).logout();
-          },
+          onServices: _tapServices,
+          onCenters: _tapCenters,
+          onAppointments: _tapAppointments,
+          onQueue: _tapQueue,
+          onNotifications: _tapNotifications,
+          onSettings: _tapSettings,
+          onAbout: _tapAbout,
         ),
         body: widget.navigationShell,
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, -4),
+        bottomNavigationBar: _CitizenBottomBar(
+          child: Row(
+            children: [
+              _Tab(
+                icon: Icons.home_outlined,
+                activeIcon: Icons.home_rounded,
+                label: 'Home',
+                selected: index == 0 && !isQueueActive,
+                onTap: () {
+                  _closeDrawer();
+                  _goBranch(0);
+                },
+              ),
+              _Tab(
+                icon: Icons.calendar_today_outlined,
+                activeIcon: Icons.calendar_month_rounded,
+                label: 'Appointments',
+                selected: index == 2 && !isQueueActive,
+                onTap: _tapAppointments,
+              ),
+              _Tab(
+                icon: Icons.groups_2_outlined,
+                activeIcon: Icons.groups_2_rounded,
+                label: 'Queue',
+                selected: isQueueActive,
+                onTap: _tapQueue,
+              ),
+              _Tab(
+                icon: Icons.info_outline_rounded,
+                activeIcon: Icons.info_rounded,
+                label: 'About',
+                selected: currentPath == AppRoutes.about,
+                onTap: _tapAbout,
+              ),
+              _Tab(
+                icon: Icons.person_outline_rounded,
+                activeIcon: Icons.person_rounded,
+                label: 'Profile',
+                selected: index == 4 && !isQueueActive,
+                onTap: _tapProfile,
               ),
             ],
           ),
-          child: SafeArea(
-            top: false,
-            child: SizedBox(
-              height: 64,
-              child: Row(
-                children: [
-                  _Tab(
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: 'Home',
-                    selected: index == 0,
-                    onTap: () => _goBranch(0),
-                  ),
-                  _Tab(
-                    icon: Icons.grid_view_outlined,
-                    activeIcon: Icons.grid_view_rounded,
-                    label: 'Services',
-                    selected: index == 1,
-                    onTap: () => _goBranch(1),
-                  ),
-                  _Tab(
-                    icon: Icons.event_note_outlined,
-                    activeIcon: Icons.event_note_rounded,
-                    label: 'Bookings',
-                    selected: index == 2,
-                    onTap: () => _goBranch(2),
-                  ),
-                  _Tab(
-                    icon: Icons.notifications_outlined,
-                    activeIcon: Icons.notifications_rounded,
-                    label: 'Alerts',
-                    selected: index == 3,
-                    badge: unread,
-                    onTap: () => _goBranch(3),
-                  ),
-                  _Tab(
-                    icon: Icons.person_outline_rounded,
-                    activeIcon: Icons.person_rounded,
-                    label: 'Profile',
-                    selected: index == 4,
-                    onTap: () => _goBranch(4),
-                  ),
-                ],
-              ),
-            ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CitizenBottomBar extends StatelessWidget {
+  const _CitizenBottomBar({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = AppSurface.isDark(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppSurface.card(context),
+        border: Border(top: BorderSide(color: AppSurface.border(context))),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.34 : 0.1),
+            blurRadius: 18,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 66,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: child,
           ),
         ),
       ),
@@ -165,7 +232,6 @@ class _Tab extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
-    this.badge = 0,
   });
 
   final IconData icon;
@@ -173,38 +239,285 @@ class _Tab extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final int badge;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : const Color(0xFF9CA3AF);
+    final activeColor = AppColors.success;
+    final inactiveColor = AppSurface.muted(context);
+    final color = selected ? activeColor : inactiveColor;
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                width: 42,
+                height: 25,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? activeColor.withValues(alpha: 0.14)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(
+                  selected ? activeIcon : icon,
+                  color: color,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  color: color,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Main drawer navigation. Account actions live inside Settings.
+class _NqsDrawer extends StatelessWidget {
+  const _NqsDrawer({
+    required this.user,
+    required this.unread,
+    required this.currentIndex,
+    required this.currentPath,
+    required this.onHome,
+    required this.onServices,
+    required this.onCenters,
+    required this.onAppointments,
+    required this.onQueue,
+    required this.onNotifications,
+    required this.onSettings,
+    required this.onAbout,
+  });
+
+  final AppUser? user;
+  final int unread;
+  final int currentIndex;
+  final String currentPath;
+  final VoidCallback onHome;
+  final VoidCallback onServices;
+  final VoidCallback onCenters;
+  final VoidCallback onAppointments;
+  final VoidCallback onQueue;
+  final VoidCallback onNotifications;
+  final VoidCallback onSettings;
+  final VoidCallback onAbout;
+
+  @override
+  Widget build(BuildContext context) {
+    final items =
+        <
+          ({
+            IconData icon,
+            String label,
+            bool selected,
+            int badge,
+            VoidCallback onTap,
+          })
+        >[
+          (
+            icon: Icons.home_rounded,
+            label: 'Home',
+            selected: currentIndex == 0 && currentPath != AppRoutes.track,
+            badge: 0,
+            onTap: onHome,
+          ),
+          (
+            icon: Icons.event_note_rounded,
+            label: 'Appointments',
+            selected: currentIndex == 2,
+            badge: 0,
+            onTap: onAppointments,
+          ),
+          (
+            icon: Icons.groups_2_rounded,
+            label: 'Track Queue',
+            selected: currentPath == AppRoutes.track,
+            badge: 0,
+            onTap: onQueue,
+          ),
+          (
+            icon: Icons.credit_card_rounded,
+            label: 'Services',
+            selected: currentIndex == 1,
+            badge: 0,
+            onTap: onServices,
+          ),
+          (
+            icon: Icons.location_city_rounded,
+            label: 'Service Centers',
+            selected:
+                currentPath == AppRoutes.centers ||
+                currentPath.startsWith('/centers/'),
+            badge: 0,
+            onTap: onCenters,
+          ),
+          (
+            icon: Icons.notifications_none_rounded,
+            label: 'Notifications',
+            selected: currentIndex == 3,
+            badge: unread,
+            onTap: onNotifications,
+          ),
+          (
+            icon: Icons.settings_outlined,
+            label: 'Settings',
+            selected: currentPath == AppRoutes.settings,
+            badge: 0,
+            onTap: onSettings,
+          ),
+          (
+            icon: Icons.info_outline_rounded,
+            label: 'About NQS',
+            selected: currentPath == AppRoutes.about,
+            badge: 0,
+            onTap: onAbout,
+          ),
+        ];
+
+    return Drawer(
+      width: MediaQuery.sizeOf(context).width * 0.76,
+      backgroundColor: AppColors.navyDeepest,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Stack(
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.primarySoft : Colors.transparent,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Badge(
-                isLabelVisible: badge > 0,
-                label: Text('$badge'),
-                child: Icon(selected ? activeIcon : icon, color: color, size: 22),
-              ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _DrawerSkyline(),
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: color,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Row(
+                    children: [
+                      const NqsCrest(size: 46),
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'NQS',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 19,
+                            ),
+                          ),
+                          Text(
+                            'National ID',
+                            style: TextStyle(
+                              color: Color(0xFF9DB6DE),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: user == null
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Guest',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Sign in to access your account',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.65),
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Citizen User',
+                              style: TextStyle(
+                                color: Color(0xFF6FA0F5),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              user!.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 17,
+                              ),
+                            ),
+                            if (user!.nationalId.trim().isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Citizen ID: ${user!.nationalId}',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+                Divider(height: 1, color: Colors.white.withValues(alpha: 0.12)),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+                    children: [
+                      for (final item in items)
+                        _DrawerRow(
+                          icon: item.icon,
+                          label: item.label,
+                          selected: item.selected,
+                          badge: item.badge,
+                          onTap: item.onTap,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -213,124 +526,140 @@ class _Tab extends StatelessWidget {
   }
 }
 
-class _NqsDrawer extends StatelessWidget {
-  const _NqsDrawer({
-    required this.userName,
-    required this.onNavigate,
-    required this.onLogout,
+class _DrawerRow extends StatelessWidget {
+  const _DrawerRow({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.badge = 0,
   });
 
-  final String userName;
-  final void Function(String route) onNavigate;
-  final VoidCallback onLogout;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
-    final items = <({IconData icon, String label, String route})>[
-      (icon: Icons.home_rounded, label: 'Home', route: 'branch:0'),
-      (icon: Icons.grid_view_rounded, label: 'Services', route: 'branch:1'),
-      (icon: Icons.event_note_rounded, label: 'Bookings', route: 'branch:2'),
-      (icon: Icons.location_city_rounded, label: 'Centers', route: AppRoutes.centers),
-      (icon: Icons.timeline_rounded, label: 'Track queue', route: AppRoutes.track),
-      (icon: Icons.notifications_rounded, label: 'Notifications', route: 'branch:3'),
-      (icon: Icons.person_rounded, label: 'Profile', route: 'branch:4'),
-      (icon: Icons.settings_rounded, label: 'Settings', route: AppRoutes.settings),
-    ];
-
-    return Drawer(
-      backgroundColor: AppColors.navyDeepest,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected ? const Color(0xFF1A3A6E) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: selected
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.88),
+                  size: 22,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     ),
-                    child: const Text(
-                      'NQ',
-                      style: TextStyle(
-                        color: AppColors.primary,
+                  ),
+                ),
+                if (badge > 0)
+                  Container(
+                    width: 22,
+                    height: 22,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: AppColors.danger,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$badge',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
-                        fontSize: 16,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'NQS',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                          ),
-                        ),
-                        Text(
-                          'National ID',
-                          style: TextStyle(color: Colors.white70, fontSize: 12.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
-            const Divider(color: Colors.white24, height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
-              child: Text(
-                'Hello, $userName',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  for (final item in items)
-                    ListTile(
-                      leading: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(item.icon, color: Colors.white, size: 18),
-                      ),
-                      title: Text(
-                        item.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      onTap: () => onNavigate(item.route),
-                    ),
-                ],
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout_rounded, color: Colors.white70),
-              title: const Text('Sign out', style: TextStyle(color: Colors.white70)),
-              onTap: onLogout,
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Faint city-skyline silhouette anchored to the bottom of the drawer —
+/// the same motif as the Create Account screen, tuned for the dark navy
+/// drawer background instead of a light page.
+class _DrawerSkyline extends StatelessWidget {
+  const _DrawerSkyline();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: SizedBox(
+        height: 56,
+        width: double.infinity,
+        child: CustomPaint(painter: _DrawerSkylinePainter()),
+      ),
+    );
+  }
+}
+
+class _DrawerSkylinePainter extends CustomPainter {
+  static const _widths = [
+    0.06,
+    0.05,
+    0.08,
+    0.04,
+    0.09,
+    0.05,
+    0.07,
+    0.06,
+    0.05,
+    0.08,
+    0.06,
+    0.05,
+  ];
+  static const _heights = [
+    0.5,
+    0.8,
+    0.35,
+    0.95,
+    0.45,
+    0.7,
+    0.3,
+    0.85,
+    0.55,
+    0.4,
+    0.75,
+    0.5,
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.white.withValues(alpha: 0.05);
+    var x = 0.0;
+    for (var i = 0; i < _widths.length; i++) {
+      final w = size.width * _widths[i];
+      final h = size.height * _heights[i];
+      canvas.drawRect(Rect.fromLTWH(x, size.height - h, w, h), paint);
+      x += w + 2;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

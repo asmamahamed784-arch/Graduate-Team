@@ -238,7 +238,7 @@ export default function LiveQueueMonitor({
         {tickets.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
             <FiUser className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm font-medium">No active tickets</p>
+            <p className="text-sm font-medium">No active requests</p>
             <p className="text-xs mt-1 opacity-60">Queue is currently empty</p>
           </div>
         )}
@@ -247,7 +247,7 @@ export default function LiveQueueMonitor({
       {/* Footer */}
       <div className="px-6 py-3 bg-gray-50/80 dark:bg-slate-800/80 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          Showing {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} in queue
+          Showing {tickets.length} request{tickets.length !== 1 ? 's' : ''} in queue
         </span>
         <span className="text-xs text-gray-400 dark:text-gray-500">
           Refresh interval: {refreshInterval / 1000}s

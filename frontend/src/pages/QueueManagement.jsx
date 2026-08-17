@@ -10,7 +10,6 @@ import {
   FaCheckDouble,
   FaClock,
   FaEye,
-  FaPause,
   FaPhoneAlt,
   FaSyncAlt,
   FaTicketAlt,
@@ -18,9 +17,14 @@ import {
   FaUsers,
 } from 'react-icons/fa';
 import api from '../api/axiosInstance';
-import { useAuth } from '../hooks';
-import { canCancelAppointment, canCompleteAppointment } from '../utils/appointmentActions';
-import { INCORRECT_FIELD_OPTIONS } from '../utils/cancellationFields';
+import { useAuth, useOtpGate } from '../hooks';
+import { canCancelAppointment, canCompleteAppointment, canReacceptAppointment } from '../utils/appointmentActions';
+import LostIdCancelDetails from '../components/LostIdCancelDetails';
+import OtpGateModal from '../components/OtpGateModal';
+import {
+  getIncorrectFieldOptionsForTicket,
+  isLostReplacementRequest,
+} from '../utils/cancellationFields';
 import { getChangedUpdateFields } from '../utils/updateRequestFields';
 
 const container = {
@@ -36,8 +40,8 @@ const item = {
 const ACTIVE_STATUSES = ['Waiting', 'Being Served', 'On Hold'];
 
 const QUEUE_FILTER_LABELS = {
-  all: 'Tickets in Queue',
-  waiting: 'Waiting Tickets',
+  all: 'Requests in Queue',
+  waiting: 'Waiting Requests',
   completed: 'Completed Services',
   serving: 'Now Serving',
 };
@@ -153,8 +157,13 @@ const QueueManagement = () => {
   const filter = searchParams.get('filter') || 'all';
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
+  const {
+    otpFlow, otpDigits, otpSeconds, otpRequesting, otpVerifying, otpError,
+    requestOtp, updateOtpDigit, verifyOtpGate, resendOtpGate, closeOtpGate
+  } = useOtpGate();
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [cancelModalTicket, setCancelModalTicket] = useState(null);
   const [selectedCancelReasons, setSelectedCancelReasons] = useState([]);
@@ -170,24 +179,38 @@ const QueueManagement = () => {
     user?.assignedCenterId ||
     '';
 
-  const fetchTickets = useCallback(async (showLoading = false) => {
+  const fetchTickets = useCallback(async (options = {}) => {
+    const { showLoading = false, notify = false } =
+      typeof options === 'boolean' ? { showLoading: options } : options;
     if (showLoading) setLoading(true);
+    if (notify) setRefreshing(true);
     try {
       const response = await api.get('/api/operator/dashboard');
       const payload = response.data?.data || {};
       const nextTickets = (payload.tickets || payload.allCenterTickets || []).map(normalizeTicket);
       setTickets(sortTickets(nextTickets));
       setError('');
+      if (notify) toast.success('Queue refreshed.');
+      return true;
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load center queue.');
+      const message = err.response?.data?.message || 'Unable to load center queue.';
+      setError(message);
+      if (notify) toast.error(message);
+      return false;
     } finally {
       if (showLoading) setLoading(false);
+      if (notify) setRefreshing(false);
     }
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    if (refreshing) return;
+    fetchTickets({ notify: true });
+  }, [fetchTickets, refreshing]);
+
   useEffect(() => {
-    fetchTickets(true);
-    const intervalId = window.setInterval(() => fetchTickets(false), 5000);
+    fetchTickets({ showLoading: true });
+    const intervalId = window.setInterval(() => fetchTickets(), 5000);
     return () => window.clearInterval(intervalId);
   }, [fetchTickets]);
 
@@ -199,7 +222,7 @@ const QueueManagement = () => {
 
     const refreshCenterQueue = (payload = {}) => {
       if (!payload.centerId || String(payload.centerId) === String(activeCenterId)) {
-        fetchTickets(false);
+        fetchTickets();
       }
     };
 
@@ -244,10 +267,10 @@ const QueueManagement = () => {
     const nextTicket = stats.callableWaitingTickets[0];
     if (!nextTicket?.ref) {
       if (stats.waitingTickets.length > 0) {
-        toast.error('Waiting tickets with past appointment dates cannot be called. Please reschedule or cancel them first.');
+        toast.error('Waiting requests with past appointment dates cannot be called. Please reschedule or cancel them first.');
         return;
       }
-      toast.info('No waiting tickets available for this center.');
+      toast.info('No waiting requests available for this center.');
       return;
     }
 
@@ -255,32 +278,13 @@ const QueueManagement = () => {
     try {
       await api.put(`/api/queue/${nextTicket.id}/call`);
       toast.success(`Now serving ${nextTicket.ref}.`);
-      await fetchTickets(false);
+      await fetchTickets();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Unable to call the next ticket.');
+      toast.error(err.response?.data?.message || 'Unable to call the next request.');
     } finally {
       setActionLoading('');
     }
   }, [fetchTickets, stats.callableWaitingTickets, stats.waitingTickets.length]);
-
-  const handleHold = useCallback(async () => {
-    const current = stats.nowServing;
-    if (!current?.id) {
-      toast.info('No ticket is currently being served.');
-      return;
-    }
-
-    setActionLoading(`hold-${current.ref}`);
-    try {
-      await api.put(`/api/queue/${current.id}/hold`);
-      toast.success(`Ticket ${current.ref} placed on hold.`);
-      await fetchTickets(false);
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Unable to hold this ticket.');
-    } finally {
-      setActionLoading('');
-    }
-  }, [fetchTickets, stats.nowServing]);
 
   const handleComplete = useCallback(async (ticket) => {
     if (!ticket?.id) return;
@@ -290,60 +294,87 @@ const QueueManagement = () => {
     }
     setActionLoading(`complete-${ticket.ref}`);
     try {
-      const otpRequest = await api.post('/api/otp/request', {
+      const otpToken = await requestOtp({
         purpose: 'complete_service',
-        ticketId: ticket.id
+        ticketId: ticket.id,
+        ticketRef: ticket.ref,
+        title: 'Verify to Complete',
+        description: `Ask the citizen for the 6-digit code sent to their phone to complete ${ticket.ref}.`
       });
-      const code = window.prompt(`Enter OTP sent to citizen for ${ticket.ref}`);
-      if (!code) {
+      if (!otpToken) {
         toast.info('Complete service cancelled.');
         return;
       }
-      const otpRes = await api.post('/api/otp/verify', {
-        purpose: 'complete_service',
-        ticketId: ticket.id,
-        otpId: otpRequest.data?.data?.otpId,
-        code
-      });
       // Prefer queue complete when actively serving; fallback to booking status for waiting tickets.
       try {
-        await api.put(`/api/queue/${ticket.id}/complete`, {
-          otpToken: otpRes.data.data?.verificationToken
-        });
+        await api.put(`/api/queue/${ticket.id}/complete`, { otpToken });
       } catch {
         await api.put(`/api/bookings/admin/${ticket.id}/status`, {
           status: 'Completed',
-          otpToken: otpRes.data.data?.verificationToken
+          otpToken
         });
       }
-      toast.success(`Ticket ${ticket.ref} completed.`);
-      await fetchTickets(false);
+      toast.success(`Request ${ticket.ref} completed.`);
+      await fetchTickets();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Unable to complete this ticket.');
+      toast.error(err.response?.data?.message || 'Unable to complete this request.');
     } finally {
       setActionLoading('');
     }
-  }, [fetchTickets]);
+  }, [fetchTickets, requestOtp]);
 
   const handleCancelTicket = useCallback(async (ticket, cancelData = {}) => {
     if (!ticket?.id) return;
 
     setActionLoading(`cancel-${ticket.ref}`);
     try {
+      const otpToken = await requestOtp({
+        purpose: 'cancel_service',
+        ticketId: ticket.id,
+        ticketRef: ticket.ref,
+        title: 'Verify to Cancel',
+        description: `Ask the citizen for the 6-digit code sent to their phone to cancel ${ticket.ref}.`
+      });
+      if (!otpToken) {
+        toast.info('Cancellation aborted.');
+        return;
+      }
       await api.put(`/api/bookings/${ticket.id}/cancel`, {
         cancellationReason: cancelData.cancellationReason || 'Cancelled by center operator',
         cancellationReasons: cancelData.cancellationReasons || [],
         additionalNotes: cancelData.additionalNotes || '',
+        otpToken
       });
-      toast.success(`Ticket ${ticket.ref} cancelled. Citizen has been notified.`);
+      toast.success(`Request ${ticket.ref} cancelled. Citizen has been notified.`);
       setCancelModalTicket(null);
       setSelectedCancelReasons([]);
       setCancelNotes('');
       setCustomCancelReason('');
       setShowCancelConfirmation(false);
-      await fetchTickets(false);
+      await fetchTickets();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Unable to cancel this ticket.');
+      toast.error(err.response?.data?.message || 'Unable to cancel this request.');
+    } finally {
+      setActionLoading('');
+    }
+  }, [fetchTickets, requestOtp]);
+
+  const handleReacceptTicket = useCallback(async (ticket) => {
+    if (!ticket?.id) return;
+    if (!canReacceptAppointment(ticket)) {
+      toast.info('Re-accept is available only after the appointment is completed.');
+      return;
+    }
+    const confirmed = window.confirm(`Re-accept ${ticket.ref}? This will return it to Waiting so it can be handled again.`);
+    if (!confirmed) return;
+
+    setActionLoading(`reaccept-${ticket.ref}`);
+    try {
+      await api.put(`/api/bookings/admin/${ticket.id}/status`, { status: 'Waiting' });
+      toast.success(`Request ${ticket.ref} returned to Waiting.`);
+      await fetchTickets();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Unable to re-accept this request.');
     } finally {
       setActionLoading('');
     }
@@ -378,12 +409,15 @@ const QueueManagement = () => {
     );
   };
 
-  const selectedReasonLabels = () =>
-    selectedCancelReasons.filter((reason) => INCORRECT_FIELD_OPTIONS.includes(reason));
+  const selectedReasonLabels = (ticket = cancelModalTicket) => {
+    const allowed = getIncorrectFieldOptionsForTicket(ticket);
+    return selectedCancelReasons.filter((reason) => allowed.includes(reason));
+  };
 
   const submitCancel = () => {
     if (!cancelModalTicket) return;
     const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+    const isLostReq = isLostReplacementRequest(cancelModalTicket);
 
     if (isUpdateReq) {
       const changedFields = getChangedUpdateFields(cancelModalTicket);
@@ -408,9 +442,13 @@ const QueueManagement = () => {
       return;
     }
 
-    const validReasons = selectedReasonLabels();
+    const validReasons = selectedReasonLabels(cancelModalTicket);
     if (!validReasons.length) {
-      toast.error('Please select at least one incorrect field.');
+      toast.error(
+        isLostReq
+          ? 'Please select at least one incorrect Lost ID field.'
+          : 'Please select at least one incorrect field.'
+      );
       return;
     }
     if (!showCancelConfirmation) {
@@ -437,15 +475,15 @@ const QueueManagement = () => {
     }, 50);
   }, [setSearchParams]);
 
+  // Sitewide soft-pastel card tone system (styles/nqs-theme-system.css).
   const statCards = [
     {
       filter: 'waiting',
       value: stats.waitingTickets.length,
       label: 'Waiting Now',
-      helper: 'Click to view waiting tickets',
+      helper: 'Click to view waiting requests',
       icon: FaUsers,
-      iconWrap: 'bg-yellow-100 dark:bg-yellow-900/40',
-      iconColor: 'text-yellow-600 dark:text-yellow-400',
+      tone: 'purple',
     },
     {
       filter: 'waiting',
@@ -453,8 +491,7 @@ const QueueManagement = () => {
       label: 'Average Wait',
       helper: 'Click to view wait list',
       icon: FaClock,
-      iconWrap: 'bg-amber-100 dark:bg-amber-900/40',
-      iconColor: 'text-amber-600 dark:text-amber-400',
+      tone: 'orange',
     },
     {
       filter: 'completed',
@@ -462,8 +499,7 @@ const QueueManagement = () => {
       label: 'Completed Service',
       helper: 'Click to view completed work',
       icon: FaCheckDouble,
-      iconWrap: 'bg-green-100 dark:bg-green-900/40',
-      iconColor: 'text-green-600 dark:text-green-400',
+      tone: 'green',
     },
   ];
 
@@ -497,12 +533,12 @@ const QueueManagement = () => {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => fetchTickets(false)}
-              disabled={loading}
-              className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:opacity-60 dark:border-blue-500/40 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700"
+              onClick={handleRefresh}
+              disabled={refreshing || Boolean(actionLoading)}
+              className="flex items-center gap-2 rounded-xl bg-[#2563EB] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <FaSyncAlt className={loading ? 'animate-spin' : ''} />
-              Refresh
+              <FaSyncAlt className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
             <button
               type="button"
@@ -512,15 +548,6 @@ const QueueManagement = () => {
             >
               <FaPhoneAlt />
               Call Next
-            </button>
-            <button
-              type="button"
-              onClick={handleHold}
-              disabled={canAct || !stats.nowServing}
-              className="flex items-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600"
-            >
-              <FaPause />
-              Hold Current
             </button>
           </div>
         </motion.div>
@@ -588,17 +615,17 @@ const QueueManagement = () => {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
             <h2 className="flex items-center gap-2 text-lg font-black text-slate-950 dark:text-white">
               <FaTicketAlt className="text-yellow-500" />
-              {QUEUE_FILTER_LABELS[filter] || 'Tickets in Queue'}
+              {QUEUE_FILTER_LABELS[filter] || 'Requests in Queue'}
             </h2>
             <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-              {displayedTickets.length} ticket{displayedTickets.length === 1 ? '' : 's'}
+              {displayedTickets.length} request{displayedTickets.length === 1 ? '' : 's'}
             </span>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="bg-blue-50 text-xs uppercase tracking-wide text-slate-700 dark:bg-slate-900 dark:text-slate-300">
                 <tr>
-                  {['Reference', 'Citizen', 'Phone', 'Service', 'Center', 'Position', 'Wait Time', 'Status', 'Actions'].map((heading) => (
+                  {['Reference', 'Full Name', 'Phone', 'Service', 'Center', 'Position', 'Wait Time', 'Status', 'Actions'].map((heading) => (
                     <th key={heading} className="px-4 py-3 font-black">{heading}</th>
                   ))}
                 </tr>
@@ -654,16 +681,6 @@ const QueueManagement = () => {
                                 Complete
                               </button>
                             )}
-                            {ticket.status === 'Being Served' && (
-                              <button
-                                type="button"
-                                onClick={handleHold}
-                                disabled={canAct}
-                                className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-1 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-60"
-                              >
-                                Hold
-                              </button>
-                            )}
                             {(ticket.status === 'Waiting' || ticket.status === 'Being Served') && (
                               <button
                                 type="button"
@@ -675,6 +692,16 @@ const QueueManagement = () => {
                                 Cancel
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleReacceptTicket(ticket)}
+                              disabled={canAct || !canReacceptAppointment(ticket)}
+                              title={canReacceptAppointment(ticket) ? 'Return completed appointment to Waiting' : 'Available after Complete'}
+                              className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-bold !text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:!text-white"
+                            >
+                              <FaSyncAlt className="text-[10px]" />
+                              Re-accept
+                            </button>
                           </div>
                         </td>
                       </motion.tr>
@@ -682,7 +709,7 @@ const QueueManagement = () => {
                   ) : (
                     <tr>
                       <td colSpan="9" className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400">
-                        No tickets to display for this filter.
+                        No requests to display for this filter.
                       </td>
                     </tr>
                   )}
@@ -700,19 +727,17 @@ const QueueManagement = () => {
                 key={`${card.label}-${card.filter}`}
                 type="button"
                 onClick={() => changeFilter(card.filter)}
-                className={`flex items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:bg-slate-800 dark:hover:border-blue-500 ${
-                  isActive
-                    ? 'border-blue-500 ring-2 ring-blue-500/20 dark:border-blue-400'
-                    : 'border-slate-200 dark:border-slate-700'
+                className={`flex items-center gap-4 rounded-2xl border p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md nqs-card-tone-${card.tone} ${
+                  isActive ? 'ring-2 ring-blue-500/20' : ''
                 }`}
               >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${card.iconWrap}`}>
-                  <card.icon className={card.iconColor} />
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg nqs-card-tone-icon-${card.tone}`}>
+                  <card.icon />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xl font-black text-slate-950 dark:text-white">{card.value}</p>
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">{card.label}</p>
-                  <p className="mt-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300">{card.helper}</p>
+                  <p className="text-xl font-black text-[var(--text-main)]">{card.value}</p>
+                  <p className="text-xs font-semibold text-[var(--text-muted)]">{card.label}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-primary)]">{card.helper}</p>
                 </div>
               </button>
             );
@@ -725,7 +750,7 @@ const QueueManagement = () => {
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Ticket details</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Request details</p>
                 <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">{selectedTicket.ref}</h2>
               </div>
               <button
@@ -738,7 +763,7 @@ const QueueManagement = () => {
             </div>
             <div className="space-y-2 text-sm">
               {[
-                ['Citizen', selectedTicket.citizenDisplayName],
+                ['Full Name', selectedTicket.citizenDisplayName],
                 ['Phone', selectedTicket.citizenPhone],
                 ['Service', selectedTicket.serviceName],
                 ['Center', selectedTicket.centerName],
@@ -757,8 +782,20 @@ const QueueManagement = () => {
 
       {cancelModalTicket && (() => {
         const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+        const isLostReq = isLostReplacementRequest(cancelModalTicket);
+        const fieldOptions = getIncorrectFieldOptionsForTicket(cancelModalTicket);
         const changedFields = isUpdateReq ? getChangedUpdateFields(cancelModalTicket) : [];
         const hasNoChanges = isUpdateReq && changedFields.length === 0;
+        const modalTitle = isUpdateReq
+          ? 'Cancel Update Request'
+          : isLostReq
+            ? 'Cancel Replace Lost National ID'
+            : 'Cancel Appointment';
+        const modalHelp = isUpdateReq
+          ? 'Review the changed information and provide a cancellation reason for this update request.'
+          : isLostReq
+            ? 'Review the Lost ID details the citizen submitted, select incorrect fields, and add notes. The citizen will see this feedback and can resubmit.'
+            : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.';
 
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
@@ -766,14 +803,8 @@ const QueueManagement = () => {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Operator Action</p>
-                <h2 className="mt-1 text-2xl font-black">
-                  {isUpdateReq ? 'Cancel Update Request' : 'Cancel Appointment'}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  {isUpdateReq
-                    ? 'Review the changed information and provide a cancellation reason for this update request.'
-                    : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.'}
-                </p>
+                <h2 className="mt-1 text-2xl font-black">{modalTitle}</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{modalHelp}</p>
               </div>
               <button
                 type="button"
@@ -788,11 +819,11 @@ const QueueManagement = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950/40">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Ticket Reference</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Request Reference</p>
                   <p className="mt-1 font-mono text-sm font-black text-blue-700 dark:text-blue-300">{cancelModalTicket.ref}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Citizen</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Full Name</p>
                   <p className="mt-1 text-sm font-black">{cancelModalTicket.citizenDisplayName || '--'}</p>
                 </div>
                 <div>
@@ -805,6 +836,8 @@ const QueueManagement = () => {
                 </div>
               </div>
             </div>
+
+            {isLostReq && <LostIdCancelDetails ticket={cancelModalTicket} />}
 
             {isUpdateReq ? (
               <div className="mt-5 space-y-4">
@@ -857,9 +890,11 @@ const QueueManagement = () => {
             ) : (
               <>
                 <div className="mt-5">
-                  <span className="text-sm font-bold">Select incorrect fields</span>
+                  <span className="text-sm font-bold">
+                    {isLostReq ? 'Select incorrect Lost ID fields' : 'Select incorrect fields'}
+                  </span>
                   <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-2">
-                    {INCORRECT_FIELD_OPTIONS.map((reason) => {
+                    {fieldOptions.map((reason) => {
                       const checked = selectedCancelReasons.includes(reason);
                       return (
                         <label
@@ -905,7 +940,7 @@ const QueueManagement = () => {
                 <p className="mt-2">
                   {isUpdateReq
                     ? `Cancellation reason: ${customCancelReason.trim()}. Are you sure you want to cancel this update request?`
-                    : `You selected the following incorrect fields: ${selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment?`}
+                    : `You selected the following incorrect fields: ${selectedReasonLabels(cancelModalTicket).join(', ')}. Are you sure you want to cancel this ${isLostReq ? 'Lost ID request' : 'appointment'}?`}
                 </p>
               </div>
             )}
@@ -924,13 +959,32 @@ const QueueManagement = () => {
                 disabled={Boolean(actionLoading) || hasNoChanges}
                 className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {actionLoading ? 'Cancelling...' : (isUpdateReq ? 'Confirm Cancel Update' : 'Confirm Cancellation')}
+                {actionLoading
+                  ? 'Cancelling...'
+                  : (isUpdateReq
+                    ? 'Confirm Cancel Update'
+                    : isLostReq
+                      ? 'Confirm Cancel Lost ID'
+                      : 'Confirm Cancellation')}
               </button>
             </div>
           </div>
         </div>
         );
       })()}
+
+      <OtpGateModal
+        flow={otpFlow}
+        digits={otpDigits}
+        seconds={otpSeconds}
+        requesting={otpRequesting}
+        verifying={otpVerifying}
+        error={otpError}
+        onDigitChange={updateOtpDigit}
+        onVerify={verifyOtpGate}
+        onResend={resendOtpGate}
+        onClose={closeOtpGate}
+      />
     </motion.div>
   );
 };

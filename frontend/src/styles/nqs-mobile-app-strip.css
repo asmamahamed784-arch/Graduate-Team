@@ -1,0 +1,53 @@
+/* ==========================================================================
+   Home — Mobile app preview strip (between "Easier Services" and "How to Apply")
+   ========================================================================== */
+.nqs-portal-mobile-strip {
+  padding: 56px 0;
+  background: #FFFFFF !important;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-mobile-strip {
+  background: #0B2E59 !important;
+}
+
+.nqs-portal-mobile-strip-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+}
+
+.nqs-portal-mobile-strip-photo {
+  display: block;
+  width: 280px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 22px;
+  box-shadow: 0 20px 44px rgba(15, 40, 80, 0.2);
+}
+
+.nqs-portal-mobile-strip-caption {
+  margin: 0;
+  max-width: 480px;
+  color: #284C70 !important;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: left;
+}
+
+html.nqs-theme-dark body .nqs-home-portal .nqs-portal-mobile-strip-caption {
+  color: #D7E8F8 !important;
+}
+
+@media (max-width: 640px) {
+  .nqs-portal-mobile-strip-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .nqs-portal-mobile-strip-caption {
+    text-align: center;
+  }
+}

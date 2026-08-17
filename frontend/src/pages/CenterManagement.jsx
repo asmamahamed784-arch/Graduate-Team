@@ -188,7 +188,6 @@ const CenterManagement = () => {
   const [centers, setCenters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('standard');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(() => createEmptyForm());
   const [search, setSearch] = useState('');
@@ -200,6 +199,8 @@ const CenterManagement = () => {
     phone: '',
     temporaryPassword: ''
   });
+  const [credentialManagerId, setCredentialManagerId] = useState(null);
+  const [operators, setOperators] = useState([]);
   const isOperator = role === 'operator';
   const isCenterManager = role === 'super_operator' || role === 'center_manager';
   const isCenterScoped = isOperator || isCenterManager;
@@ -226,6 +227,29 @@ const CenterManagement = () => {
   useEffect(() => {
     loadCenters();
   }, [loadCenters]);
+
+  const loadOperators = useCallback(async () => {
+    if (isCenterScoped) return;
+    try {
+      const res = await apiClient.get('/api/operators');
+      setOperators(res.data || []);
+    } catch (_err) {
+      // Non-fatal: the credentials modal just falls back to "create new" if this fails.
+    }
+  }, [isCenterScoped]);
+
+  useEffect(() => {
+    loadOperators();
+  }, [loadOperators]);
+
+  const findExistingManager = useCallback((center) => {
+    const centerId = getCenterId(center);
+    if (!centerId) return null;
+    return operators.find((operator) => (
+      operator.operatorType === 'center_manager' &&
+      String(operator.center?._id || operator.center?.id || operator.center || '') === centerId
+    )) || null;
+  }, [operators]);
 
   const manageableCenters = useMemo(() => {
     if (!isCenterScoped) return centers;
@@ -254,15 +278,6 @@ const CenterManagement = () => {
     ])].sort((a, b) => a.localeCompare(b)),
     [manageableCenters]
   );
-
-  const assignRegisteredDistrict = (district) => {
-    const clean = String(district || '').trim();
-    if (!clean) return;
-    setCenterField('district', clean);
-    if (!editing && !form.name.trim()) {
-      setCenterField('name', `${clean} National ID Center`);
-    }
-  };
 
   const setSchedule = (patch) => {
     setForm((current) => ({
@@ -343,32 +358,36 @@ const CenterManagement = () => {
     });
   };
 
+  // Auto-save draft for Add Center to prevent data loss if modal accidentally closes
+  useEffect(() => {
+    if (modalOpen && !editing) {
+      sessionStorage.setItem('nqs_add_center_draft', JSON.stringify(form));
+    }
+  }, [form, editing, modalOpen]);
+
   const openAdd = () => {
     if (isCenterScoped) {
       toast.info('Only admins can create service centers.');
       return;
     }
     setEditing(null);
-    setModalMode('standard');
-    setForm(createEmptyForm());
-    setModalOpen(true);
-  };
-
-  const openAssignDistrictCenter = () => {
-    if (isCenterScoped) {
-      toast.info('Only admins can create service centers.');
-      return;
+    try {
+      const draft = sessionStorage.getItem('nqs_add_center_draft');
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        setForm(parsed);
+      } else {
+        setForm(createEmptyForm());
+      }
+    } catch {
+      setForm(createEmptyForm());
     }
-    setEditing(null);
-    setModalMode('registeredDistrict');
-    setForm(createEmptyForm());
     setModalOpen(true);
   };
 
   const openEdit = (center) => {
     const schedule = normalizeSchedule(center.schedule || {});
     setEditing(center._id || center.id);
-    setModalMode('standard');
     setForm({
       name: displayCenterName(center),
       district: center.district || districtFromCenterName(center.name),
@@ -384,20 +403,22 @@ const CenterManagement = () => {
     setModalOpen(true);
   };
 
-  const buildPayload = () => ({
+  const buildPayload = () => {
+    const counters = Math.max(1, Number(form.counters || 1));
+    return {
     name: form.name.trim(),
     district: form.district.trim(),
     address: form.address.trim(),
     city: 'Banaadir',
     phone: formatManagerPhone(form.phone),
-    counters: Number(form.counters || 1),
+    counters,
     status: 'Active',
     capacity: Number(form.schedule.maxAppointmentsPerDay || form.capacity || 100),
     hours: `${form.schedule.startTime} - ${form.schedule.endTime}`,
     schedule: {
       ...form.schedule,
       slotDuration: Number(defaultSchedule.slotDuration),
-      maxBookingsPerSlot: Number(defaultSchedule.maxBookingsPerSlot),
+      maxBookingsPerSlot: counters,
       maxAppointmentsPerDay: Number(form.schedule.maxAppointmentsPerDay || 1),
       closedDates: form.schedule.closedDates || [],
       specialUnavailableDates: [],
@@ -411,7 +432,8 @@ const CenterManagement = () => {
         temporaryPassword: form.managerCredentials.temporaryPassword
       }
     } : {})
-  });
+  };
+  };
 
   const validateForm = () => {
     if (!form.name.trim()) return 'Center name is required.';
@@ -428,7 +450,6 @@ const CenterManagement = () => {
     }
     if (!form.schedule.workingDays.length) return 'Select at least one working day.';
     if (!form.schedule.startTime || !form.schedule.endTime) return 'Start and end time are required.';
-    if (form.schedule.startTime >= form.schedule.endTime) return 'Opening time must be before closing time.';
     return '';
   };
 
@@ -445,11 +466,15 @@ const CenterManagement = () => {
         await apiClient.put(`/api/centers/update/${editing}`, payload);
         toast.success('Center schedule updated.');
       } else {
-        const res = await apiClient.post('/api/centers/create', payload);
-        const createdCenter = res.data?.data || res.data;
-        const createdId = getCenterId(createdCenter);
+        await apiClient.post('/api/centers/create', payload);
         toast.success('Center added.');
       }
+      
+      // Clear draft on successful save
+      if (!editing) {
+        sessionStorage.removeItem('nqs_add_center_draft');
+      }
+
       await loadCenters();
       setModalOpen(false);
     } catch (err) {
@@ -477,11 +502,13 @@ const CenterManagement = () => {
       toast.error('Only admins can manage center credentials.');
       return;
     }
+    const existingManager = findExistingManager(center);
     setCredentialCenter(center);
+    setCredentialManagerId(existingManager?.id || existingManager?._id || null);
     setCredentialForm({
-      name: `${displayCenterName(center)} Manager`,
-      username: credentialUsernameFrom(center),
-      phone: center.phone || '',
+      name: existingManager?.name || `${displayCenterName(center)} Manager`,
+      username: existingManager?.username || credentialUsernameFrom(center),
+      phone: existingManager?.phone || center.phone || '',
       temporaryPassword: ''
     });
   };
@@ -496,6 +523,25 @@ const CenterManagement = () => {
 
   const handleCredentialSave = async () => {
     if (!credentialCenter) return;
+
+    if (credentialManagerId) {
+      if (!credentialForm.temporaryPassword || credentialForm.temporaryPassword.length < 6) {
+        toast.error('Temporary password must be at least 6 characters.');
+        return;
+      }
+      try {
+        await apiClient.put(`/api/operators/${credentialManagerId}/reset-password`, {
+          temporaryPassword: credentialForm.temporaryPassword
+        });
+        toast.success('Center manager password updated.');
+        setCredentialCenter(null);
+        loadOperators();
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Failed to update center manager password.');
+      }
+      return;
+    }
+
     if (!credentialForm.name.trim() || !credentialForm.username.trim() || !credentialForm.phone.trim() || !credentialForm.temporaryPassword) {
       toast.error('Name, username, phone, and temporary password are required.');
       return;
@@ -515,6 +561,7 @@ const CenterManagement = () => {
       });
       toast.success('Center manager credentials created and sent for approval.');
       setCredentialCenter(null);
+      loadOperators();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to create center credentials.');
     }
@@ -550,12 +597,6 @@ const CenterManagement = () => {
           </div>
           {!isCenterScoped && (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <button
-                onClick={openAssignDistrictCenter}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
-              >
-                <FaMapMarkerAlt /> Add Center to District
-              </button>
               <button
                 onClick={openAdd}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
@@ -707,14 +748,12 @@ const CenterManagement = () => {
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
               <div>
                 <h2 className="text-xl font-black text-[#0B3A75] dark:text-white">
-                  {isCenterManager ? 'Edit Center Schedule' : editing ? 'Edit Center' : modalMode === 'registeredDistrict' ? 'Add Center to Registered District' : 'Add Center'}
+                  {isCenterManager ? 'Edit Center Schedule' : editing ? 'Edit Center' : 'Add Center'}
                 </h2>
                 <p className="text-sm font-semibold text-slate-500 dark:text-slate-300">
                   {isCenterManager
                     ? 'Only schedule and appointment availability can be changed from this account.'
-                    : modalMode === 'registeredDistrict'
-                      ? 'Create a new center and assign it to an existing registered district.'
-                      : 'Manage center details and appointment schedule.'}
+                    : 'Manage center details and appointment schedule.'}
                 </p>
               </div>
               <button onClick={() => setModalOpen(false)} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800">
@@ -737,30 +776,15 @@ const CenterManagement = () => {
                     disabled={isCenterManager}
                   />
                 </Field>
-                {modalMode === 'registeredDistrict' && !editing && !isCenterManager ? (
-                  <Field label="Assign Registered District">
-                    <select
-                      value={form.district}
-                      onChange={(event) => assignRegisteredDistrict(event.target.value)}
-                      className={inputClass}
-                    >
-                      <option value="">Select registered district</option>
-                      {districtOptions.map((district) => (
-                        <option key={district} value={district}>{district}</option>
-                      ))}
-                    </select>
-                  </Field>
-                ) : (
-                  <Field label="District">
-                    <input
-                      value={form.district}
-                      onChange={(event) => setCenterField('district', event.target.value)}
-                      className={inputClass}
-                      placeholder="Example: Hodan"
-                      disabled={isCenterManager}
-                    />
-                  </Field>
-                )}
+                <Field label="District">
+                  <input
+                    value={form.district}
+                    onChange={(event) => setCenterField('district', event.target.value)}
+                    className={inputClass}
+                    placeholder="Type district name"
+                    disabled={isCenterManager}
+                  />
+                </Field>
                 <Field label="Address">
                   <input value={form.address} onChange={(event) => setCenterField('address', event.target.value)} className={inputClass} placeholder="District office, Mogadishu" disabled={isCenterManager} />
                 </Field>
@@ -773,7 +797,28 @@ const CenterManagement = () => {
                     />
                   </Field>
                   <Field label="Number of Counters">
-                    <input type="number" min="1" value={form.counters} onChange={(event) => setForm({ ...form, counters: event.target.value })} className={inputClass} disabled={isCenterManager} />
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.counters}
+                      onChange={(event) => {
+                        const counters = event.target.value;
+                        setForm((current) => ({
+                          ...current,
+                          counters,
+                          schedule: {
+                            ...current.schedule,
+                            // 1 counter = 1 registration allowed in the same time slot.
+                            maxBookingsPerSlot: Math.max(1, Number(counters) || 1),
+                          },
+                        }));
+                      }}
+                      className={inputClass}
+                      disabled={isCenterManager}
+                    />
+                    <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      If counters = 1, only 1 citizen can register for the same appointment time at this center.
+                    </p>
                   </Field>
                   <Field label="Maximum Appointments Per Day">
                     <input
@@ -795,7 +840,7 @@ const CenterManagement = () => {
                         <input
                           autoComplete="off"
                           value={form.managerCredentials.name}
-                          onChange={(event) => setManagerCredential('name', event.target.value)}
+                          onChange={(event) => setManagerCredential('name', event.target.value.replace(/[^A-Za-z\s'-]/g, ''))}
                           className={inputClass}
                           placeholder="Manager full name"
                         />
@@ -811,7 +856,7 @@ const CenterManagement = () => {
                           name="center-manager-username"
                           autoComplete="username"
                           value={form.managerCredentials.username}
-                          onChange={(event) => setManagerCredential('username', event.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
+                          onChange={(event) => setManagerCredential('username', event.target.value.toLowerCase().replace(/[^a-z]/g, ''))}
                           className={inputClass}
                           placeholder="hodanmanager"
                         />
@@ -899,7 +944,9 @@ const CenterManagement = () => {
               <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700 dark:text-blue-300">Center Credentials</p>
               <h2 className="mt-1 text-xl font-black text-[#0B3A75] dark:text-white">{credentialCenter.name}</h2>
               <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-300">
-                Create a center manager account for this center. This account can manage staff and schedule for this center only.
+                {credentialManagerId
+                  ? `This center already has a manager account (@${credentialForm.username}). Set a new temporary password to reset it — the username stays the same.`
+                  : 'Create a center manager account for this center. This account can manage staff and schedule for this center only.'}
               </p>
             </div>
 
@@ -907,32 +954,35 @@ const CenterManagement = () => {
               <Field label="Manager Name">
                 <input
                   value={credentialForm.name}
-                  onChange={(event) => setCredentialForm({ ...credentialForm, name: event.target.value })}
+                  onChange={(event) => setCredentialForm({ ...credentialForm, name: event.target.value.replace(/[^A-Za-z\s'-]/g, '') })}
                   className={inputClass}
                   placeholder="Center manager full name"
+                  disabled={!!credentialManagerId}
                 />
               </Field>
               <Field label="Username">
                 <input
                   value={credentialForm.username}
-                  onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value.toLowerCase().replace(/\s+/g, '') })}
+                  onChange={(event) => setCredentialForm({ ...credentialForm, username: event.target.value.toLowerCase().replace(/[^a-z]/g, '') })}
                   className={inputClass}
                   placeholder="centerusername"
+                  disabled={!!credentialManagerId}
                 />
               </Field>
               <Field label="Phone Number">
                 <SomaliPhoneField
                   value={credentialForm.phone}
                   onChange={(value) => setCredentialForm({ ...credentialForm, phone: value })}
+                  disabled={!!credentialManagerId}
                 />
               </Field>
-              <Field label="Temporary Password">
+              <Field label={credentialManagerId ? 'New Password' : 'Temporary Password'}>
                 <input
                   type="password"
                   value={credentialForm.temporaryPassword}
                   onChange={(event) => setCredentialForm({ ...credentialForm, temporaryPassword: event.target.value })}
                   className={inputClass}
-                  placeholder="Set temporary password"
+                  placeholder={credentialManagerId ? 'Set new password' : 'Set temporary password'}
                 />
               </Field>
             </div>
@@ -950,7 +1000,7 @@ const CenterManagement = () => {
                 onClick={handleCredentialSave}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
               >
-                <FaKey /> Create Credentials
+                <FaKey /> {credentialManagerId ? 'Reset Password' : 'Create Credentials'}
               </button>
             </div>
           </div>
@@ -960,19 +1010,25 @@ const CenterManagement = () => {
   );
 };
 
+// Sitewide soft-pastel card tone system (styles/nqs-theme-system.css).
 const SummaryCard = ({ label, value, color }) => {
-  const colorMap = {
-    emerald: 'border-emerald-500 bg-emerald-50 text-emerald-700',
-    red: 'border-red-500 bg-red-50 text-red-700',
-    blue: 'border-blue-500 bg-blue-50 text-blue-700'
+  const cardTone = {
+    emerald: 'nqs-card-tone-green',
+    red: 'nqs-card-tone-pink',
+    blue: 'nqs-card-tone-blue'
+  };
+  const iconTone = {
+    emerald: 'nqs-card-tone-icon-green',
+    red: 'nqs-card-tone-icon-pink',
+    blue: 'nqs-card-tone-icon-blue'
   };
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border-l-4 ${colorMap[color]}`}>
+    <div className={`rounded-2xl border p-5 shadow-sm ${cardTone[color]}`}>
+      <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${iconTone[color]}`}>
         <FaBuilding />
       </div>
       <p className="mt-3 text-2xl font-black">{value}</p>
-      <p className="text-sm font-semibold text-slate-500 dark:text-slate-300">{label}</p>
+      <p className="text-sm font-semibold text-[var(--text-muted)]">{label}</p>
     </div>
   );
 };
@@ -1135,9 +1191,14 @@ const DateListEditor = ({ title, dates, onAddMany, onRemove }) => {
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {selectedDates.length ? `${selectedDates.length} selected` : 'No dates selected'}
                 </p>
-                <button type="button" onClick={() => setSelectedDates([])} className="text-xs font-black text-blue-600 hover:text-blue-800 dark:text-blue-300">
-                  Clear
-                </button>
+                <div className="flex items-center gap-3">
+                  <button type="button" onClick={() => setSelectedDates([])} className="text-xs font-black text-slate-500 hover:text-slate-700 dark:text-slate-400">
+                    Clear
+                  </button>
+                  <button type="button" onClick={() => setPickerOpen(false)} className="text-xs font-black text-blue-600 hover:text-blue-800 dark:text-blue-300">
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           )}

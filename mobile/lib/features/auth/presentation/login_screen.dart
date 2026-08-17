@@ -6,12 +6,12 @@ import '../../../core/config/env.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/providers.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/router/role_home.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/widgets/state_views.dart';
+import '../../home/application/protected_action.dart';
 import '../application/auth_controller.dart';
 import '../application/otp_flow.dart';
-import 'widgets/auth_scaffold.dart';
+import 'widgets/nqs_auth_page.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,7 +26,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _obscure = true;
-  bool _remember = true;
   bool _submitting = false;
   String? _error;
 
@@ -50,6 +49,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  String _friendlyLoginError(ApiException error) {
+    final raw = error.message.toLowerCase();
+    if (raw.contains('disabled') || raw.contains('inactive')) {
+      return 'Account disabled. Contact National ID support.';
+    }
+    if (raw.contains('password') &&
+        (raw.contains('incorrect') ||
+            raw.contains('invalid') ||
+            raw.contains('wrong'))) {
+      return 'Incorrect PIN. Please try again.';
+    }
+    if (raw.contains('user') ||
+        raw.contains('username') ||
+        raw.contains('not found') ||
+        raw.contains('credentials')) {
+      return 'Incorrect User ID or PIN.';
+    }
+    if (error.isOffline) {
+      return '${error.message}\n(API: ${Env.apiBaseUrl})';
+    }
+    return error.message;
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     FocusScope.of(context).unfocus();
@@ -59,11 +81,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
 
+    final query = GoRouterState.of(context).uri.queryParameters;
+    final resumeToken = query['resume'];
+    final redirectTo = query['redirectTo'];
+
     try {
       final result = await ref.read(authControllerProvider.notifier).login(
             identifier: _identifierController.text,
             password: _passwordController.text,
-            rememberUsername: _remember,
+            rememberUsername: true,
           );
       if (!mounted) return;
 
@@ -76,29 +102,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             identifier: _identifierController.text.trim(),
             title: 'Confirm it is you',
             subtitle: 'Enter the code we sent to your registered phone.',
+            resumeToken: resumeToken,
+            redirectTo: redirectTo,
           ),
         );
         return;
       }
 
-      // Route by backend role only (never by username).
-      final user = ref.read(authControllerProvider).user;
-      final destination = homeRouteForUser(user);
-      debugPrint('[NQS LOGIN] role=${user?.role} isAdmin=${user?.isAdmin} -> $destination');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Signed in as ${user?.role ?? 'unknown'} → opening ${user?.isAdmin == true ? 'Admin' : user?.isOperator == true ? 'Operator' : 'Citizen'} dashboard',
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      context.go(destination);
+      await resumeAfterAuth(context, ref, resumeToken: resumeToken, redirectTo: redirectTo);
     } on ApiException catch (error) {
       if (!mounted) return;
-      final offlineHint = error.isOffline ? '\n(API: ${Env.apiBaseUrl})' : '';
-      setState(() => _error = '${error.message}$offlineHint');
+      setState(() => _error = _friendlyLoginError(error));
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -108,9 +122,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return AuthScaffold(
-      title: 'Welcome back',
-      subtitle: 'Sign in to book appointments and follow your National ID requests.',
+    return NqsAuthPage(
+      heading: 'Welcome Back!',
+      subheading: 'Please sign in to continue',
+      bottomArt: const NqsWaveArt(),
+      footer: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          InkWell(
+            onTap: () => context.push(AppRoutes.help),
+            borderRadius: BorderRadius.circular(10),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.support_agent_rounded, color: AppColors.primary, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Need help?',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       child: Form(
         key: _formKey,
         child: Column(
@@ -118,92 +161,75 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           children: [
             if (_error != null) ...[
               InlineErrorBanner(message: _error!),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
             ],
             TextFormField(
               controller: _identifierController,
               textInputAction: TextInputAction.next,
               autocorrect: false,
               decoration: const InputDecoration(
-                labelText: 'Username or phone number',
+                labelText: 'User ID',
+                hintText: 'Enter your User ID',
+                prefixIcon: Icon(Icons.person_outline_rounded),
               ),
               validator: (value) => (value ?? '').trim().isEmpty
-                  ? 'Enter your username or phone number.'
+                  ? 'Enter your User ID.'
                   : null,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _passwordController,
               obscureText: _obscure,
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _submit(),
               decoration: InputDecoration(
-                labelText: 'Password',
+                labelText: 'PIN',
+                hintText: 'Enter your PIN',
+                prefixIcon: const Icon(Icons.lock_outline_rounded),
                 suffixIcon: IconButton(
                   onPressed: () => setState(() => _obscure = !_obscure),
                   icon: Icon(
-                    _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                    _obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
                     color: AppColors.muted,
                   ),
                 ),
               ),
               validator: (value) =>
-                  (value ?? '').isEmpty ? 'Enter your password.' : null,
+                  (value ?? '').isEmpty ? 'Enter your PIN.' : null,
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: Checkbox(
-                    value: _remember,
-                    activeColor: AppColors.navy,
-                    side: const BorderSide(color: AppColors.muted),
-                    onChanged: (value) => setState(() => _remember = value ?? false),
-                  ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => context.push(AppRoutes.forgotPassword),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: EdgeInsets.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () => setState(() => _remember = !_remember),
-                  child: const Text(
-                    'Remember me',
-                    style: TextStyle(
-                      color: AppColors.ink,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                child: const Text(
+                  'Forgot PIN?',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
                 ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => context.push(AppRoutes.forgotPassword),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    padding: EdgeInsets.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: const Text(
-                    'Forgot password?',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 14),
             SizedBox(
               height: 54,
               child: FilledButton(
                 onPressed: _submitting ? null : _submit,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF00234B),
+                  backgroundColor: AppColors.navy,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: const Color(0xFF00234B).withValues(alpha: 0.6),
+                  disabledBackgroundColor: AppColors.navy.withValues(alpha: 0.55),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   textStyle: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 child: _submitting
@@ -215,29 +241,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Sign in'),
+                    : const Text('Sign In'),
               ),
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
             Wrap(
               alignment: WrapAlignment.center,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 const Text(
-                  'New to NQS? ',
-                  style: TextStyle(color: AppColors.muted, fontSize: 14),
+                  "Don't have an account? ",
+                  style: TextStyle(color: AppColors.muted, fontSize: 13.5),
                 ),
                 TextButton(
-                  onPressed: () => context.push(AppRoutes.register),
+                  onPressed: () {
+                    final query = GoRouterState.of(context).uri.queryParameters;
+                    context.push(
+                      Uri(path: AppRoutes.register, queryParameters: {
+                        if (query['resume'] != null) 'resume': query['resume'],
+                        if (query['redirectTo'] != null)
+                          'redirectTo': query['redirectTo'],
+                      }).toString(),
+                    );
+                  },
                   style: TextButton.styleFrom(
-                    foregroundColor: AppColors.accent,
+                    foregroundColor: AppColors.primary,
                     padding: EdgeInsets.zero,
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: const Text(
-                    'Create an account',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                    'Create Account',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
                   ),
                 ),
               ],

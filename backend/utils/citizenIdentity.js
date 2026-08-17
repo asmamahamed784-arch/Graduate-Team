@@ -19,6 +19,46 @@ export const generatePermanentNqsId = async () => {
   throw new Error('Could not generate a unique permanent NQS ID.');
 };
 
+const withNationalId = (details, nationalId) => (
+  details && typeof details === 'object' && !Array.isArray(details)
+    ? { ...details, nationalIdNumber: nationalId }
+    : details
+);
+
+export const syncCitizenTicketsNationalId = async (userId, nationalId) => {
+  if (!userId || !nationalId) return;
+
+  const tickets = await prisma.ticket.findMany({
+    where: { citizen: userId },
+    select: {
+      id: true,
+      nationalIdNumber: true,
+      registrationDetails: true,
+      replacementDetails: true,
+      updateDetails: true
+    }
+  });
+
+  await Promise.all(tickets.map((ticket) => {
+    const data = {
+      nationalIdNumber: nationalId,
+      registrationDetails: withNationalId(ticket.registrationDetails, nationalId),
+      replacementDetails: withNationalId(ticket.replacementDetails, nationalId),
+      updateDetails: withNationalId(ticket.updateDetails, nationalId)
+    };
+
+    const changed =
+      ticket.nationalIdNumber !== nationalId ||
+      data.registrationDetails !== ticket.registrationDetails ||
+      data.replacementDetails !== ticket.replacementDetails ||
+      data.updateDetails !== ticket.updateDetails;
+
+    return changed
+      ? prisma.ticket.update({ where: { id: ticket.id }, data })
+      : null;
+  }).filter(Boolean));
+};
+
 /** Find the one locked National ID for this citizen (never invent a second one). */
 export const resolveExistingCitizenNationalId = async (userOrId) => {
   const userId = typeof userOrId === 'string' ? userOrId : userOrId?.id;
@@ -108,14 +148,8 @@ export const ensureCitizenPermanentNqsId = async (userOrId) => {
     }
   });
 
-  // Keep all of this citizen's tickets aligned to the same permanent ID.
-  await prisma.ticket.updateMany({
-    where: {
-      citizen: userId,
-      NOT: { nationalIdNumber: nationalId }
-    },
-    data: { nationalIdNumber: nationalId }
-  });
+  // Keep all of this citizen's appointments aligned to the same permanent ID.
+  await syncCitizenTicketsNationalId(userId, nationalId);
 
   return nationalId;
 };
@@ -187,6 +221,8 @@ export const syncCitizenIdentityProfile = async (userId, data = {}) => {
     update: citizenData,
     create: { userId, ...citizenData }
   });
+
+  await syncCitizenTicketsNationalId(userId, nationalId);
 
   return updatedUser;
 };

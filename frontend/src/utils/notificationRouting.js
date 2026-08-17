@@ -127,13 +127,13 @@ const citizenServicePath = (requestType = '', target = '') => {
   if (target) {
     return `/dashboard/user/new-id-registration${query}`;
   }
-  return '/dashboard/user/appointments';
+  return '/dashboard/user/my-appointments';
 };
 
 const roleHomeRoute = (role = '') => {
   if (role === 'admin' || role === 'super_admin') return '/admin-appointments';
   if (role === 'operator' || role === 'super_operator' || role === 'center_manager') return '/dashboard/operator';
-  if (role === 'citizen' || role === 'user') return '/dashboard/user/appointments';
+  if (role === 'citizen' || role === 'user') return '/dashboard/user/my-appointments';
   return '/notifications';
 };
 
@@ -188,7 +188,7 @@ export const buildNotificationRoute = (notification = {}, user = {}) => {
       const ticketRef = notification.referenceNumber || extractTicketReference(notification);
       if (ticketRef) params.set('ticket', ticketRef);
       if (target && target !== ticketRef) params.set('ticketId', String(target));
-      return `/dashboard/user/appointments${params.toString() ? `?${params.toString()}` : ''}`;
+      return `/dashboard/user/my-appointments${params.toString() ? `?${params.toString()}` : ''}`;
     }
   }
 

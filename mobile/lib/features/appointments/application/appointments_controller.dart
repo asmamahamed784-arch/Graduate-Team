@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../shared/models/appointment.dart';
 import '../../auth/application/auth_controller.dart';
 import '../data/booking_repository.dart';
@@ -21,7 +22,10 @@ class AppointmentsController extends AsyncNotifier<List<Appointment>> {
     if (!auth.isAuthenticated) return const [];
 
     _poller?.cancel();
-    _poller = Timer.periodic(const Duration(seconds: 20), (_) => _silentRefresh());
+    _poller = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _silentRefresh(),
+    );
     ref.onDispose(() => _poller?.cancel());
 
     return ref.read(bookingRepositoryProvider).myAppointments();
@@ -52,14 +56,17 @@ class AppointmentsController extends AsyncNotifier<List<Appointment>> {
   }
 
   Future<Appointment> cancel(String id, {String? reason}) async {
-    final appointment =
-        await ref.read(bookingRepositoryProvider).cancel(id, reason: reason);
+    final appointment = await ref
+        .read(bookingRepositoryProvider)
+        .cancel(id, reason: reason);
     await refresh();
     return appointment;
   }
 
   Future<Appointment> resubmit(String id, Map<String, dynamic> details) async {
-    final appointment = await ref.read(bookingRepositoryProvider).resubmit(id, details);
+    final appointment = await ref
+        .read(bookingRepositoryProvider)
+        .resubmit(id, details);
     await refresh();
     return appointment;
   }
@@ -67,8 +74,8 @@ class AppointmentsController extends AsyncNotifier<List<Appointment>> {
 
 final appointmentsControllerProvider =
     AsyncNotifierProvider<AppointmentsController, List<Appointment>>(
-  AppointmentsController.new,
-);
+      AppointmentsController.new,
+    );
 
 /// Requests that are still open, newest first.
 final activeAppointmentsProvider = Provider<List<Appointment>>((ref) {
@@ -91,7 +98,38 @@ final currentAppointmentProvider = Provider<Appointment?>((ref) {
   return active.isEmpty ? null : active.first;
 });
 
-final appointmentByIdProvider = Provider.family<Appointment?, String>((ref, id) {
+bool isCompletedNewRegistration(Appointment appointment) {
+  final status = appointment.status.trim().toLowerCase();
+  final requestStatus = appointment.requestStatus.trim().toLowerCase();
+  return appointment.requestType == RequestTypes.newNationalId &&
+      (status == 'completed' || requestStatus == 'completed');
+}
+
+final completedNewRegistrationProvider = Provider<Appointment?>((ref) {
+  final data = ref.watch(appointmentsControllerProvider).value ?? const [];
+  for (final appointment in data) {
+    if (isCompletedNewRegistration(appointment)) return appointment;
+  }
+  return null;
+});
+
+/// Open New Registration request (not completed / cancelled).
+/// Used so tapping New Registration shows existing citizen data
+/// until that request is finished or cancelled.
+final activeNewRegistrationProvider = Provider<Appointment?>((ref) {
+  final active = ref.watch(activeAppointmentsProvider);
+  for (final appointment in active) {
+    if (appointment.requestType == RequestTypes.newNationalId) {
+      return appointment;
+    }
+  }
+  return null;
+});
+
+final appointmentByIdProvider = Provider.family<Appointment?, String>((
+  ref,
+  id,
+) {
   final data = ref.watch(appointmentsControllerProvider).value ?? const [];
   for (final appointment in data) {
     if (appointment.id == id || appointment.reference == id) return appointment;

@@ -4,7 +4,7 @@ import Footer from '../components/Footer';
 
 function MainLayout() {
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--nqs-bg)] text-[var(--nqs-text)] transition-colors duration-300">
+    <div className="nqs-public-blue-lock flex min-h-screen flex-col transition-colors duration-300">
       <NavBar />
       <main className="nqs-public-surface flex-1 w-full">
         <Outlet />

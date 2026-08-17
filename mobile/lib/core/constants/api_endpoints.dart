@@ -1,5 +1,7 @@
-/// Every path the mobile app calls on the existing NQS backend.
+/// Every path the citizen mobile app calls on the existing NQS backend.
 /// Paths mirror `backend/routes/*.js` exactly and must not be invented.
+/// Staff-only endpoints (admin, operators, sessions, reports, audits) are
+/// deliberately absent: those screens live in the web portal.
 class ApiEndpoints {
   const ApiEndpoints._();
 
@@ -29,51 +31,13 @@ class ApiEndpoints {
   static const String bookings = '/api/bookings';
   static const String myBookings = '/api/bookings/my';
   static const String bookingAvailability = '/api/bookings/availability';
-  static const String adminBookings = '/api/bookings/admin/all';
   static String booking(String refOrId) => '/api/bookings/$refOrId';
   static String cancelBooking(String id) => '/api/bookings/$id/cancel';
   static String resubmitBooking(String id) => '/api/bookings/$id/resubmit';
-  static String adminBookingStatus(String id) => '/api/bookings/admin/$id/status';
-  static String adminBookingRequestStatus(String id) =>
-      '/api/bookings/admin/$id/request-status';
-  static String adminBookingReplacementStatus(String id) =>
-      '/api/bookings/admin/$id/replacement-status';
-  static String adminBookingCorrection(String id) => '/api/bookings/admin/$id/correction';
 
-  // Queue / operator
-  static const String queueList = '/api/queue/list';
-  static const String queueCallNext = '/api/queue/call-next';
-  static const String operatorCallNext = '/api/operator/call-next';
-  static const String operatorDashboard = '/api/operator/dashboard';
-  static const String operatorQueue = '/api/operator/queue';
-  static String queueHold(String id) => '/api/queue/$id/hold';
-  static String queueComplete(String id) => '/api/queue/$id/complete';
-  static String operatorComplete(String ticketId) => '/api/operator/complete/$ticketId';
+  // Queue tracking
   static String trackTicket(String ref) => '/api/queue/track/$ref';
   static String liveQueue(String centerId) => '/api/queue/live/$centerId';
-
-  // Reports / admin
-  static const String reportStats = '/api/reports/stats';
-  static const String reportAnalytics = '/api/reports/analytics';
-  static const String operatorDashboardReport = '/api/reports/operator-dashboard';
-
-  // Users / operators
-  static const String users = '/api/users';
-  static String user(String id) => '/api/users/$id';
-  static String userStatus(String id) => '/api/users/$id/status';
-  static String userResetPassword(String id) => '/api/users/$id/reset-password';
-  static const String operators = '/api/operators';
-  static String operator(String id) => '/api/operators/$id';
-  static String operatorApprove(String id) => '/api/operators/$id/approve';
-  static String operatorReject(String id) => '/api/operators/$id/reject';
-  static String operatorActivate(String id) => '/api/operators/$id/activate';
-  static String operatorDeactivate(String id) => '/api/operators/$id/deactivate';
-
-  // Sessions / activity / audits
-  static const String sessions = '/api/sessions';
-  static String invalidateSession(String id) => '/api/sessions/$id/invalidate';
-  static const String activities = '/api/activities';
-  static const String audits = '/api/audits';
 
   // Notifications
   static const String notifications = '/api/notifications';
@@ -81,13 +45,12 @@ class ApiEndpoints {
   static String notificationRead(String id) => '/api/notifications/$id/read';
   static String notification(String id) => '/api/notifications/$id';
 
-  // QR
+  // QR ticket
   static const String qrGenerate = '/api/qr/generate';
-  static const String qrVerify = '/api/qr/verify';
-  static const String qrAction = '/api/qr/action';
 
-  // Misc
-  static const String feedback = '/api/feedback';
-  static const String announcements = '/api/announcements';
+  // Public, no-auth stats shown on the guest-facing Home screen.
+  static const String publicHomeStats = '/api/reports/public-home-stats';
+
+  // Contact form
   static const String contact = '/api/contact';
 }

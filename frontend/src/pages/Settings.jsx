@@ -73,22 +73,23 @@ const normalizeScheduleForUi = (value = {}) => {
 };
 
 const Toggle = ({ enabled, onChange, label, description }) => (
-  <div className="flex items-center justify-between py-3">
-    <div>
-      <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</p>
-      {description && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>}
+  <div className="flex items-center justify-between gap-4 py-3">
+    <div className="min-w-0">
+      <p className="text-sm font-bold text-[var(--text-main)]">{label}</p>
+      {description && <p className="mt-0.5 text-xs font-semibold text-[var(--text-muted)]">{description}</p>}
     </div>
     <button
       type="button"
       onClick={() => onChange(!enabled)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${
-        enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
-      }`}
+      aria-pressed={enabled}
+      className="relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+      style={{
+        backgroundColor: enabled ? 'var(--color-primary)' : '#CBD5E1',
+        borderColor: enabled ? 'var(--color-primary)' : '#94A3B8',
+      }}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-          enabled ? 'translate-x-6' : 'translate-x-1'
-        }`}
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-1'}`}
       />
     </button>
   </div>
@@ -204,53 +205,53 @@ const Settings = () => {
   };
 
   return (
-    <div className="min-h-screen pb-12">
+    <div className="min-h-screen w-full overflow-x-hidden px-3 pb-12 sm:px-5 lg:px-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="mb-8"
+        className="mb-6 rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-4 shadow-sm sm:p-5"
       >
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2.5 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
-            <FiSettings className="text-blue-700 dark:text-blue-400 text-xl" />
+          <div className="rounded-xl bg-[var(--color-primary-soft)] p-2.5">
+            <FiSettings className="text-xl text-[var(--color-primary)]" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings')}</h1>
+          <h1 className="text-2xl font-black text-[var(--text-main)]">{t('settings')}</h1>
         </div>
-        <p className="text-gray-500 dark:text-gray-400 text-sm ml-1">
+        <p className="ml-1 text-sm font-medium text-[var(--text-muted)]">
           Update your display, alerts, and account settings.
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {/* ─── Appearance ─────────────────────────────── */}
         <motion.div
           custom={0}
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiSettings className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Appearance</h2>
+            <FiSettings className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">Appearance</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="mb-4 text-xs font-semibold text-[var(--text-muted)]">
             The site uses the standard National ID portal colors.
           </p>
-          <div className="space-y-1 divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="space-y-1 divide-y divide-[var(--border-light)]">
             <div className="flex items-center justify-between py-3">
               <div>
-                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Main Color</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Main color used across the site</p>
+                <p className="text-sm font-bold text-[var(--text-main)]">Main Color</p>
+                <p className="mt-0.5 text-xs font-semibold text-[var(--text-muted)]">Main color used across the site</p>
               </div>
               <div className="flex items-center gap-2">
                 <div
                   className="w-8 h-8 rounded-full border-2 border-white dark:border-gray-600 shadow"
                   style={{ backgroundColor: themeColor }}
                 />
-                <span className="text-xs font-mono text-gray-500 dark:text-gray-400 uppercase">{themeColor}</span>
+                <span className="font-mono text-xs uppercase text-[var(--text-muted)]">{themeColor}</span>
               </div>
             </div>
           </div>
@@ -262,26 +263,26 @@ const Settings = () => {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiGlobe className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('language')}</h2>
+            <FiGlobe className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">{t('language')}</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="mb-4 text-xs font-semibold text-[var(--text-muted)]">
             Choose the language used on the site.
           </p>
           <div className="relative">
             <select
               value={language}
               onChange={handleLanguageChange}
-              className="w-full appearance-none bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 pr-10 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent cursor-pointer"
+              className="w-full cursor-pointer appearance-none rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-4 py-3 pr-10 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
             >
               <option value="en">English</option>
             </select>
             <FiGlobe className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+          <p className="mt-3 text-xs font-semibold text-[var(--text-muted)]">
             English is currently available.
           </p>
         </motion.div>
@@ -292,16 +293,16 @@ const Settings = () => {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiBell className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Notifications</h2>
+            <FiBell className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">Notifications</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="mb-4 text-xs font-semibold text-[var(--text-muted)]">
             Choose how you receive appointment and queue updates.
           </p>
-          <div className="space-y-1 divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="space-y-1 divide-y divide-[var(--border-light)]">
             <Toggle
               enabled={emailNotif}
               onChange={setEmailNotif}
@@ -329,16 +330,16 @@ const Settings = () => {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiShield className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Privacy</h2>
+            <FiShield className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">Privacy</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="mb-4 text-xs font-semibold text-[var(--text-muted)]">
             Choose what account information can be used by the system.
           </p>
-          <div className="space-y-1 divide-y divide-gray-100 dark:divide-gray-700">
+          <div className="space-y-1 divide-y divide-[var(--border-light)]">
             <Toggle
               enabled={publicProfile}
               onChange={setPublicProfile}
@@ -360,19 +361,19 @@ const Settings = () => {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiCalendar className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Appointment Schedule</h2>
+            <FiCalendar className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">Appointment Schedule</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <p className="mb-4 text-xs font-semibold text-[var(--text-muted)]">
             Set working days, hours, and appointment capacity.
           </p>
 
           <div className="space-y-4">
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Working Days</p>
+              <p className="mb-2 text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Working Days</p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {weekDays.map((day) => (
                   <button
@@ -381,8 +382,8 @@ const Settings = () => {
                     onClick={() => toggleWorkingDay(day.key)}
                     className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition ${
                       schedule.workingDays.includes(day.key)
-                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                        : 'border-gray-200 bg-gray-50 text-gray-500 dark:border-gray-700 dark:bg-gray-700/50 dark:text-gray-400'
+                        ? 'border-[var(--border-focus)] bg-[var(--color-primary-soft)] text-[var(--color-primary)]'
+                        : 'border-[var(--border-light)] bg-[var(--bg-secondary)] text-[var(--text-muted)]'
                     }`}
                   >
                     {day.label}
@@ -393,46 +394,46 @@ const Settings = () => {
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label>
-                <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Start Time</span>
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Start Time</span>
                 <input
                   type="time"
                   value={schedule.startTime}
                   onChange={(e) => updateSchedule('startTime', e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  className="w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">End Time</span>
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">End Time</span>
                 <input
                   type="time"
                   value={schedule.endTime}
                   onChange={(e) => updateSchedule('endTime', e.target.value)}
-                  className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  className="w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Max Per Time Slot</span>
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Max Per Time Slot</span>
                 <input
                   type="number"
                   min="1"
                   value={schedule.maxAppointmentsPerSlot}
                   onChange={(e) => updateSchedule('maxAppointmentsPerSlot', Number(e.target.value))}
-                  className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  className="w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
                 />
               </label>
               <label>
-                <span className="mb-1 block text-xs text-gray-500 dark:text-gray-400">Max Per Day</span>
+                <span className="mb-1 block text-xs font-semibold text-[var(--text-muted)]">Max Per Day</span>
                 <input
                   type="number"
                   min="1"
                   value={schedule.maxAppointmentsPerDay}
                   onChange={(e) => updateSchedule('maxAppointmentsPerDay', Number(e.target.value))}
-                  className="w-full rounded-xl border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200"
+                  className="w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-input)] px-3 py-2 text-sm font-semibold text-[var(--text-main)] outline-none focus:border-[var(--border-focus)] focus:ring-4 focus:ring-[var(--border-focus)]/15"
                 />
               </label>
             </div>
 
-            <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-800/40 dark:bg-blue-900/20 dark:text-blue-300">
+            <div className="flex items-start gap-2 rounded-xl border border-[var(--border-light)] bg-[var(--color-primary-soft)] p-3 text-xs font-semibold text-[var(--color-primary)]">
               <FiClock className="mt-0.5 shrink-0" />
               Default schedule is 08:00 AM to 04:00 PM, with Friday closed.
             </div>
@@ -444,26 +445,26 @@ const Settings = () => {
           variants={fadeUp}
           initial="hidden"
           animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+          className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 mb-1">
-            <FiUser className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Account</h2>
+            <FiUser className="text-[var(--color-primary)]" />
+            <h2 className="text-lg font-black text-[var(--text-main)]">Account</h2>
           </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+          <p className="mb-5 text-xs font-semibold text-[var(--text-muted)]">
             Manage your password or close your account.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => window.location.assign('/profile')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
             >
               <FiLock size={15} />
               Change Password
             </button>
             <button
               onClick={() => setShowDeleteModal(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-red-700 focus:outline-none focus:ring-4 focus:ring-red-500/20"
             >
               <FiTrash2 size={15} />
               Delete Account
@@ -478,11 +479,11 @@ const Settings = () => {
         variants={fadeUp}
         initial="hidden"
         animate="visible"
-        className="mt-8 max-w-5xl"
+        className="mt-8"
       >
         <button
           onClick={handleSave}
-          className="inline-flex items-center gap-2 px-8 py-3 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xl shadow-lg shadow-blue-700/20 transition-all hover:shadow-xl hover:shadow-blue-700/30 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-8 py-3 font-bold text-white shadow-lg shadow-blue-700/20 transition-all hover:bg-blue-800 hover:shadow-xl hover:shadow-blue-700/30 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
         >
           <FiSave size={18} />
           Save Changes
@@ -496,30 +497,30 @@ const Settings = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6"
+            className="mx-4 w-full max-w-md rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 shadow-2xl"
           >
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-full">
                 <FiTrash2 className="text-red-600 dark:text-red-400 text-lg" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Delete Account</h3>
+              <h3 className="text-lg font-black text-[var(--text-main)]">Delete Account</h3>
             </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-2">
+            <p className="mb-2 text-sm font-semibold text-[var(--text-muted)]">
               Are you sure you want to delete your account? This action is <strong>permanent</strong> and cannot be undone.
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
+            <p className="mb-6 text-xs font-semibold text-[var(--text-muted)]">
               All your data, bookings, and history will be permanently removed from the system.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl transition-colors"
+                className="rounded-xl bg-[var(--bg-secondary)] px-4 py-2 text-sm font-bold text-[var(--text-main)] transition-colors hover:bg-[var(--color-primary-soft)]"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700"
               >
                 Yes, Delete My Account
               </button>

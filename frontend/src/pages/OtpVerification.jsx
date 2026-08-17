@@ -194,7 +194,7 @@ const OtpVerification = () => {
       }
       sessionStorage.removeItem(STORAGE_KEY);
       toast.success(flow.successMessage || 'Verified successfully.');
-      navigate(flow.successPath || '/dashboard/user/appointments', {
+      navigate(flow.successPath || '/dashboard/user/my-appointments', {
         replace: true,
         state: { otpVerified: true, result }
       });
@@ -212,7 +212,7 @@ const OtpVerification = () => {
   if (!flow) return null;
 
   return (
-    <div className="min-h-screen bg-[#061426] px-4 py-8 text-white">
+    <div className="nqs-auth-dark min-h-screen bg-[#061426] px-4 py-8 text-white">
       <div className="mx-auto flex min-h-[80vh] max-w-lg items-center">
         <div className="w-full rounded-3xl border border-blue-400/20 bg-[#0B2344] p-6 shadow-2xl shadow-black/30">
           <div className="text-center">

@@ -28,7 +28,7 @@ class QrTicketScreen extends ConsumerWidget {
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(file.path)],
-        text: 'NQS National ID ticket $reference',
+        text: 'NQS National ID request $reference',
       ),
     );
   }
@@ -47,7 +47,7 @@ class QrTicketScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('QR Ticket'),
+        title: const Text('QR Request'),
         actions: [
           IconButton(
             tooltip: 'Copy reference',
@@ -173,7 +173,7 @@ class QrTicketScreen extends ConsumerWidget {
                 : FilledButton.icon(
                     onPressed: () => _shareTicket(context, bytes),
                     icon: const Icon(Icons.download_rounded),
-                    label: const Text('Download / Share ticket'),
+                    label: const Text('Download / Share request'),
                   ),
             orElse: () => const SizedBox.shrink(),
           ),
@@ -190,12 +190,20 @@ class QrTicketScreen extends ConsumerWidget {
               child: const Text('Cancel appointment'),
             ),
           ],
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: appointment == null
+                ? null
+                : () => context.push(AppRoutes.appointmentDetail(appointment.id)),
+            icon: const Icon(Icons.info_outline_rounded),
+            label: const Text('View appointment details'),
+          ),
           const SizedBox(height: 20),
           const Center(
             child: Text(
-              'Keep your screen brightness up so the code scans quickly.',
+              'Present this QR code at the service center.\nKeep brightness up so it scans quickly.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+              style: TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.4),
             ),
           ),
         ],

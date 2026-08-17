@@ -35,15 +35,27 @@ final activeCentersProvider = Provider<List<CenterModel>>((ref) {
   return centers.where((center) => center.isActive).toList();
 });
 
-/// Distinct districts, used by the centers filter.
+/// Distinct districts, used by the centers filter and booking forms.
+/// Built from centers in the database (not a hardcoded Banadir list).
 final centerDistrictsProvider = Provider<List<String>>((ref) {
   final centers = ref.watch(centersProvider).value ?? const [];
-  final districts = centers
-      .map((center) => center.district.trim())
-      .where((district) => district.isNotEmpty)
-      .toSet()
-      .toList()
-    ..sort();
+  final options = <String>{};
+
+  for (final center in centers) {
+    final district = center.district.trim();
+    if (district.isNotEmpty) options.add(district);
+
+    // Custom district centers (created in Admin) also appear as options,
+    // matching the web New ID registration form.
+    final name = center.name.trim();
+    final isGenericNationalIdCenter =
+        RegExp(r'national\s+id\s+center', caseSensitive: false).hasMatch(name);
+    if (name.isNotEmpty && !isGenericNationalIdCenter) {
+      options.add(name);
+    }
+  }
+
+  final districts = options.toList()..sort();
   return districts;
 });
 

@@ -56,15 +56,20 @@ export const protect = async (req, res, next) => {
         }
       }
 
+      const now = new Date();
       await prisma.user.update({
         where: { id: req.user.id },
-        data: { lastActiveAt: new Date() }
+        data: { lastActiveAt: now }
+      });
+      await prisma.accountProfile.updateMany({
+        where: { userId: req.user.id },
+        data: { lastActiveAt: now }
       });
 
       if (decoded.jti) {
         await prisma.activeSession.updateMany({
           where: { tokenId: decoded.jti, status: 'active' },
-          data: { lastActiveTime: new Date() }
+          data: { lastActiveTime: now }
         });
       }
       

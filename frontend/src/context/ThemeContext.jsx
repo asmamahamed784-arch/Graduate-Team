@@ -6,9 +6,26 @@ export const ThemeContext = createContext({
   toggleTheme: () => {}
 });
 
+const readStoredTheme = () => {
+  try {
+    return localStorage.getItem('nqs-theme') || localStorage.getItem('theme');
+  } catch {
+    return null;
+  }
+};
+
+const writeStoredTheme = (theme) => {
+  try {
+    localStorage.setItem('nqs-theme', theme);
+    localStorage.setItem('theme', theme);
+  } catch {
+    // Keep the in-memory theme if browser storage is unavailable.
+  }
+};
+
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('nqs-theme') || localStorage.getItem('theme');
+    const savedTheme = readStoredTheme();
     if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme;
     return 'light';
   });
@@ -23,8 +40,7 @@ export const ThemeProvider = ({ children }) => {
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
 
-    localStorage.setItem('nqs-theme', theme);
-    localStorage.setItem('theme', theme);
+    writeStoredTheme(theme);
   }, [theme]);
 
   const toggleTheme = () => {

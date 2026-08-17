@@ -6,6 +6,11 @@ import { apiClient } from '../api/apiClient';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'react-toastify';
 import { resolveNotificationRoute } from '../utils/notificationRouting';
+import { getNotificationDisplayMessage } from '../utils/cancellationDisplay';
+import {
+  isAcknowledgmentNotification,
+  NQS_FEEDBACK_TOAST_ID,
+} from '../utils/feedbackToast';
 
 export const NotificationContext = createContext({
   notifications: [],
@@ -124,8 +129,12 @@ export const NotificationProvider = ({ children }) => {
         return [notification, ...current];
       });
 
+      // Keep inbox updated, but do not show a second toast for the same
+      // submit/verify action the page already confirmed.
+      if (isAcknowledgmentNotification(notification)) return;
+
       const title = notification.title || 'New notification';
-      const preview = String(notification.desc || notification.message || '').trim();
+      const preview = String(getNotificationDisplayMessage(notification)).trim();
 
       toast.info(
         <div className="pr-1">
@@ -134,6 +143,7 @@ export const NotificationProvider = ({ children }) => {
           <p className="mt-1 text-[11px] font-semibold underline underline-offset-2">Click to open</p>
         </div>,
         {
+          toastId: NQS_FEEDBACK_TOAST_ID,
           autoClose: 8000,
           closeOnClick: true,
           onClick: () => {
@@ -207,12 +217,15 @@ export const NotificationProvider = ({ children }) => {
       read: false
     };
     setNotifications((prev) => [newItem, ...prev]);
+    if (isAcknowledgmentNotification(newItem)) return;
+
     toast.info(
       <div>
         <p className="text-sm font-bold">{title}</p>
         <p className="mt-1 text-[11px] font-semibold underline underline-offset-2">Click to open</p>
       </div>,
       {
+        toastId: NQS_FEEDBACK_TOAST_ID,
         autoClose: 8000,
         closeOnClick: true,
         onClick: () => openNotification(newItem)

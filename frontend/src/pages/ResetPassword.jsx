@@ -58,7 +58,7 @@ const ResetPassword = () => {
   if (!session) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#061426] px-4 py-10 text-white">
+    <div className="nqs-auth-dark flex min-h-screen items-center justify-center bg-[#061426] px-4 py-10 text-white">
       <form onSubmit={submit} className="w-full max-w-md rounded-2xl border border-blue-400/20 bg-[#0B2344] p-8 shadow-2xl shadow-black/30">
         <div className="text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-2xl">

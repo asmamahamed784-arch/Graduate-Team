@@ -1,6 +1,8 @@
 // src/routes/AppRoutes.jsx
-import React, { Suspense, lazy } from 'react';
-import { Link, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { Link, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { apiClient } from '../api/apiClient';
+import { isCompletedNewIdBooking } from '../utils/serviceRouting';
 
 // Layouts
 import MainLayout from '../layouts/MainLayout';
@@ -15,6 +17,7 @@ import PublicRoute from './PublicRoute';
 const Home = lazy(() => import('../pages/Home.jsx'));
 const About = lazy(() => import('../pages/About.jsx'));
 const Services = lazy(() => import('../pages/Services.jsx'));
+const PublicServices = lazy(() => import('../pages/PublicServices.jsx'));
 const Centers = lazy(() => import('../pages/Centers.jsx'));
 const FAQ = lazy(() => import('../pages/FAQ.jsx'));
 const Contact = lazy(() => import('../pages/Contact.jsx'));
@@ -24,13 +27,19 @@ const UpdateInformationRequest = lazy(() => import('../pages/UpdateInformationRe
 const ReplaceLostId = lazy(() => import('../pages/ReplaceLostId.jsx'));
 const GenericServiceBooking = lazy(() => import('../pages/GenericServiceBooking.jsx'));
 const LiveQueue = lazy(() => import('../pages/LiveQueue.jsx'));
+const BookingSuccess = lazy(() => import('../pages/booking/BookingSuccess.jsx'));
+const QrTicket = lazy(() => import('../pages/booking/QrTicket.jsx'));
+const AppointmentDetailsView = lazy(() => import('../pages/booking/AppointmentDetailsView.jsx'));
+const TrackQueueConfirm = lazy(() => import('../pages/booking/TrackQueueConfirm.jsx'));
 
 const UserDashboard = lazy(() => import('../pages/UserDashboard.jsx'));
 const UserAppointments = lazy(() => import('../pages/UserAppointments.jsx'));
 const OperatorDashboard = lazy(() => import('../pages/OperatorDashboard.jsx'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard.jsx'));
 const AdminAppointments = lazy(() => import('../pages/AdminAppointments.jsx'));
+const CitizenAppointmentDetails = lazy(() => import('../pages/CitizenAppointmentDetails.jsx'));
 const OperatorManagement = lazy(() => import('../pages/OperatorManagement.jsx'));
+const OperatorAppointments = lazy(() => import('../pages/OperatorAppointments.jsx'));
 const CenterOperatorDetail = lazy(() => import('../pages/CenterOperatorDetail.jsx'));
 const ActiveSessions = lazy(() => import('../pages/ActiveSessions.jsx'));
 const UserManagement = lazy(() => import('../pages/UserManagement.jsx'));
@@ -44,6 +53,7 @@ const Reports = lazy(() => import('../pages/Reports.jsx'));
 const QueueManagement = lazy(() => import('../pages/QueueManagement.jsx'));
 const ServiceManagement = lazy(() => import('../pages/ServiceManagement.jsx'));
 const CenterManagement = lazy(() => import('../pages/CenterManagement.jsx'));
+const CenterReport = lazy(() => import('../pages/CenterReport.jsx'));
 const QRVerify = lazy(() => import('../pages/QRVerify.jsx'));
 const NotificationManagement = lazy(() => import('../pages/NotificationManagement.jsx'));
 const AntiCorruptionLogs = lazy(() => import('../pages/AntiCorruptionLogs.jsx'));
@@ -69,6 +79,47 @@ const NotFound = () => (
   </div>
 );
 
+const TrackRedirect = () => {
+  const location = useLocation();
+  return <Navigate to={`/dashboard/user/track${location.search}`} replace />;
+};
+
+const CompletedNationalIdRoute = ({ children }) => {
+  const location = useLocation();
+  const [allowed, setAllowed] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCompletedRegistration = async () => {
+      try {
+        const response = await apiClient.get('/api/bookings/my');
+        const records = Array.isArray(response.data) ? response.data : [];
+        if (mounted) setAllowed(records.some(isCompletedNewIdBooking));
+      } catch {
+        if (mounted) setAllowed(false);
+      }
+    };
+
+    loadCompletedRegistration();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (allowed === null) return <Loader />;
+  if (!allowed) {
+    return (
+      <Navigate
+        to="/dashboard/user/appointments"
+        replace
+        state={{ blockedServicePath: location.pathname }}
+      />
+    );
+  }
+
+  return children;
+};
+
 export const AppRoutes = () => {
   return (
     <Suspense fallback={<Loader />}>
@@ -81,6 +132,7 @@ export const AppRoutes = () => {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/about" element={<About />} />
+          <Route path="/services" element={<PublicServices />} />
           <Route path="/centers" element={<Centers />} />
           <Route path="/faq" element={<FAQ />} />
           <Route path="/contact" element={<Contact />} />
@@ -89,11 +141,10 @@ export const AppRoutes = () => {
         {/* Citizen appointment pages require authentication */}
         <Route element={<ProtectedRoute allowedRoles={['citizen', 'admin', 'super_admin']} />}>
           <Route path="/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
-          <Route path="/services" element={<Navigate to="/dashboard/user/services" replace />} />
           <Route path="/services/new-id-registration" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
           <Route path="/services/update-information" element={<Navigate to="/dashboard/user/update-information" replace />} />
           <Route path="/services/replace-lost-id" element={<Navigate to="/dashboard/user/replace-lost-id" replace />} />
-          <Route path="/track" element={<Navigate to="/dashboard/user/track" replace />} />
+          <Route path="/track" element={<TrackRedirect />} />
         </Route>
 
         {/* Guest-only Auth Pages (redirects if logged in) */}
@@ -129,14 +180,36 @@ export const AppRoutes = () => {
         <Route element={<ProtectedRoute allowedRoles={['citizen']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard/user" element={<UserDashboard />} />
-            <Route path="/dashboard/user/appointments" element={<UserAppointments />} />
+            <Route path="/dashboard/user/appointments" element={<NewIdRegistration />} />
+            <Route path="/dashboard/user/my-appointments" element={<UserAppointments />} />
             <Route path="/dashboard/user/services" element={<Services />} />
             <Route path="/dashboard/user/services/:serviceId/book" element={<GenericServiceBooking />} />
             <Route path="/dashboard/user/booking" element={<Navigate to="/dashboard/user/new-id-registration" replace />} />
             <Route path="/dashboard/user/new-id-registration" element={<NewIdRegistration />} />
-            <Route path="/dashboard/user/update-information" element={<UpdateInformationRequest />} />
-            <Route path="/dashboard/user/replace-lost-id" element={<ReplaceLostId />} />
+            <Route
+              path="/dashboard/user/update-information"
+              element={(
+                <CompletedNationalIdRoute>
+                  <UpdateInformationRequest />
+                </CompletedNationalIdRoute>
+              )}
+            />
+            <Route
+              path="/dashboard/user/replace-lost-id"
+              element={(
+                <CompletedNationalIdRoute>
+                  <ReplaceLostId />
+                </CompletedNationalIdRoute>
+              )}
+            />
             <Route path="/dashboard/user/track" element={<TrackQueue />} />
+            <Route path="/dashboard/user/booking/success" element={<BookingSuccess />} />
+            <Route path="/dashboard/user/booking/ticket" element={<QrTicket />} />
+            <Route path="/dashboard/user/booking/ticket/:ref" element={<QrTicket />} />
+            <Route path="/dashboard/user/booking/details" element={<AppointmentDetailsView />} />
+            <Route path="/dashboard/user/booking/details/:ref" element={<AppointmentDetailsView />} />
+            <Route path="/dashboard/user/booking/track" element={<TrackQueueConfirm />} />
+            <Route path="/dashboard/user/booking/track/:ref" element={<TrackQueueConfirm />} />
           </Route>
         </Route>
 
@@ -155,12 +228,22 @@ export const AppRoutes = () => {
             <Route path="/operator-management" element={<OperatorManagement />} />
             <Route path="/admin/operators" element={<OperatorManagement />} />
             <Route path="/dashboard/operator/staff" element={<OperatorManagement />} />
+            <Route path="/operator-management/:operatorId" element={<OperatorAppointments />} />
           </Route>
         </Route>
 
         <Route element={<ProtectedRoute allowedRoles={['admin', 'super_admin', 'super_operator', 'center_manager', 'operator']} />}>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard/operator/center-schedule" element={<CenterManagement />} />
+          </Route>
+        </Route>
+
+        {/* Center Report — center managers only, scoped to their own assigned center.
+            Admin reporting lives solely on the Global Reports page (/dashboard/admin/reports). */}
+        <Route element={<ProtectedRoute allowedRoles={['super_operator', 'center_manager']} />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard/operator/report" element={<CenterReport />} />
+            <Route path="/center-management/:centerId/report" element={<CenterReport />} />
           </Route>
         </Route>
 
@@ -185,6 +268,7 @@ export const AppRoutes = () => {
             <Route path="/admin-appointments" element={<AdminAppointments />} />
             <Route path="/admin/appointments" element={<AdminAppointments />} />
             <Route path="/admin-appointments/center" element={<AdminAppointments />} />
+            <Route path="/admin-appointments/citizen/:citizenKey" element={<CitizenAppointmentDetails />} />
             <Route path="/active-sessions" element={<ActiveSessions />} />
             <Route path="/active-sessions/:role" element={<ActiveSessions />} />
             <Route path="/reports" element={<Navigate to="/dashboard/admin/reports" replace />} />
@@ -196,6 +280,7 @@ export const AppRoutes = () => {
             <Route path="/dashboard/admin/reports/service-centers/:centerId/:centerView" element={<Reports />} />
             <Route path="/dashboard/admin/reports/operators" element={<Reports />} />
             <Route path="/dashboard/admin/reports/queue" element={<Reports />} />
+            <Route path="/dashboard/admin/reports/appointments" element={<Reports />} />
             <Route path="/dashboard/admin/reports/trends" element={<Reports />} />
             <Route path="/dashboard/admin/reports/citizens" element={<Reports />} />
             <Route path="/dashboard/admin/reports/citizens/all" element={<Reports />} />

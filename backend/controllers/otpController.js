@@ -8,10 +8,17 @@ const ALLOWED_PURPOSES = new Set([
   'update_information',
   'replace_lost_id',
   'complete_service',
+  'cancel_service',
   'forgot_password'
 ]);
+const TICKET_PHONE_PURPOSES = new Set(['complete_service', 'cancel_service']);
+const UPDATE_BLOCKED_OTP_PURPOSES = new Set(['new_id_booking', 'update_information', 'replace_lost_id']);
+const OPEN_UPDATE_STATUSES = ['Pending', 'On Hold', 'Waiting', 'Being Served', 'In Progress'];
+const OPEN_UPDATE_REQUEST_STATUSES = ['Pending', 'Under Review', 'Approved', 'In Progress', 'Resubmission Required'];
+const UPDATE_REQUEST_BLOCKS_OTHER_SERVICES_MESSAGE = 'You already have an Update Information request waiting for review. You cannot submit another request until that update is completed.';
 
-const getUserOtpPhone = (req) => normalizeOtpPhone(req.user?.phone || req.body.phone);
+// Prefer body phone (booking form) — citizen accounts may have no profile phone.
+const getUserOtpPhone = (req) => normalizeOtpPhone(req.body.phone || req.user?.phone);
 
 const phoneLookupVariants = (phone = '') => {
   const normalized = normalizeOtpPhone(phone);
@@ -68,6 +75,18 @@ const getTicketPhone = async (ticketId) => {
   };
 };
 
+const findOpenUpdateRequestForCitizen = async (citizenId) => prisma.ticket.findFirst({
+  where: {
+    citizen: citizenId,
+    requestType: 'update_information',
+    OR: [
+      { status: { in: OPEN_UPDATE_STATUSES } },
+      { requestStatus: { in: OPEN_UPDATE_REQUEST_STATUSES } }
+    ]
+  },
+  orderBy: { createdAt: 'desc' }
+});
+
 export const requestOtpCode = async (req, res) => {
   try {
     const { purpose, ticketId } = req.body;
@@ -80,18 +99,40 @@ export const requestOtpCode = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Use forgot password OTP endpoint.' });
     }
 
+    if (req.user?.id && String(req.user?.role || '').toLowerCase() === 'citizen' && UPDATE_BLOCKED_OTP_PURPOSES.has(cleanPurpose)) {
+      const openUpdateRequest = await findOpenUpdateRequestForCitizen(req.user.id);
+      if (openUpdateRequest) {
+        return res.status(409).json({
+          success: false,
+          message: cleanPurpose === 'update_information'
+            ? 'You already have a pending Update Information request. Please wait until the Center or Admin completes it.'
+            : UPDATE_REQUEST_BLOCKS_OTHER_SERVICES_MESSAGE,
+          data: openUpdateRequest
+        });
+      }
+    }
+
     let phone = getUserOtpPhone(req);
-    if (cleanPurpose === 'complete_service') {
+    if (TICKET_PHONE_PURPOSES.has(cleanPurpose)) {
       const ticketData = await getTicketPhone(ticketId);
       if (!ticketData?.ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
       phone = ticketData.phone;
+    }
+
+    if (cleanPurpose === 'new_id_booking' && phone) {
+      const existingUser = await prisma.user.findFirst({
+        where: { phone: { in: phoneLookupVariants(phone) } }
+      });
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'This phone number is already in use, so an OTP was not sent.' });
+      }
     }
 
     const data = await requestOtp({
       purpose: cleanPurpose,
       phone,
       userId: req.user?.id,
-      ticketId: cleanPurpose === 'complete_service' ? ticketId : null,
+      ticketId: TICKET_PHONE_PURPOSES.has(cleanPurpose) ? ticketId : null,
       forceNew: req.body.resend === true
     });
 
@@ -115,7 +156,7 @@ export const verifyOtpCode = async (req, res) => {
     }
 
     let phone = getUserOtpPhone(req);
-    if (cleanPurpose === 'complete_service') {
+    if (TICKET_PHONE_PURPOSES.has(cleanPurpose)) {
       const ticketData = await getTicketPhone(ticketId);
       if (!ticketData?.ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
       phone = ticketData.phone;
@@ -127,7 +168,7 @@ export const verifyOtpCode = async (req, res) => {
       code,
       otpId,
       userId: req.user?.id,
-      ticketId: cleanPurpose === 'complete_service' ? ticketId : null
+      ticketId: TICKET_PHONE_PURPOSES.has(cleanPurpose) ? ticketId : null
     });
 
     await logActivity({

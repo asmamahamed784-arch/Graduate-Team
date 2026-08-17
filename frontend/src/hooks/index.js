@@ -7,3 +7,5 @@ export { useDashboard } from './useDashboard';
 export { useLanguage } from './useLanguage';
 export { useLocalStorage } from './useLocalStorage';
 export { useRealtimeQueue } from './useRealtimeQueue';
+export { useCountUp } from './useCountUp';
+export { useOtpGate } from './useOtpGate';

@@ -75,3 +75,5 @@ textarea:focus {
 .nqs-theme-dark textarea:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
 }
+
+@media (min-width: 768px) { .nqs-dashboard-main { margin-left: var(--desktop-ml, 0) !important; } }

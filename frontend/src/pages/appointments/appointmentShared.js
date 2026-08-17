@@ -112,9 +112,14 @@ export const calculateAge = (dateOfBirth) => {
   const today = new Date();
   if (dob > today) return '';
   let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
+  let monthDiff = today.getMonth() - dob.getMonth();
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
     age -= 1;
+  }
+  if (age === 0) {
+    if (monthDiff < 0) monthDiff += 12;
+    if (monthDiff === 0 && today.getDate() < dob.getDate()) monthDiff = 11;
+    return `${monthDiff} Month${monthDiff === 1 ? '' : 's'}`;
   }
   return age;
 };

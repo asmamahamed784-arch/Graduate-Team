@@ -1,28 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { toast } from 'react-toastify';
 import {
   FiUser, FiPhone, FiMapPin, FiCalendar, FiHash,
-  FiLock, FiEye, FiEyeOff, FiSave, FiStar, FiClock, FiCheckCircle
+  FiLock, FiEye, FiEyeOff, FiSave, FiCheckCircle,
+  FiGlobe, FiMoon, FiBell, FiShield, FiUserCheck, FiChevronRight, FiLogOut, FiEdit3,
 } from 'react-icons/fi';
 import api from '../api/axiosInstance';
-import { useAuth } from '../hooks';
+import { useAuth, useLanguage, useNotification, useTheme } from '../hooks';
 import { formatSomaliPhone, isValidSomaliPhone } from './appointments/appointmentShared';
+import Modal from '../components/Modal';
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (i) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.08, duration: 0.45, ease: 'easeOut' },
-  }),
-};
+const NOTIFICATIONS_PREF_KEY = 'nqs_notifications_enabled';
 
 const profileSchema = yup.object().shape({
-  fullName: yup.string().required('Full name is required'),
+  fullName: yup.string().required('Full name is required').matches(/^[A-Za-z\s'-]+$/, 'Full name may only contain letters.'),
   phone: yup.string().required('Phone is required').test('somali-phone', 'Enter a valid Somali phone number.', (value) => isValidSomaliPhone(value)),
   nationalId: yup.string().optional(),
   dateOfBirth: yup.string().optional(),
@@ -36,15 +30,6 @@ const passwordSchema = yup.object().shape({
     .oneOf([yup.ref('newPassword')], 'Passwords must match')
     .required('Confirm your password'),
 });
-
-const statusColors = {
-  Completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
-  Cancelled: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
-  Pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
-  Waiting: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
-  'Being Served': 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
-  'On Hold': 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
-};
 
 const InputField = ({ icon: Icon, label, error, ...props }) => (
   <div>
@@ -62,11 +47,62 @@ const InputField = ({ icon: Icon, label, error, ...props }) => (
   </div>
 );
 
+const ToggleSwitch = ({ checked, onChange, label }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    aria-label={label}
+    onClick={(event) => {
+      event.stopPropagation();
+      onChange(!checked);
+    }}
+    className="relative h-6 w-11 shrink-0 rounded-full border transition-colors focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+    style={{
+      backgroundColor: checked ? 'var(--color-primary)' : '#CBD5E1',
+      borderColor: checked ? 'var(--color-primary)' : '#94A3B8',
+    }}
+  >
+    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+  </button>
+);
+
+const SettingsRow = ({ icon: Icon, iconTone, title, description, onClick, right, danger = false }) => {
+  const Component = onClick ? 'button' : 'div';
+
+  return (
+    <Component
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`flex w-full items-center gap-4 border-b border-gray-100 px-4 py-4 text-left last:border-0 dark:border-gray-700 sm:px-6 sm:py-5 ${onClick ? 'hover:bg-gray-50 dark:hover:bg-gray-700/40' : ''}`}
+    >
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full sm:h-12 sm:w-12 ${iconTone}`}>
+        <Icon size={19} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-base font-black ${danger ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{title}</span>
+        {description && <span className="mt-1 block text-sm text-gray-500 dark:text-gray-400">{description}</span>}
+      </span>
+      {right || (onClick && <FiChevronRight className="shrink-0 text-gray-300 dark:text-gray-600" />)}
+    </Component>
+  );
+};
+
 const Profile = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, logout } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const { language, changeLanguage } = useLanguage();
+  const { toast: notifyToast } = useNotification();
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
-  const [appointments, setAppointments] = useState([]);
+  const [activeModal, setActiveModal] = useState(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    try {
+      return localStorage.getItem(NOTIFICATIONS_PREF_KEY) !== 'false';
+    } catch {
+      return true;
+    }
+  });
 
   const initials = useMemo(() => {
     return (user?.name || 'NQS User')
@@ -96,11 +132,10 @@ const Profile = () => {
   const {
     register: regPassword,
     handleSubmit: handlePassword,
+    setError: setPasswordError,
     formState: { errors: pwErrors },
     reset: resetPassword,
-  } = useForm({
-    resolver: yupResolver(passwordSchema),
-  });
+  } = useForm({ resolver: yupResolver(passwordSchema) });
 
   useEffect(() => {
     resetProfile({
@@ -112,29 +147,23 @@ const Profile = () => {
     });
   }, [resetProfile, user]);
 
+  // AuthContext caches the profile from login time. Re-fetch on open so fields
+  // filled in later (e.g. phone/DOB synced when a National ID request completes)
+  // show up here instead of staying blank until the next login.
   useEffect(() => {
-    const loadAppointments = async () => {
+    const refreshProfile = async () => {
       try {
-        const res = await api.get('/api/bookings/my');
+        const res = await api.get('/api/auth/profile');
         if (res.data.success) {
-          setAppointments((res.data.data || []).map((ticket) => ({
-            id: ticket._id || ticket.id,
-            service: typeof ticket.service === 'object' ? ticket.service?.name : ticket.service,
-            date: ticket.date,
-            status: ticket.status
-          })));
+          updateUser(res.data.data);
         }
-      } catch (e) {
-        toast.error(e.response?.data?.message || 'Could not load appointment history.');
+      } catch {
+        // Keep whatever is already cached in context.
       }
     };
-    if (user) {
-      loadAppointments();
-    }
-  }, [user]);
-
-  const completedAppointments = appointments.filter((appointment) => appointment.status === 'Completed');
-  const activeAppointments = appointments.filter((appointment) => ['Waiting', 'Being Served', 'On Hold'].includes(appointment.status));
+    refreshProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onProfileSave = async (values) => {
     try {
@@ -148,6 +177,7 @@ const Profile = () => {
       if (res.data.success) {
         updateUser(res.data.data);
         toast.success('Profile updated.');
+        setActiveModal(null);
       }
     } catch (e) {
       toast.error(e.response?.data?.message || 'Could not update profile.');
@@ -161,264 +191,222 @@ const Profile = () => {
         newPassword: values.newPassword,
       });
       if (res.data.success) {
-        toast.success('Password changed.');
+        toast.success('PIN changed.');
         resetPassword();
+        setActiveModal(null);
       }
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Could not change password.');
+      const message = e.response?.data?.message || 'Could not change your PIN.';
+      const lower = message.toLowerCase();
+      // One error only: field message under the input (no second toast).
+      if (lower.includes('current password')) {
+        setPasswordError('currentPassword', { type: 'server', message });
+        return;
+      }
+      if (lower.includes('new password') || lower.includes('passwords must')) {
+        setPasswordError('newPassword', { type: 'server', message });
+        return;
+      }
+      toast.error(message);
     }
   };
 
+  const handleToggleNotifications = (next) => {
+    setNotificationsEnabled(next);
+    try {
+      localStorage.setItem(NOTIFICATIONS_PREF_KEY, String(next));
+    } catch {
+      // Preference just won't persist across sessions if storage is unavailable.
+    }
+    notifyToast.success(next ? 'Notifications turned on.' : 'Notifications turned off.');
+  };
+
   return (
-    <div className="min-h-screen pb-12 text-white">
-      {/* ─── Profile Header ──────────────────────────── */}
-      <motion.div
-        custom={0}
-        variants={fadeUp}
-        initial="hidden"
-        animate="visible"
-        className="bg-slate-900 rounded-2xl p-6 md:p-8 mb-6 text-white relative overflow-hidden border border-slate-800 shadow-xl shadow-black/10"
-      >
-        {/* Decorative circles */}
-        <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-28 h-28 bg-sky-500/10 rounded-full translate-y-1/2 -translate-x-1/2" />
+    <div className="min-h-screen bg-[#F5F8FC] px-4 pb-10 pt-6 text-slate-900 dark:bg-gray-900 dark:text-white sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-4xl space-y-5">
+        <section>
+          <h1 className="text-3xl font-black text-[#0B3A75] dark:text-white sm:text-4xl">Settings</h1>
+          <p className="mt-2 text-base text-slate-600 dark:text-gray-400">Manage your account and app preferences</p>
+        </section>
 
-        <div className="flex flex-col sm:flex-row items-center gap-5 relative z-10">
-          {/* Avatar */}
-          <div className="w-20 h-20 rounded-full bg-blue-500/10 border-4 border-blue-500/20 text-[#4189DD] flex items-center justify-center text-3xl font-bold">
-            {initials}
-          </div>
-          <div className="text-center sm:text-left">
-            <h1 className="text-2xl font-bold">{user?.name || 'NQS User'}</h1>
-            <p className="text-slate-500 text-sm">{formatSomaliPhone(user?.phone) || 'No phone number added'}</p>
-            <div className="flex items-center justify-center sm:justify-start gap-3 mt-2">
-              <span className="px-3 py-0.5 bg-blue-500/10 text-[#4189DD] rounded-full text-xs font-medium">
-                {user?.role || 'user'}
-              </span>
-              <span className="text-xs text-slate-500">
-                <FiCalendar className="inline mr-1" size={12} />
-                Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'N/A'}
-              </span>
+        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-blue-100 bg-blue-50 text-2xl font-black text-[#0B3A75] dark:border-blue-900/40 dark:bg-blue-900/30 dark:text-blue-300 sm:h-20 sm:w-20">
+              {initials}
             </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
-        {/* ─── Personal Information ──────────────────── */}
-        <motion.div
-          custom={1}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <FiUser className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personal Details</h2>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
-            Update the details used for your National ID appointments.
-          </p>
-
-          <form onSubmit={handleProfile(onProfileSave)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField
-                icon={FiUser}
-                label="Full Name"
-                placeholder="Enter full name"
-                error={profileErrors.fullName}
-                {...regProfile('fullName')}
-              />
-              <InputField
-                icon={FiPhone}
-                label="Phone Number"
-                placeholder="+252 61 XXX XXXX"
-                error={profileErrors.phone}
-                {...regProfile('phone')}
-              />
-              <InputField
-                icon={FiHash}
-                label="National ID"
-                placeholder="SO-100200300"
-                error={profileErrors.nationalId}
-                {...regProfile('nationalId')}
-              />
-              <InputField
-                icon={FiCalendar}
-                label="Date of Birth"
-                type="date"
-                error={profileErrors.dateOfBirth}
-                {...regProfile('dateOfBirth')}
-              />
-              <InputField
-                icon={FiMapPin}
-                label="Address"
-                placeholder="Enter address"
-                error={profileErrors.address}
-                {...regProfile('address')}
-              />
-            </div>
-            <div className="pt-2">
-              <button
-                type="submit"
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-              >
-                <FiSave size={15} />
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </motion.div>
-
-        {/* ─── Activity Summary ──────────────────────── */}
-        <motion.div
-          custom={2}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
-        >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Appointment Summary</h2>
-          <div className="space-y-4">
-            {[
-              { label: 'Total Appointments', value: appointments.length.toString(), icon: FiCalendar, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
-              { label: 'Completed Visits', value: completedAppointments.length.toString(), icon: FiStar, color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/30' },
-              { label: 'Active Queue Visits', value: activeAppointments.length.toString(), icon: FiClock, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/30' },
-            ].map((stat) => (
-              <div key={stat.label} className={`flex items-center gap-3 p-3 rounded-xl ${stat.bg}`}>
-                <div className={`p-2 rounded-lg ${stat.bg}`}>
-                  <stat.icon className={stat.color} size={20} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{stat.label}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* ─── Security ──────────────────────────────── */}
-        <motion.div
-          custom={3}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <FiLock className="text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Security</h2>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
-            Change your password to keep your account secure.
-          </p>
-
-          <form onSubmit={handlePassword(onPasswordChange)} className="space-y-4 max-w-md">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Current Password</label>
-              <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type={showCurrentPw ? 'text' : 'password'}
-                  placeholder="Enter current password"
-                  className={`w-full pl-10 pr-10 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-gray-200 ${
-                    pwErrors.currentPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                  {...regPassword('currentPassword')}
-                />
-                <button type="button" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showCurrentPw ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                </button>
-              </div>
-              {pwErrors.currentPassword && <p className="text-xs text-red-500 mt-1">{pwErrors.currentPassword.message}</p>}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">New Password</label>
-              <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type={showNewPw ? 'text' : 'password'}
-                  placeholder="Enter new password"
-                  className={`w-full pl-10 pr-10 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-gray-200 ${
-                    pwErrors.newPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                  {...regPassword('newPassword')}
-                />
-                <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                  {showNewPw ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                </button>
-              </div>
-              {pwErrors.newPassword && <p className="text-xs text-red-500 mt-1">{pwErrors.newPassword.message}</p>}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Confirm New Password</label>
-              <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="password"
-                  placeholder="Confirm new password"
-                  className={`w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50 dark:bg-gray-700 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 dark:text-gray-200 ${
-                    pwErrors.confirmPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
-                  }`}
-                  {...regPassword('confirmPassword')}
-                />
-              </div>
-              {pwErrors.confirmPassword && <p className="text-xs text-red-500 mt-1">{pwErrors.confirmPassword.message}</p>}
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-black text-gray-900 dark:text-white sm:text-2xl">{user?.name || 'NQS User'}</h2>
+              <p className="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">{formatSomaliPhone(user?.phone) || 'No phone number added'}</p>
             </div>
             <button
-              type="submit"
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-sm font-medium rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+              type="button"
+              onClick={() => setActiveModal('personal')}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-transparent dark:text-blue-300 dark:hover:bg-blue-900/30"
             >
-              <FiCheckCircle size={15} />
-              Update Password
+              <FiEdit3 size={13} /> Edit Profile
             </button>
-          </form>
-        </motion.div>
-
-        {/* ─── Recent Appointments ────────────────────── */}
-        <motion.div
-          custom={4}
-          variants={fadeUp}
-          initial="hidden"
-          animate="visible"
-          className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
-        >
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Appointments</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                  <th className="pb-2 font-medium">Service</th>
-                  <th className="pb-2 font-medium">Date</th>
-                  <th className="pb-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {appointments.slice(0, 5).map((a) => (
-                  <tr key={a.id} className="border-b border-gray-100 dark:border-gray-700/50 last:border-0">
-                    <td className="py-2.5 text-gray-800 dark:text-gray-200 font-medium">{a.service}</td>
-                    <td className="py-2.5 text-gray-500 dark:text-gray-400">{a.date}</td>
-                    <td className="py-2.5">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[a.status] || 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}>
-                        {a.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-                {appointments.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="py-6 text-center text-gray-400 dark:text-gray-500">
-                      No appointments found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
-        </motion.div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <SettingsRow
+            icon={FiUser}
+            iconTone="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+            title="Personal Information"
+            description="View and update your personal details"
+            onClick={() => setActiveModal('personal')}
+          />
+          <SettingsRow
+            icon={FiGlobe}
+            iconTone="bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300"
+            title="Language"
+            description="Choose your preferred language"
+            onClick={() => setActiveModal('language')}
+            right={<span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-gray-700 dark:text-gray-300">{language === 'so' ? 'Soomaali' : 'English'}</span>}
+          />
+          <SettingsRow
+            icon={FiMoon}
+            iconTone="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300"
+            title="Dark Mode"
+            description="Switch between light and dark theme"
+            right={<ToggleSwitch checked={isDark} onChange={toggleTheme} label="Dark mode" />}
+          />
+          <SettingsRow
+            icon={FiBell}
+            iconTone="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300"
+            title="Notifications"
+            description="Manage app notification preferences"
+            right={<ToggleSwitch checked={notificationsEnabled} onChange={handleToggleNotifications} label="Notifications" />}
+          />
+          <SettingsRow
+            icon={FiShield}
+            iconTone="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
+            title="Security & PIN"
+            description="Manage your PIN and security settings"
+            onClick={() => setActiveModal('security')}
+          />
+          <SettingsRow
+            icon={FiUserCheck}
+            iconTone="bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300"
+            title="Privacy"
+            description="Manage your privacy and data"
+            onClick={() => setActiveModal('privacy')}
+          />
+          <SettingsRow
+            icon={FiLogOut}
+            iconTone="bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300"
+            title="Logout"
+            description="Sign out from your account"
+            onClick={logout}
+            danger
+          />
+        </section>
       </div>
+
+      <Modal isOpen={activeModal === 'personal'} onClose={() => setActiveModal(null)} title="Personal Information" className="max-w-lg">
+        <form onSubmit={handleProfile(onProfileSave)} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <InputField icon={FiUser} label="Full Name" placeholder="Enter full name" error={profileErrors.fullName} {...regProfile('fullName')} />
+            <InputField icon={FiPhone} label="Phone Number" placeholder="+252 61 XXX XXXX" error={profileErrors.phone} {...regProfile('phone')} />
+            <InputField icon={FiHash} label="National ID" placeholder="SO-100200300" error={profileErrors.nationalId} {...regProfile('nationalId')} />
+            <InputField icon={FiCalendar} label="Date of Birth" type="date" error={profileErrors.dateOfBirth} {...regProfile('dateOfBirth')} />
+            <InputField icon={FiMapPin} label="Address" placeholder="Enter address" error={profileErrors.address} {...regProfile('address')} />
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-800"
+          >
+            <FiSave size={15} /> Save Changes
+          </button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'security'} onClose={() => setActiveModal(null)} title="Security & PIN" className="max-w-md">
+        <form onSubmit={handlePassword(onPasswordChange)} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Current PIN</label>
+            <div className="relative">
+              <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type={showCurrentPw ? 'text' : 'password'}
+                placeholder="Enter current PIN"
+                className={`w-full rounded-xl border bg-gray-50 py-2.5 pl-10 pr-10 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 ${
+                  pwErrors.currentPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
+                }`}
+                {...regPassword('currentPassword')}
+              />
+              <button type="button" onClick={() => setShowCurrentPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showCurrentPw ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+              </button>
+            </div>
+            {pwErrors.currentPassword && <p className="mt-1 text-xs text-red-500">{pwErrors.currentPassword.message}</p>}
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">New PIN</label>
+            <div className="relative">
+              <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type={showNewPw ? 'text' : 'password'}
+                placeholder="Enter new PIN"
+                className={`w-full rounded-xl border bg-gray-50 py-2.5 pl-10 pr-10 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 ${
+                  pwErrors.newPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
+                }`}
+                {...regPassword('newPassword')}
+              />
+              <button type="button" onClick={() => setShowNewPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showNewPw ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+              </button>
+            </div>
+            {pwErrors.newPassword && <p className="mt-1 text-xs text-red-500">{pwErrors.newPassword.message}</p>}
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400">Confirm New PIN</label>
+            <div className="relative">
+              <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="password"
+                placeholder="Confirm new PIN"
+                className={`w-full rounded-xl border bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-gray-200 ${
+                  pwErrors.confirmPassword ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'
+                }`}
+                {...regPassword('confirmPassword')}
+              />
+            </div>
+            {pwErrors.confirmPassword && <p className="mt-1 text-xs text-red-500">{pwErrors.confirmPassword.message}</p>}
+          </div>
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-800"
+          >
+            <FiCheckCircle size={15} /> Update PIN
+          </button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'language'} onClose={() => setActiveModal(null)} title="Language">
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => { changeLanguage('en'); setActiveModal(null); }}
+            className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-sm font-bold ${language === 'en' ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'border-gray-200 text-gray-700 dark:border-gray-600 dark:text-gray-200'}`}
+          >
+            English
+            {language === 'en' && <FiCheckCircle />}
+          </button>
+          <button type="button" disabled className="flex w-full cursor-not-allowed items-center justify-between rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-gray-400 dark:border-gray-700 dark:text-gray-600">
+            Soomaali
+            <span className="text-xs font-semibold">Coming soon</span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={activeModal === 'privacy'} onClose={() => setActiveModal(null)} title="Privacy">
+        <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+          <p>NQS stores the personal details you provide for your National ID appointments — your name, phone number, National ID number, date of birth, and address.</p>
+          <p>This information is used only to process your National ID requests and queue appointments, and is only visible to authorized NQS staff.</p>
+          <p>You can review or update your personal information at any time from the Personal Information section above.</p>
+        </div>
+      </Modal>
     </div>
   );
 };

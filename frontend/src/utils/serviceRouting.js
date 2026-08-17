@@ -8,11 +8,64 @@ export const getServiceId = (service = {}) => service._id || service.id || '';
 
 export const normalizeServiceName = (value = '') => String(value).trim().toLowerCase();
 
-export const isNewIdService = (service = {}) => normalizeServiceName(service.name) === normalizeServiceName(NEW_ID_SERVICE_NAME);
+const serviceText = (service = {}) => [
+  service.name,
+  service.title,
+  service.slug,
+  service.code,
+  service.requestType,
+  service.type
+].filter(Boolean).join(' ').toLowerCase();
 
-export const isUpdateInfoService = (service = {}) => normalizeServiceName(service.name) === normalizeServiceName(UPDATE_INFO_SERVICE_NAME);
+export const isNewIdService = (service = {}) => {
+  const name = normalizeServiceName(service.name);
+  const text = serviceText(service);
+  return name === normalizeServiceName(NEW_ID_SERVICE_NAME) ||
+    text.includes('new national id') ||
+    text.includes('national id registration') ||
+    text.includes('new_national_id') ||
+    text.includes('new-id-registration');
+};
 
-export const isLostIdService = (service = {}) => normalizeServiceName(service.name) === normalizeServiceName(LOST_ID_SERVICE_NAME);
+export const isCompletedTicketStatus = (ticket = {}) => {
+  const status = normalizeServiceName(ticket.status);
+  const requestStatus = normalizeServiceName(ticket.requestStatus);
+  return status === 'completed' || requestStatus === 'completed';
+};
+
+export const isNewIdBooking = (ticket = {}) => {
+  const requestType = String(ticket.requestType || ticket.type || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const serviceName = ticket.service?.name || ticket.serviceName || ticket.service || '';
+  return ['new_national_id', 'new_id_registration', 'new_registration', 'national_id_registration'].includes(requestType) ||
+    isNewIdService({
+      name: serviceName,
+      title: ticket.title,
+      requestType,
+      type: requestType
+    });
+};
+
+export const isCompletedNewIdBooking = (ticket = {}) => isNewIdBooking(ticket) && isCompletedTicketStatus(ticket);
+
+export const isUpdateInfoService = (service = {}) => {
+  const name = normalizeServiceName(service.name);
+  const text = serviceText(service);
+  return name === normalizeServiceName(UPDATE_INFO_SERVICE_NAME) ||
+    text.includes('update national id') ||
+    text.includes('update information') ||
+    text.includes('update_information');
+};
+
+export const isLostIdService = (service = {}) => {
+  const name = normalizeServiceName(service.name);
+  const text = serviceText(service);
+  return name === normalizeServiceName(LOST_ID_SERVICE_NAME) ||
+    text.includes('replace lost') ||
+    text.includes('lost id') ||
+    text.includes('lost national id') ||
+    text.includes('lost_replacement') ||
+    text.includes('replace_lost_id');
+};
 
 export const isCoreService = (service = {}) => isNewIdService(service) || isUpdateInfoService(service) || isLostIdService(service);
 

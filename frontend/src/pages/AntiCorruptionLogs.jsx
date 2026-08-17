@@ -19,10 +19,10 @@ import api from '../api/axiosInstance';
 const ROWS_PER_PAGE = 10;
 
 const ROLE_TABS = [
-  { key: 'all', label: 'All Accounts', detailTitle: 'All Accounts', icon: <FiActivity /> },
-  { key: 'admin', label: 'Admins', detailTitle: 'Admin Accounts', icon: <FiShield /> },
-  { key: 'operator', label: 'Operators', detailTitle: 'Operator Accounts', icon: <FiUserCheck /> },
-  { key: 'citizen', label: 'Citizens', detailTitle: 'Citizen Accounts', icon: <FiUsers /> }
+  { key: 'all', label: 'All Accounts', detailTitle: 'All Accounts', icon: <FiActivity />, tone: 'blue' },
+  { key: 'admin', label: 'Admins', detailTitle: 'Admin Accounts', icon: <FiShield />, tone: 'purple' },
+  { key: 'operator', label: 'Operators', detailTitle: 'Operator Accounts', icon: <FiUserCheck />, tone: 'green' },
+  { key: 'citizen', label: 'Citizens', detailTitle: 'Citizen Accounts', icon: <FiUsers />, tone: 'orange' }
 ];
 
 const VALID_LOG_PAGES = new Set(ROLE_TABS.map((tab) => tab.key));
@@ -84,6 +84,7 @@ const AntiCorruptionLogs = () => {
   const isOverview = !pageRole;
 
   const [accounts, setAccounts] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [accountStats, setAccountStats] = useState({ all: 0, admin: 0, operator: 0, citizen: 0 });
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -97,7 +98,7 @@ const AntiCorruptionLogs = () => {
         api.get('/api/users'),
         api.get('/api/users', { params: { role: 'system' } }),
         api.get('/api/operators'),
-        api.get('/api/audits', { params: { limit: 1 } }).catch(() => null)
+        api.get('/api/audits', { params: { limit: 8 } }).catch(() => null)
       ]);
 
       const citizens = (citizensRes.data?.data || []).map(mapAccount);
@@ -117,6 +118,7 @@ const AntiCorruptionLogs = () => {
       });
 
       setAccounts(unique);
+      setAuditLogs(auditsRes?.data?.data || []);
 
       if (auditsRes?.data?.accountStats) {
         setAccountStats({
@@ -180,6 +182,11 @@ const AntiCorruptionLogs = () => {
   const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
   const paginated = filtered.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE);
   const visiblePages = compactPages(currentPage, totalPages);
+  const latestAccounts = useMemo(() => (
+    [...accounts]
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .slice(0, 8)
+  ), [accounts]);
 
   const setFilter = (setter) => (value) => {
     setter(value);
@@ -274,28 +281,117 @@ const AntiCorruptionLogs = () => {
         </section>
 
         {isOverview ? (
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {ROLE_TABS.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => navigate(`/logs/${tab.key}`)}
-                className="group flex items-center gap-3 rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-500 hover:ring-4 hover:ring-blue-500/15"
-              >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-600/10 text-xl text-blue-500">
-                  {tab.icon}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-2xl font-black">{roleCounts[tab.key] ?? 0}</span>
-                  <span className="block truncate text-sm font-bold text-[var(--text-muted)]">{tab.label}</span>
-                  <span className="mt-0.5 block text-[11px] font-semibold text-[var(--text-muted)]">
-                    Accounts in system
+          <>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {ROLE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => navigate(`/logs/${tab.key}`)}
+                  className={`group flex items-center gap-3 rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md nqs-card-tone-${tab.tone}`}
+                >
+                  <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-xl nqs-card-tone-icon-${tab.tone}`}>
+                    {tab.icon}
                   </span>
-                </span>
-                <span className="ml-auto text-xl text-blue-500">-&gt;</span>
-              </button>
-            ))}
-          </section>
+                  <span className="min-w-0">
+                    <span className="block text-2xl font-black text-[var(--text-main)]">{roleCounts[tab.key] ?? 0}</span>
+                    <span className="block truncate text-sm font-bold text-[var(--text-muted)]">{tab.label}</span>
+                    <span className="mt-0.5 block text-[11px] font-semibold text-[var(--text-muted)]">
+                      Accounts in system
+                    </span>
+                  </span>
+                  <span className="ml-auto text-xl text-[var(--color-primary)]">-&gt;</span>
+                </button>
+              ))}
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="overflow-hidden rounded-[1.5rem] border border-[var(--border-light)] bg-[var(--bg-card)] shadow-sm">
+                <div className="flex items-center justify-between border-b border-[var(--border-light)] px-5 py-4">
+                  <div>
+                    <h2 className="text-lg font-black">Recent System Activity</h2>
+                    <p className="text-sm font-semibold text-[var(--text-muted)]">Latest audit events recorded by the system.</p>
+                  </div>
+                  <FiActivity className="text-xl text-blue-400" />
+                </div>
+                <div className="divide-y divide-[var(--border-light)]">
+                  {loading ? (
+                    <p className="px-5 py-10 text-center font-bold text-[var(--text-muted)]">Loading activity...</p>
+                  ) : auditLogs.length === 0 ? (
+                    <p className="px-5 py-10 text-center font-bold text-[var(--text-muted)]">No audit activity recorded yet.</p>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <div key={log.id || log._id} className="flex items-start gap-3 px-5 py-4">
+                        <span className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-500/10 text-blue-400">
+                          <FiShield />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <p className="font-black text-[var(--text-main)]">{log.action || 'System activity'}</p>
+                            <span className="shrink-0 text-xs font-bold text-[var(--text-muted)]">{formatDate(log.timestamp || log.createdAt)}</span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--text-muted)]">{log.details || 'No details provided.'}</p>
+                          <p className="mt-2 text-xs font-bold text-blue-400">
+                            {typeof log.user === 'object' ? (log.user?.name || log.user?.username || 'System') : 'System'} · {roleLabel(log.role)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[1.5rem] border border-[var(--border-light)] bg-[var(--bg-card)] shadow-sm">
+                <div className="flex items-center justify-between border-b border-[var(--border-light)] px-5 py-4">
+                  <div>
+                    <h2 className="text-lg font-black">Latest Accounts</h2>
+                    <p className="text-sm font-semibold text-[var(--text-muted)]">Newest users added to the system.</p>
+                  </div>
+                  <FiUsers className="text-xl text-blue-400" />
+                </div>
+                <div className="divide-y divide-[var(--border-light)]">
+                  {loading ? (
+                    <p className="px-5 py-10 text-center font-bold text-[var(--text-muted)]">Loading accounts...</p>
+                  ) : latestAccounts.length === 0 ? (
+                    <p className="px-5 py-10 text-center font-bold text-[var(--text-muted)]">No accounts found.</p>
+                  ) : (
+                    latestAccounts.map((user) => {
+                      const roleTone = user.roleKey === 'operator'
+                        ? 'green'
+                        : user.roleKey === 'admin'
+                          ? 'purple'
+                          : 'orange';
+                      const isActive = String(user.status).toLowerCase() === 'active';
+                      return (
+                      <button
+                        key={user.id || user.username}
+                        type="button"
+                        onClick={() => navigate(`/logs/${user.roleKey === 'other' ? 'all' : user.roleKey}`)}
+                        className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-[var(--bg-secondary)]"
+                      >
+                        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl nqs-card-tone-icon-${roleTone}`}>
+                          {user.roleKey === 'operator' ? <FiUserCheck /> : user.roleKey === 'admin' ? <FiShield /> : <FiUsers />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-black text-[var(--text-main)]">{user.name}</span>
+                          <span className="block truncate text-xs font-bold text-[var(--text-muted)]">{roleLabel(user.role)} · {user.username}</span>
+                        </span>
+                        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${
+                          isActive
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                        >
+                          {isActive ? 'Active' : user.status}
+                        </span>
+                      </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </section>
+          </>
         ) : (
           <>
             <section className="rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-3 shadow-sm">
@@ -332,15 +428,15 @@ const AntiCorruptionLogs = () => {
                     key={tab.key}
                     type="button"
                     onClick={() => navigate(`/logs/${tab.key}`)}
-                    className={`flex items-center gap-3 rounded-2xl border bg-[var(--bg-card)] p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-500 hover:ring-4 hover:ring-blue-500/15 ${
-                      selected ? 'border-blue-500 ring-4 ring-blue-500/15' : 'border-[var(--border-light)]'
+                    className={`flex items-center gap-3 rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md nqs-card-tone-${tab.tone} ${
+                      selected ? 'ring-4 ring-blue-500/15' : ''
                     }`}
                   >
-                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-600/10 text-xl text-blue-500">
+                    <span className={`grid h-12 w-12 place-items-center rounded-2xl text-xl nqs-card-tone-icon-${tab.tone}`}>
                       {tab.icon}
                     </span>
                     <div>
-                      <p className="text-3xl font-black">{roleCounts[tab.key] ?? 0}</p>
+                      <p className="text-3xl font-black text-[var(--text-main)]">{roleCounts[tab.key] ?? 0}</p>
                       <p className="text-sm font-bold text-[var(--text-muted)]">{tab.label}</p>
                     </div>
                   </button>

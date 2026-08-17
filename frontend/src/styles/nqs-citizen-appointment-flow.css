@@ -1,0 +1,365 @@
+/* ==========================================================================
+   Citizen appointment flow - restore the original light content area
+   ========================================================================== */
+html body .nqs-dashboard-surface .nqs-user-appointments,
+html body .nqs-dashboard-surface .nqs-booking-wizard,
+html body .nqs-dashboard-surface .nqs-new-id-page {
+  background: #F5F8FC !important;
+  color: #06194A !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments > div > section {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(h1, h2, h3, h4, strong),
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(h1, h2, h3, h4, strong),
+html body .nqs-dashboard-surface .nqs-new-id-page :is(h1, h2, h3, h4, strong) {
+  color: #06194A !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(p, label, li, td, th, span),
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(p, label, li, td, th, span),
+html body .nqs-dashboard-surface .nqs-new-id-page :is(p, label, li, td, th, span) {
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class~="bg-white"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class~="bg-white"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class~="bg-white"] {
+  background-color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-[#f5f8fc]"],
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-[#F5F8FC]"],
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-[#F8FAFC]"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-[#f5f8fc]"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-[#F5F8FC]"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-[#F8FAFC]"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-[#f5f8fc]"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-[#F5F8FC]"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-[#F8FAFC]"],
+html body .nqs-dashboard-surface .nqs-user-appointments [class~="bg-slate-50"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class~="bg-slate-50"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class~="bg-slate-50"] {
+  background-color: #F8FAFC !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-blue-50"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-blue-50"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-blue-50"] {
+  background-color: #EFF6FF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-emerald"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-emerald"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-emerald"] {
+  background-color: #D1FAE5 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-red-50"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-red-50"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-red-50"] {
+  background-color: #FEF2F2 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-amber-50"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-amber-50"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-amber-50"] {
+  background-color: #FFFBEB !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="bg-purple-50"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="bg-purple-50"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-purple-50"] {
+  background-color: #FAF5FF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="border-slate"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="border-slate"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="border-slate"] {
+  border-color: #E2E8F0 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="border-blue"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="border-blue"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="border-blue"] {
+  border-color: #BFDBFE !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-slate-500"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-slate-500"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-500"] {
+  color: #64748B !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-slate-600"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-slate-600"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-600"] {
+  color: #475569 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-slate-700"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-slate-700"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-700"],
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-[#06194A]"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-[#06194A]"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[#06194A]"] {
+  color: #06194A !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-blue"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-blue"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-blue"] {
+  color: #1D4ED8 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-emerald"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-emerald"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-emerald"] {
+  color: #047857 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-red"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-red"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-red"] {
+  color: #DC2626 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments [class*="text-amber"],
+html body .nqs-dashboard-surface .nqs-booking-wizard [class*="text-amber"],
+html body .nqs-dashboard-surface .nqs-new-id-page [class*="text-amber"] {
+  color: #B45309 !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="bg-blue-600"],
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="bg-blue-600"],
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-600"] {
+  background-color: #2563EB !important;
+  border-color: #2563EB !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="bg-blue-700"],
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="bg-blue-700"],
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-700"] {
+  background-color: #1D4ED8 !important;
+  border-color: #1D4ED8 !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="bg-[#0B2E59]"],
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="bg-[#0B2E59]"],
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-[#0B2E59]"] {
+  background-color: #0B2E59 !important;
+  border-color: #0B2E59 !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="bg-emerald-600"],
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="bg-emerald-600"],
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-emerald-600"] {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="text-white"],
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="text-white"],
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="text-white"],
+html body .nqs-dashboard-surface .nqs-user-appointments :is(a, button)[class*="text-white"] *,
+html body .nqs-dashboard-surface .nqs-booking-wizard :is(a, button)[class*="text-white"] *,
+html body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="text-white"] * {
+  color: #FFFFFF !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments input,
+html body .nqs-dashboard-surface .nqs-user-appointments select,
+html body .nqs-dashboard-surface .nqs-user-appointments textarea,
+html body .nqs-dashboard-surface .nqs-booking-wizard input,
+html body .nqs-dashboard-surface .nqs-booking-wizard select,
+html body .nqs-dashboard-surface .nqs-booking-wizard textarea,
+html body .nqs-dashboard-surface .nqs-new-id-page input,
+html body .nqs-dashboard-surface .nqs-new-id-page select,
+html body .nqs-dashboard-surface .nqs-new-id-page textarea {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+html body .nqs-dashboard-surface .nqs-user-appointments input::placeholder,
+html body .nqs-dashboard-surface .nqs-user-appointments textarea::placeholder,
+html body .nqs-dashboard-surface .nqs-booking-wizard input::placeholder,
+html body .nqs-dashboard-surface .nqs-booking-wizard textarea::placeholder,
+html body .nqs-dashboard-surface .nqs-new-id-page input::placeholder,
+html body .nqs-dashboard-surface .nqs-new-id-page textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Dark mode: keep the New ID correction form on one readable navy system. */
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page {
+  --bg-app: #071B35;
+  --bg-card: #0B2E59;
+  --bg-secondary: #123E72;
+  --bg-input: #082844;
+  --bg-elevated: #123E72;
+  --text-main: #F8FBFF;
+  --text-muted: #B9D9FF;
+  --border-light: rgba(159, 195, 232, 0.38);
+  --border-focus: #7CB8FF;
+  --color-primary: #7CB8FF;
+  --color-primary-hover: #B9D9FF;
+  --color-primary-soft: rgba(124, 184, 255, 0.16);
+  --color-success: #86EFAC;
+  --color-success-soft: rgba(34, 197, 94, 0.16);
+  --color-danger: #FCA5A5;
+  --color-danger-soft: rgba(248, 113, 113, 0.16);
+  background: #071B35 !important;
+  color: #F8FBFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page .nqs-new-id-hero,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page .nqs-new-id-card,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page .nqs-new-id-receipt-row,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-[var(--bg-card)]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class~="bg-white"] {
+  background: #0B2E59 !important;
+  border-color: rgba(159, 195, 232, 0.38) !important;
+  color: #F8FBFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page .nqs-new-id-receipt-row,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-[var(--bg-secondary)]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class~="bg-slate-50"] {
+  background: #123E72 !important;
+  border-color: rgba(159, 195, 232, 0.34) !important;
+  color: #F8FBFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(h1, h2, h3, h4, strong),
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[var(--text-main)]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[#06194A]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[#0B2E59]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-950"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-900"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-800"] {
+  color: #F8FBFF !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(p, label, li, td, th, span),
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[var(--text-muted)]"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-300"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-400"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-500"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-600"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-slate-700"] {
+  color: #B9D9FF !important;
+  opacity: 1 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-blue"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-[var(--color-primary)]"] {
+  color: #93C5FD !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-red"] {
+  color: #FCA5A5 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-amber"] {
+  color: #FCD34D !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="text-emerald"] {
+  color: #86EFAC !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page input,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page select,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page textarea {
+  background: #082844 !important;
+  border-color: rgba(159, 195, 232, 0.42) !important;
+  color: #F8FBFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page input:focus,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page select:focus,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page textarea:focus {
+  border-color: #7CB8FF !important;
+  box-shadow: 0 0 0 4px rgba(124, 184, 255, 0.18) !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page input::placeholder,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page textarea::placeholder {
+  color: #9FC3E8 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page option {
+  background: #082844;
+  color: #F8FBFF;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(input, select, textarea):disabled {
+  background: #123E72 !important;
+  color: #B9D9FF !important;
+  opacity: 0.82;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-red-50"] {
+  background: rgba(220, 38, 38, 0.14) !important;
+  border-color: rgba(252, 165, 165, 0.38) !important;
+  color: #FECACA !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-emerald"] {
+  background: rgba(34, 197, 94, 0.14) !important;
+  border-color: rgba(134, 239, 172, 0.32) !important;
+  color: #DCFCE7 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-blue-50"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [class*="bg-blue-100"] {
+  background: rgba(124, 184, 255, 0.16) !important;
+  border-color: rgba(124, 184, 255, 0.34) !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [role="listbox"] {
+  background: #0B2E59 !important;
+  border-color: rgba(159, 195, 232, 0.42) !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [role="listbox"] button:hover,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page [role="listbox"] button[class*="bg-[var(--color-primary-soft)]"] {
+  background: rgba(124, 184, 255, 0.18) !important;
+  color: #F8FBFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-600"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-700"],
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-emerald-600"] {
+  color: #FFFFFF !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-600"] {
+  background: #2563EB !important;
+  border-color: #2563EB !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-700"] {
+  background: #1D4ED8 !important;
+  border-color: #1D4ED8 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-emerald-600"] {
+  background: #059669 !important;
+  border-color: #059669 !important;
+}
+
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-600"] *,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-blue-700"] *,
+html.nqs-theme-dark body .nqs-dashboard-surface .nqs-new-id-page :is(a, button)[class*="bg-emerald-600"] * {
+  color: #FFFFFF !important;
+}

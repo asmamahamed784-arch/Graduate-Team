@@ -1,121 +1,108 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   FiCheckCircle,
-  FiArrowLeft,
-  FiBriefcase,
-  FiChevronRight,
   FiCreditCard,
   FiEdit3,
   FiEye,
+  FiGrid,
+  FiRepeat,
   FiSearch,
-  FiSlash,
   FiUserPlus,
+  FiX,
   FiXCircle
 } from 'react-icons/fi';
 import api from '../api/axiosInstance';
-import { canCancelAppointment, canCompleteAppointment } from '../utils/appointmentActions';
-import { INCORRECT_FIELD_OPTIONS } from '../utils/cancellationFields';
+import { useOtpGate } from '../hooks';
+import { canCancelAppointment, canCompleteAppointment, canReacceptAppointment, hasAppointmentTimeArrived } from '../utils/appointmentActions';
+import { getCancellationFeedbackText, getCancellationReasonList } from '../utils/cancellationDisplay';
+import LostIdCancelDetails from '../components/LostIdCancelDetails';
+import OtpGateModal from '../components/OtpGateModal';
+import {
+  getIncorrectFieldOptionsForTicket,
+  isLostReplacementRequest,
+} from '../utils/cancellationFields';
 import { getChangedUpdateFields } from '../utils/updateRequestFields';
+import { classifyAppointment, STATUS_CATEGORY_META, getStatusLabel, statusClass } from '../utils/appointmentStatus';
+import {
+  formatDate,
+  getQueueNumber,
+  getRequestTypeLabel,
+  getAppointmentCenterName,
+  getAppointmentCenterDistrict,
+  getCenterRecordId,
+  getCitizenPhone
+} from '../utils/appointmentDisplay';
+import { getCitizenKey } from '../utils/citizenIdentity';
 
-const statusOptions = ['', 'Waiting', 'Being Served', 'On Hold', 'Completed', 'Cancelled'];
-const requestStatusOptions = ['', 'Pending', 'Approved', 'Rejected', 'Completed', 'Resubmission Required'];
+// Service tabs stay in sync with the "Service" filter dropdown via the same
+// activeTab state — '' represents "All Services" (no requestType filter sent).
+// Tone = sitewide soft-pastel card tone system (styles/nqs-theme-system.css),
+// scoped to just the tabs/status cards on this page.
 const requestTabs = [
-  { key: 'new_national_id', label: 'New Registration', icon: FiUserPlus },
-  { key: 'update_information', label: 'Update Information', icon: FiEdit3 },
-  { key: 'lost_replacement', label: 'Lost ID Replacement', icon: FiCreditCard }
+  { key: '', label: 'All Services', icon: FiGrid, tone: 'blue' },
+  { key: 'new_national_id', label: 'New Registration', icon: FiUserPlus, tone: 'green' },
+  { key: 'update_information', label: 'Update Information', icon: FiEdit3, tone: 'purple' },
+  { key: 'lost_replacement', label: 'Lost ID Replacement', icon: FiCreditCard, tone: 'orange' }
 ];
-const getCancellationReasonList = (item = {}) => {
-  const reasons = Array.isArray(item.cancellationReasons) ? item.cancellationReasons : [];
-  if (reasons.length) return reasons.filter(Boolean);
-  return item.cancellationReason ? [item.cancellationReason] : [];
+
+// Local card-only tone map for the status cards (the "All Status" filter dropdown
+// keeps using the shared STATUS_CATEGORY_META untouched — only these cards change).
+const STATUS_CARD_TONE = {
+  '': 'blue',
+  waiting: 'purple',
+  completed: 'green',
+  cancelled: 'pink',
+  noShow: 'pink'
 };
 
-const statusClass = (status) => {
-  const base = 'inline-flex rounded-full px-2.5 py-1 text-xs font-semibold';
-  if (status === 'Completed') return `${base} bg-emerald-500/15 text-emerald-300`;
-  if (status === 'Cancelled') return `${base} bg-red-500/15 text-red-300`;
-  if (status === 'Rejected') return `${base} bg-red-500/15 text-red-300`;
-  if (status === 'Being Served') return `${base} bg-sky-500/15 text-sky-300`;
-  if (status === 'On Hold') return `${base} bg-amber-500/15 text-amber-300`;
-  if (status === 'Pending') return `${base} bg-amber-500/15 text-amber-300`;
-  if (status === 'Approved') return `${base} bg-blue-500/15 text-blue-300`;
-  return `${base} bg-blue-500/15 text-blue-300`;
+const formatMaritalStatus = (value) => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (normalized === 'single' || normalized === 'singe') return 'Single';
+  if (normalized === 'married' || normalized === 'marrid') return 'Married';
+  return value || '--';
 };
 
-const formatDate = (value) => {
-  if (!value) return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  });
+const getPreviousDataRows = (appointment = {}) => {
+  const previous = appointment.updateDetails?.previousData || appointment.updateDetails?.oldDataSnapshot || {};
+  const rows = [
+    ['Full Name', previous.fullName],
+    ["Mother's Name", previous.motherName],
+    ['Date of Birth', formatDate(previous.dateOfBirth)],
+    ['Phone', previous.phone],
+    ['Gender', previous.gender],
+    ['Marital Status', formatMaritalStatus(previous.maritalStatus)],
+    ['District', previous.district],
+    ['Full Address', previous.address || previous.fullAddress],
+    ['Nearest Landmark', previous.nearestLandmark],
+    ['National ID Number', previous.nationalIdNumber]
+  ];
+  return rows.filter(([, value]) => value && value !== '--');
 };
-
-const getQueueNumber = (ref) => {
-  if (!ref) return '--';
-  return ref.split('-').pop();
-};
-
-const getRequestTypeLabel = (requestType) => {
-  if (requestType === 'lost_replacement') return 'Lost ID Replacement';
-  if (requestType === 'update_information') return 'Update Information Request';
-  return 'New Registration';
-};
-
-const getAppointmentDistrict = (appointment) => (
-  appointment.district ||
-  appointment.registrationDetails?.district ||
-  appointment.registrationDetails?.centerDistrict ||
-  appointment.replacementDetails?.district ||
-  appointment.center?.district ||
-  'Not provided'
-);
-
-const getAppointmentCenterName = (appointment) => (
-  appointment.center?.name ||
-  appointment.registrationDetails?.selectedCenter ||
-  appointment.existingRegistration?.centerName ||
-  'No center assigned'
-);
-
-const getAppointmentCenterId = (appointment) => {
-  if (!appointment.center) return '';
-  if (typeof appointment.center === 'string') return appointment.center;
-  return appointment.center._id || appointment.center.id || '';
-};
-
-const normalizeCenterKey = (value = '') => String(value).trim().toLowerCase().replace(/\s+/g, ' ');
-
-const getCenterRecordId = (center = {}) => String(center._id || center.id || '');
 
 function AdminAppointments() {
   const [searchParams] = useSearchParams();
-  const location = useLocation();
   const navigate = useNavigate();
-  const isCenterDetailPage = location.pathname.startsWith('/admin-appointments/center');
-  const requestedCenterName = searchParams.get('centerName') || '';
   const requestedTicketRef = String(searchParams.get('ticket') || '').trim().toUpperCase();
   const requestedTicketId = String(searchParams.get('ticketId') || '').trim();
   const autoOpenedTicketRef = useRef('');
   const [appointments, setAppointments] = useState([]);
   const [centers, setCenters] = useState([]);
-  const [activeTab, setActiveTab] = useState('new_national_id');
+  const [activeTab, setActiveTab] = useState('');
+  const [statusCategory, setStatusCategory] = useState('');
   const [filters, setFilters] = useState({
     search: '',
-    status: '',
-    requestType: '',
-    requestStatus: '',
-    district: '',
     center: '',
     date: ''
   });
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState('');
+  const {
+    otpFlow, otpDigits, otpSeconds, otpRequesting, otpVerifying, otpError,
+    requestOtp, updateOtpDigit, verifyOtpGate, resendOtpGate, closeOtpGate
+  } = useOtpGate();
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [selectedCancelReasons, setSelectedCancelReasons] = useState([]);
@@ -123,139 +110,54 @@ function AdminAppointments() {
   const [cancelNotes, setCancelNotes] = useState('');
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 
+  // Only search/center/date/service are sent to the backend (all already supported,
+  // composable query params on GET /api/bookings/admin/all — see BookingService.getAllBookings).
+  // Status-category filtering (the 7 status cards) happens client-side below because
+  // it spans both the `status` and `requestStatus` columns, which the backend only
+  // exact-matches one at a time.
   const activeFilters = useMemo(() => {
     const active = Object.fromEntries(
       Object.entries(filters).filter(([, value]) => value)
     );
-    active.requestType = activeTab;
+    if (activeTab) active.requestType = activeTab;
     return active;
   }, [filters, activeTab]);
 
   const updateFilter = (field, value) => {
-    setFilters((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === 'district' ? { center: '' } : {})
-    }));
-  };
-
-  const openCenterAppointmentsPage = (group) => {
-    const params = new URLSearchParams({
-      requestType: activeTab,
-      district: group.district,
-      centerName: group.centerName
-    });
-    if (group.centerId) {
-      params.set('center', group.centerId);
-    }
-    navigate(`/admin-appointments/center?${params.toString()}`);
-  };
-
-  const backToCenterCards = () => {
-    const params = new URLSearchParams({ requestType: activeTab });
-    if (filters.district) {
-      params.set('district', filters.district);
-    }
-    navigate(`/admin-appointments?${params.toString()}`);
+    setFilters((current) => ({ ...current, [field]: value }));
   };
 
   const centerOptions = useMemo(
-    () => filters.district
-      ? centers.filter((center) => center.district === filters.district)
-      : centers,
-    [centers, filters.district]
-  );
-
-  const districtOptions = useMemo(
-    () => [...new Set(centers.map((center) => center.district).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    () => [...centers].sort((a, b) => (
+      String(a.district || '').localeCompare(String(b.district || '')) || a.name.localeCompare(b.name)
+    )),
     [centers]
   );
 
-  // Cards come only from centers created in Center Management — never from orphan appointment names.
-  const groupedAppointments = useMemo(() => {
-    const byCenterId = new Map();
-    const byNameDistrict = new Map();
-
+  // Status cards + the "All Status" dropdown both filter this same categorized
+  // set client-side (see comment on activeFilters above for why).
+  const categorizedAppointments = useMemo(() => {
+    const groups = { waiting: [], inProgress: [], completed: [], cancelled: [], correctionRequired: [], noShow: [] };
     appointments.forEach((appointment) => {
-      const centerId = String(getAppointmentCenterId(appointment) || '');
-      const district = getAppointmentDistrict(appointment);
-      const centerName = getAppointmentCenterName(appointment);
-      const nameKey = `${normalizeCenterKey(district)}__${normalizeCenterKey(centerName)}`;
-
-      if (centerId) {
-        if (!byCenterId.has(centerId)) byCenterId.set(centerId, []);
-        byCenterId.get(centerId).push(appointment);
-      }
-
-      if (!byNameDistrict.has(nameKey)) byNameDistrict.set(nameKey, []);
-      byNameDistrict.get(nameKey).push(appointment);
+      const category = classifyAppointment(appointment);
+      const visibleCategory = category === 'inProgress' || category === 'correctionRequired' ? 'waiting' : category;
+      groups[visibleCategory].push(appointment);
     });
+    return groups;
+  }, [appointments]);
 
-    const visibleCenters = filters.district
-      ? centers.filter((center) => center.district === filters.district)
-      : centers;
-
-    return visibleCenters
-      .map((center) => {
-        const centerId = getCenterRecordId(center);
-        const nameKey = `${normalizeCenterKey(center.district)}__${normalizeCenterKey(center.name)}`;
-        const matched = byCenterId.get(centerId) || byNameDistrict.get(nameKey) || [];
-        return {
-          key: centerId || nameKey,
-          district: center.district || 'Not provided',
-          centerName: center.name || 'Unnamed center',
-          centerId,
-          appointments: matched
-        };
-      })
-      .filter((group) => group.appointments.length > 0)
-      .sort((a, b) => (
-        a.district.localeCompare(b.district) || a.centerName.localeCompare(b.centerName)
-      ));
-  }, [appointments, centers, filters.district]);
-
-  const selectedGroup = useMemo(() => {
-    if (!isCenterDetailPage) return null;
-
-    const requestedCenter = searchParams.get('center') || filters.center || '';
-    if (requestedCenter) {
-      const byCenterId = groupedAppointments.find((group) => String(group.centerId || '') === String(requestedCenter));
-      if (byCenterId) return byCenterId;
-    }
-
-    if (requestedCenterName) {
-      const byName = groupedAppointments.find((group) => group.centerName === requestedCenterName);
-      if (byName) return byName;
-    }
-
-    if (requestedTicketRef || requestedTicketId) {
-      const byTicket = groupedAppointments.find((group) => group.appointments.some((appointment) => (
-        String(appointment.ref || '').toUpperCase() === requestedTicketRef
-        || String(appointment._id || '') === requestedTicketId
-        || String(appointment.id || '') === requestedTicketId
-      )));
-      if (byTicket) return byTicket;
-    }
-
-    return groupedAppointments[0] || null;
-  }, [
-    filters.center,
-    groupedAppointments,
-    isCenterDetailPage,
-    requestedCenterName,
-    requestedTicketId,
-    requestedTicketRef,
-    searchParams
-  ]);
+  const displayedAppointments = statusCategory
+    ? (categorizedAppointments[statusCategory] || [])
+    : appointments;
 
   useEffect(() => {
-    if (!isCenterDetailPage || !selectedGroup?.appointments?.length) return;
+    if (!appointments.length) return;
     if (!requestedTicketRef && !requestedTicketId) return;
 
     const lookupKey = requestedTicketRef || requestedTicketId;
     if (autoOpenedTicketRef.current === lookupKey) return;
 
-    const matched = selectedGroup.appointments.find((appointment) => (
+    const matched = appointments.find((appointment) => (
       String(appointment.ref || '').toUpperCase() === requestedTicketRef
       || String(appointment._id || '') === requestedTicketId
       || String(appointment.id || '') === requestedTicketId
@@ -263,12 +165,9 @@ function AdminAppointments() {
 
     if (matched) {
       autoOpenedTicketRef.current = lookupKey;
-      if (matched.requestType && requestTabs.some((tab) => tab.key === matched.requestType)) {
-        setActiveTab(matched.requestType);
-      }
       setSelectedAppointment(matched);
     }
-  }, [isCenterDetailPage, requestedTicketId, requestedTicketRef, selectedGroup]);
+  }, [appointments, requestedTicketId, requestedTicketRef]);
 
   useEffect(() => {
     const requestedType = searchParams.get('requestType');
@@ -276,18 +175,30 @@ function AdminAppointments() {
       setActiveTab(requestedType);
     }
 
+    // Links from Admin Dashboard KPI tiles (AdminDashboardParts.jsx KPI_ROUTES)
+    // pass a raw backend status literal (e.g. ?status=Completed) — reuse the same
+    // classifier to resolve it to the matching status-card category.
+    const requestedStatus = searchParams.get('status');
+    if (requestedStatus) {
+      const requestedCategory = classifyAppointment({ status: requestedStatus });
+      setStatusCategory(
+        requestedCategory === 'inProgress' || requestedCategory === 'correctionRequired'
+          ? 'waiting'
+          : requestedCategory
+      );
+    }
+
     const requestedDate = searchParams.get('date');
-    const requestedDistrict = searchParams.get('district');
     const requestedCenter = searchParams.get('center');
 
     setFilters((current) => ({
       ...current,
       ...(requestedDate === 'today' ? { date: new Date().toISOString().slice(0, 10) } : {}),
       ...(requestedDate && requestedDate !== 'today' ? { date: requestedDate } : {}),
-      ...(requestedDistrict !== null ? { district: requestedDistrict } : {}),
       ...(requestedCenter !== null ? { center: requestedCenter } : {})
     }));
-  }, [searchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadAppointments = async () => {
     try {
@@ -318,19 +229,14 @@ function AdminAppointments() {
     return appointment.requestStatus || appointment.status || 'Pending';
   };
 
-  const getUpdatedFields = (appointment) => {
-    if (!appointment.updateDetails?.changes?.length) {
-      return appointment.updateDetails?.fieldToUpdate || 'Not specified';
-    }
-    return appointment.updateDetails.changes.map((change) => change.field).filter(Boolean).join(', ');
-  };
-
   const updateAppointmentStatus = async (appointment, status, extra = {}) => {
     if (status === 'Completed' && !canCompleteAppointment({
       ...appointment,
       displayStatus: getDisplayStatus(appointment)
     })) {
-      toast.info('This appointment is already completed or closed.');
+      toast.info(hasAppointmentTimeArrived(appointment)
+        ? 'This appointment is already completed or closed.'
+        : 'This appointment cannot be completed before its scheduled date and time.');
       return;
     }
     if (status === 'Cancelled' && !canCancelAppointment({
@@ -342,11 +248,25 @@ function AdminAppointments() {
     }
     try {
       setUpdatingId(appointment._id);
-      const res = await api.put(`/api/bookings/admin/${appointment._id}/status`, { status, ...extra });
+      let otpToken = '';
+      if (status === 'Completed' || status === 'Cancelled') {
+        otpToken = await requestOtp({
+          purpose: status === 'Completed' ? 'complete_service' : 'cancel_service',
+          ticketId: appointment._id,
+          ticketRef: appointment.ref,
+          title: status === 'Completed' ? 'Verify to Complete' : 'Verify to Cancel',
+          description: `Ask the citizen for the 6-digit code sent to their phone to ${status === 'Completed' ? 'complete' : 'cancel'} ${appointment.ref || 'this request'}.`
+        });
+        if (!otpToken) {
+          toast.info(status === 'Completed' ? 'Complete service cancelled.' : 'Cancellation aborted.');
+          return;
+        }
+      }
+      const res = await api.put(`/api/bookings/admin/${appointment._id}/status`, { status, otpToken, ...extra });
       if (res.data.success) {
         toast.success(status === 'Cancelled'
           ? (res.data.message || 'The appointment was cancelled successfully, and the citizen has been notified.')
-          : `Ticket ${appointment.ref} updated.`);
+          : `Request ${appointment.ref} updated.`);
         await loadAppointments();
       }
     } catch (error) {
@@ -388,12 +308,15 @@ function AdminAppointments() {
     ));
   };
 
-  const selectedReasonLabels = () =>
-    selectedCancelReasons.filter((reason) => INCORRECT_FIELD_OPTIONS.includes(reason));
+  const selectedReasonLabels = (ticket = cancelTarget) => {
+    const allowed = getIncorrectFieldOptionsForTicket(ticket);
+    return selectedCancelReasons.filter((reason) => allowed.includes(reason));
+  };
 
   const confirmCancelAppointment = async () => {
     if (!cancelTarget) return;
     const isUpdateReq = cancelTarget.requestType === 'update_information';
+    const isLostReq = isLostReplacementRequest(cancelTarget);
     const changedUpdateFields = getChangedUpdateFields(cancelTarget);
 
     if (isUpdateReq) {
@@ -420,9 +343,13 @@ function AdminAppointments() {
       return;
     }
 
-    const validReasons = selectedReasonLabels();
+    const validReasons = selectedReasonLabels(cancelTarget);
     if (!validReasons.length) {
-      toast.error('Please select at least one incorrect field.');
+      toast.error(
+        isLostReq
+          ? 'Please select at least one incorrect Lost ID field.'
+          : 'Please select at least one incorrect field.'
+      );
       return;
     }
     if (!showCancelConfirmation) {
@@ -449,7 +376,21 @@ function AdminAppointments() {
     }
     try {
       setUpdatingId(appointment._id);
-      const res = await api.put(`/api/bookings/admin/${appointment._id}/request-status`, { requestStatus });
+      let otpToken = '';
+      if (requestStatus === 'Completed' || requestStatus === 'Cancelled') {
+        otpToken = await requestOtp({
+          purpose: requestStatus === 'Completed' ? 'complete_service' : 'cancel_service',
+          ticketId: appointment._id,
+          ticketRef: appointment.ref,
+          title: requestStatus === 'Completed' ? 'Verify to Complete' : 'Verify to Cancel',
+          description: `Ask the citizen for the 6-digit code sent to their phone to ${requestStatus === 'Completed' ? 'complete' : 'cancel'} ${appointment.ref || 'this request'}.`
+        });
+        if (!otpToken) {
+          toast.info(requestStatus === 'Completed' ? 'Complete service cancelled.' : 'Cancellation aborted.');
+          return;
+        }
+      }
+      const res = await api.put(`/api/bookings/admin/${appointment._id}/request-status`, { requestStatus, otpToken });
       if (res.data.success) {
         toast.success(`Request ${appointment.ref} updated.`);
         await loadAppointments();
@@ -461,43 +402,33 @@ function AdminAppointments() {
     }
   };
 
-  const tableHeadings = activeTab === 'new_national_id'
-    ? [
-        'Ticket Number',
-        'Citizen Name',
-        'Phone',
-        'Appointment Date',
-        'Queue Number',
-        'Status',
-        'Actions'
-      ]
-    : activeTab === 'update_information'
-      ? [
-          'Ticket Number',
-          'Citizen Name',
-          'National ID Number',
-          'Updated Fields',
-          'Submission Date',
-          'Status',
-          'Actions'
-        ]
-      : [
-          'Ticket Number',
-          'Citizen Name',
-          'National ID Number',
-          'Police Report Number',
-          'Uploaded Document',
-          'Submission Date',
-          'Status',
-          'Actions'
-        ];
+  const reacceptAppointment = async (appointment) => {
+    const actionTicket = {
+      ...appointment,
+      status: getDisplayStatus(appointment),
+      requestStatus: appointment.requestStatus || getDisplayStatus(appointment),
+      displayStatus: getDisplayStatus(appointment)
+    };
+    if (!canReacceptAppointment(actionTicket)) {
+      toast.info('Re-accept is available only after the appointment is completed.');
+      return;
+    }
+    const confirmed = window.confirm(`Re-accept ${appointment.ref}? This will return it to Waiting so it can be handled again.`);
+    if (!confirmed) return;
+    await updateAppointmentStatus(appointment, 'Waiting');
+  };
+
+  // One unified column set for all three services (the Service column tells them
+  // apart), so "All Services" can list mixed request types in a single table.
+  const tableHeadings = ['Request', 'Full Name', 'Phone', 'Service', 'Center', 'Date & Time', 'Queue', 'Status', 'Actions'];
 
   const renderAppointmentRow = (appointment) => {
     const citizen = appointment.citizen || {};
     const isBusy = updatingId === appointment._id;
     const isManagedRequest = appointment.requestType !== 'new_national_id';
     const displayStatus = getDisplayStatus(appointment);
-    const submissionDate = formatDate(appointment.createdAt || appointment.submissionDate || appointment.date);
+    const statusLabel = getStatusLabel(appointment);
+    const appointmentDate = appointment.date || appointment.createdAt || appointment.submissionDate;
     const actionTicket = {
       ...appointment,
       status: displayStatus,
@@ -506,43 +437,46 @@ function AdminAppointments() {
     };
     const canComplete = canCompleteAppointment(actionTicket);
     const canCancel = canCancelAppointment(actionTicket);
+    const canReaccept = canReacceptAppointment(actionTicket);
+
+    const openCitizenPage = () => navigate(`/admin-appointments/citizen/${encodeURIComponent(getCitizenKey(appointment))}`);
 
     return (
-      <tr key={appointment._id} className="nqs-admin-appointment-row bg-white hover:bg-[#f8fbff]">
+      <tr
+        key={appointment._id}
+        onClick={openCitizenPage}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openCitizenPage();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        className="nqs-admin-appointment-row cursor-pointer bg-white hover:bg-[#f8fbff]"
+      >
         <td className="px-4 py-3 font-mono font-bold text-[#2563eb]">{appointment.ref}</td>
         <td className="px-4 py-3 font-semibold text-[#06194a]">
           {citizen.name || appointment.citizenName || '--'}
         </td>
-
-        {activeTab === 'new_national_id' ? (
-          <>
-            <td className="px-4 py-3 text-[#243b63]">{citizen.phone || appointment.registrationDetails?.phone || '--'}</td>
-            <td className="px-4 py-3 text-[#243b63]">
-              {formatDate(appointment.date)}
-              {appointment.timeSlot ? <span className="block text-xs text-[#62708a]">{appointment.timeSlot}</span> : null}
-            </td>
-            <td className="px-4 py-3 font-mono font-semibold text-[#06194a]">{getQueueNumber(appointment.ref)}</td>
-          </>
-        ) : activeTab === 'update_information' ? (
-          <>
-            <td className="px-4 py-3 text-[#243b63]">{appointment.updateDetails?.nationalIdNumber || '--'}</td>
-            <td className="px-4 py-3 text-[#243b63]">{getUpdatedFields(appointment)}</td>
-            <td className="px-4 py-3 text-[#243b63]">{submissionDate}</td>
-          </>
-        ) : (
-          <>
-            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.nationalIdNumber || '--'}</td>
-            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.policeReportNumber || '--'}</td>
-            <td className="px-4 py-3 text-[#243b63]">{appointment.replacementDetails?.policeReportDocument || '--'}</td>
-            <td className="px-4 py-3 text-[#243b63]">{submissionDate}</td>
-          </>
-        )}
-
+        <td className="px-4 py-3 text-[#243b63]">{getCitizenPhone(appointment)}</td>
+        <td className="px-4 py-3 text-[#243b63]">{getRequestTypeLabel(appointment.requestType)}</td>
+        <td className="px-4 py-3 text-[#243b63]">
+          {getAppointmentCenterName(appointment)}
+          {getAppointmentCenterDistrict(appointment) ? (
+            <span className="block text-xs text-[#62708a]">{getAppointmentCenterDistrict(appointment)}</span>
+          ) : null}
+        </td>
+        <td className="px-4 py-3 text-[#243b63]">
+          {formatDate(appointmentDate)}
+          {appointment.timeSlot ? <span className="block text-xs text-[#62708a]">{appointment.timeSlot}</span> : null}
+        </td>
+        <td className="px-4 py-3 font-mono font-semibold text-[#06194a]">{getQueueNumber(appointment.ref)}</td>
         <td className="px-4 py-3">
-          <span className={statusClass(displayStatus)}>{displayStatus}</span>
+          <span className={statusClass(appointment)}>{statusLabel}</span>
         </td>
         <td className="px-4 py-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
               onClick={() => setSelectedAppointment(appointment)}
@@ -570,6 +504,15 @@ function AdminAppointments() {
                 <FiXCircle /> Cancel
               </button>
             )}
+            <button
+              type="button"
+              disabled={isBusy || !canReaccept}
+              onClick={() => reacceptAppointment(appointment)}
+              title={canReaccept ? 'Return completed appointment to Waiting' : 'Available after Complete'}
+              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold !text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:!text-white"
+            >
+              <FiRepeat /> Re-accept
+            </button>
           </div>
         </td>
       </tr>
@@ -580,74 +523,111 @@ function AdminAppointments() {
     <div className="nqs-admin-appointments min-h-screen bg-[var(--nqs-bg,#fff)] p-0 text-[var(--nqs-text,#06194a)]">
       <div className="mx-auto max-w-none">
         <div className="nqs-admin-appointments-hero border-b border-[var(--nqs-border,#cbd8ea)] bg-[var(--nqs-card,#fff)] px-8 py-9">
-          <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-xs">
-              <h1 className="text-2xl font-black tracking-tight text-[var(--nqs-text,#06194a)] sm:text-3xl">Admin Appointments</h1>
-              <p className="mt-4 text-base leading-7 text-[var(--nqs-muted,#243b63)]">
-                Review and manage National ID bookings from the database.
-              </p>
-            </div>
+          <h1 className="text-2xl font-black tracking-tight text-[var(--nqs-text,#06194a)] sm:text-3xl">Admin Appointments</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--nqs-muted,#243b63)]">
+            Review and manage National ID bookings from the database.
+          </p>
+        </div>
 
-            <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-              <label className="relative block">
+        <div className="nqs-admin-appointments-body bg-white px-8 py-7">
+          <div className="nqs-admin-request-tabs mb-6 flex flex-wrap gap-3">
+            {requestTabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key || 'all-services'}
+                  type="button"
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`nqs-admin-request-tab inline-flex items-center gap-3 rounded-md border px-5 py-3 text-sm font-black transition-all ${isActive ? 'is-active border-[#2563eb] bg-[#2563eb] text-white shadow-sm' : `nqs-card-tone-${tab.tone} hover:border-[#2563eb] hover:text-[#2563eb]`}`}
+                >
+                  <Icon className="h-5 w-5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {[
+              { key: '', label: 'All Appointments', value: appointments.length, tone: STATUS_CARD_TONE[''], icon: FiGrid },
+              ...Object.entries(STATUS_CATEGORY_META)
+                .map(([key, meta]) => ({
+                  key,
+                  label: meta.label,
+                  value: categorizedAppointments[key]?.length || 0,
+                  tone: STATUS_CARD_TONE[key],
+                  icon: meta.icon
+                }))
+            ].map((card) => {
+              const isActive = statusCategory === card.key;
+              const Icon = card.icon;
+              return (
+                <button
+                  key={card.key || 'all-appointments'}
+                  type="button"
+                  onClick={() => setStatusCategory(card.key)}
+                  className={`nqs-admin-status-card flex items-center gap-3 rounded-md border p-4 text-left transition-all nqs-card-tone-${card.tone} ${isActive ? 'ring-2 ring-blue-500/25' : ''}`}
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-lg nqs-card-tone-icon-${card.tone}`}>
+                    <Icon />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-xl font-black text-[#06194a]">{card.value}</span>
+                    <span className="block truncate text-xs font-bold text-[#62708a]">{card.label}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mb-6 rounded-md border border-[#d7e1ee] bg-[#f8fbff] p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <label className="relative block xl:col-span-2">
                 <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[#06194a]" />
                 <input
                   value={filters.search}
                   onChange={(event) => updateFilter('search', event.target.value)}
-                  placeholder="Search ticket #"
+                  placeholder="Search citizen, phone, request or queue number"
                   className="nqs-admin-filter-control w-full rounded-md border border-[#bfd0e6] bg-white py-3 pl-11 pr-3 text-sm font-medium text-[#06194a] outline-none placeholder:text-[#62708a] focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
                 />
               </label>
-
-              <select
-                value={filters.status}
-                onChange={(event) => updateFilter('status', event.target.value)}
-                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
-              >
-                {statusOptions.map((status) => (
-                  <option key={status || 'all'} value={status}>
-                    {status || 'All statuses'}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={filters.requestStatus}
-                onChange={(event) => updateFilter('requestStatus', event.target.value)}
-                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
-              >
-                {requestStatusOptions.map((status) => (
-                  <option key={status || 'all-request-statuses'} value={status}>
-                    {status || 'All request statuses'}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={filters.district}
-                onChange={(event) => updateFilter('district', event.target.value)}
-                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
-              >
-                <option value="">All districts</option>
-                {districtOptions.map((district) => (
-                  <option key={district} value={district}>{district}</option>
-                ))}
-              </select>
 
               <select
                 value={filters.center}
                 onChange={(event) => updateFilter('center', event.target.value)}
                 className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
               >
-                <option value="">All centers</option>
+                <option value="">All Centers</option>
                 {centerOptions.map((center) => {
                   const centerId = getCenterRecordId(center);
                   return (
                     <option key={centerId} value={centerId}>
-                      {center.name}
+                      {center.district ? `${center.district} - ` : ''}{center.name}
                     </option>
                   );
                 })}
+              </select>
+
+              <select
+                value={activeTab}
+                onChange={(event) => setActiveTab(event.target.value)}
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
+              >
+                {requestTabs.map((tab) => (
+                  <option key={tab.key || 'all-services'} value={tab.key}>{tab.label}</option>
+                ))}
+              </select>
+
+              <select
+                value={statusCategory}
+                onChange={(event) => setStatusCategory(event.target.value)}
+                className="nqs-admin-filter-control rounded-md border border-[#bfd0e6] bg-white px-4 py-3 text-sm font-medium text-[#06194a] outline-none focus:border-[#2563eb] focus:ring-4 focus:ring-blue-500/10"
+              >
+                <option value="">All Status</option>
+                {Object.entries(STATUS_CATEGORY_META).map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.label}</option>
+                ))}
               </select>
 
               <input
@@ -658,31 +638,6 @@ function AdminAppointments() {
               />
             </div>
           </div>
-        </div>
-
-        <div className="nqs-admin-appointments-body bg-white px-8 py-7">
-          <div className="nqs-admin-request-tabs mb-6 flex flex-wrap gap-3">
-            {requestTabs.map((tab) => {
-              const isActive = activeTab === tab.key;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(tab.key);
-                    if (isCenterDetailPage) {
-                      navigate(`/admin-appointments?requestType=${tab.key}`);
-                    }
-                  }}
-                  className={`nqs-admin-request-tab inline-flex items-center gap-3 rounded-md border px-5 py-3 text-sm font-black transition-all ${isActive ? 'is-active border-[#2563eb] bg-[#2563eb] text-white shadow-sm' : 'border-[#bfd0e6] bg-white text-[#06194a] hover:border-[#2563eb] hover:text-[#2563eb]'}`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
 
           {loading && (
             <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
@@ -690,104 +645,34 @@ function AdminAppointments() {
             </div>
           )}
 
-          {!loading && appointments.length === 0 && (
-            <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
-              No appointments match the selected filters.
-            </div>
-          )}
-
-          {!loading && appointments.length > 0 && groupedAppointments.length === 0 && !isCenterDetailPage && (
-            <div className="rounded-md border border-[#d7e1ee] bg-white px-4 py-10 text-center text-[#62708a]">
-              No appointments found for your created centers. Create centers in Manage Centers, or check that bookings use those centers.
-            </div>
-          )}
-
-          {!loading && groupedAppointments.length > 0 && !isCenterDetailPage && (
-            <div className="space-y-4">
-              <div>
-                <p className="nqs-admin-muted mb-6 text-sm font-semibold text-[#243b63]">
-                  Select a district center to open its appointment page.
-                </p>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {groupedAppointments.map((group) => (
-                      <button
-                        key={group.key}
-                        type="button"
-                        onClick={() => openCenterAppointmentsPage(group)}
-                        className="nqs-admin-center-card rounded-md border border-[#d7e1ee] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#2563eb] hover:shadow-md"
-                      >
-                        <div className="grid grid-cols-[54px_1fr_auto] items-center gap-5">
-                          <span className="flex h-14 w-14 items-center justify-center rounded-md border border-[#e5ebf4] bg-[#f5f8ff] text-[#2563eb]">
-                            <FiBriefcase className="h-7 w-7" />
-                          </span>
-                          <div className="min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="nqs-admin-center-district text-xs font-black uppercase tracking-[0.06em] text-[#2563eb]">
-                                {group.district} District
-                              </p>
-                              <span className="nqs-admin-center-count rounded-md border border-[#d7e1ee] bg-white px-2 py-0.5 text-xs font-black text-[#06194a]">
-                                {group.appointments.length}
-                              </span>
-                            </div>
-                            <h2 className="nqs-admin-center-name mt-3 truncate text-xl font-black text-[#06194a]">{group.centerName}</h2>
-                            <p className="nqs-admin-center-helper mt-2 text-sm font-medium leading-6 text-[#243b63]">
-                              Click to view this center&apos;s records only
-                            </p>
-                          </div>
-                          <span className="text-[#06194a]">
-                            <FiChevronRight className="h-6 w-6" />
-                          </span>
-                        </div>
-                      </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!loading && isCenterDetailPage && !selectedGroup && (
-            <div className="rounded-md border border-dashed border-[#bfd0e6] bg-white px-4 py-10 text-center text-[#62708a]">
-              No appointments found for this center.
-            </div>
-          )}
-
-          {!loading && isCenterDetailPage && selectedGroup && (
-            <section
-              className="overflow-hidden rounded-md border border-[#d7e1ee] bg-white shadow-sm"
-            >
-              <div className="nqs-admin-center-detail-bar flex flex-col gap-3 border-b border-[var(--nqs-border,#d7e1ee)] bg-[var(--nqs-card-soft,#f8fbff)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <button
-                    type="button"
-                    onClick={backToCenterCards}
-                    className="mb-3 inline-flex items-center gap-2 rounded-md border border-[var(--nqs-border,#bfd0e6)] bg-[var(--nqs-card,#fff)] px-3 py-1.5 text-xs font-black text-[#2563eb] hover:border-[#2563eb]"
-                  >
-                    <FiArrowLeft /> Back to centers
-                  </button>
-                  <p className="nqs-admin-center-district text-xs font-black uppercase tracking-[0.08em] text-[#2563eb]">
-                    {selectedGroup.district} District
-                  </p>
-                  <h2 className="mt-1 text-lg font-black text-[var(--nqs-text,#06194a)]">{selectedGroup.centerName}</h2>
-                </div>
-                <span className="nqs-admin-center-count w-fit rounded-md border border-[var(--nqs-border,#bfd0e6)] bg-[var(--nqs-card,#fff)] px-3 py-1 text-xs font-black text-[var(--nqs-text,#06194a)]">
-                  {selectedGroup.appointments.length} appointment{selectedGroup.appointments.length === 1 ? '' : 's'}
+          {!loading && (
+            <section className="overflow-hidden rounded-md border border-[#d7e1ee] bg-white shadow-sm">
+              <div className="flex items-center justify-end border-b border-[#d7e1ee] bg-[#f8fbff] px-5 py-4">
+                <span className="w-fit rounded-md border border-[#d7e1ee] bg-white px-3 py-1 text-xs font-black text-[#243b63]">
+                  {displayedAppointments.length} appointment{displayedAppointments.length === 1 ? '' : 's'}
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="bg-[#f5f8ff] text-xs uppercase tracking-wide text-[#62708a]">
-                    <tr>
-                      {tableHeadings.map((heading) => (
-                        <th key={heading} className="px-4 py-3 font-bold">{heading}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#d7e1ee]">
-                    {selectedGroup.appointments.map(renderAppointmentRow)}
-                  </tbody>
-                </table>
-              </div>
+              {displayedAppointments.length === 0 ? (
+                <div className="px-4 py-10 text-center text-[#62708a]">
+                  No appointments match the selected filters.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="bg-[#f5f8ff] text-xs uppercase tracking-wide text-[#62708a]">
+                      <tr>
+                        {tableHeadings.map((heading) => (
+                          <th key={heading} className="px-4 py-3 font-bold">{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#d7e1ee]">
+                      {displayedAppointments.map(renderAppointmentRow)}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
           )}
         </div>
@@ -800,8 +685,20 @@ function AdminAppointments() {
 
       {cancelTarget && (() => {
         const isUpdateReq = cancelTarget.requestType === 'update_information';
+        const isLostReq = isLostReplacementRequest(cancelTarget);
+        const fieldOptions = getIncorrectFieldOptionsForTicket(cancelTarget);
         const changedFields = isUpdateReq ? getChangedUpdateFields(cancelTarget) : [];
         const hasNoChanges = isUpdateReq && changedFields.length === 0;
+        const modalTitle = isUpdateReq
+          ? 'Cancel Update Request'
+          : isLostReq
+            ? 'Cancel Replace Lost National ID'
+            : 'Cancel Appointment';
+        const modalHelp = isUpdateReq
+          ? 'Review the changed information and provide a cancellation reason for this update request.'
+          : isLostReq
+            ? 'Review the Lost ID details the citizen submitted, select incorrect fields, and add notes. The citizen will see this feedback and can resubmit.'
+            : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.';
 
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
@@ -809,14 +706,8 @@ function AdminAppointments() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Admin Action</p>
-                <h2 className="mt-1 text-2xl font-black">
-                  {isUpdateReq ? 'Cancel Update Request' : 'Cancel Appointment'}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                  {isUpdateReq
-                    ? 'Review the changed information and provide a cancellation reason for this update request.'
-                    : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.'}
-                </p>
+                <h2 className="mt-1 text-2xl font-black">{modalTitle}</h2>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{modalHelp}</p>
               </div>
               <button
                 type="button"
@@ -824,18 +715,18 @@ function AdminAppointments() {
                 className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                 aria-label="Close cancel appointment modal"
               >
-                <FiSlash />
+                <FiX className="h-5 w-5" />
               </button>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950/40">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Ticket Reference</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Request Reference</p>
                   <p className="mt-1 font-mono text-sm font-black text-blue-700 dark:text-[#7CB8FF]">{cancelTarget.ref}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Citizen</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">Full Name</p>
                   <p className="mt-1 text-sm font-black">{cancelTarget.citizen?.name || cancelTarget.citizenName || '--'}</p>
                 </div>
                 <div>
@@ -848,6 +739,8 @@ function AdminAppointments() {
                 </div>
               </div>
             </div>
+
+            {isLostReq && <LostIdCancelDetails ticket={cancelTarget} />}
 
             {isUpdateReq ? (
               <div className="mt-5 space-y-4">
@@ -900,9 +793,11 @@ function AdminAppointments() {
             ) : (
               <>
                 <div className="mt-5">
-                  <span className="text-sm font-bold">Select incorrect fields</span>
+                  <span className="text-sm font-bold">
+                    {isLostReq ? 'Select incorrect Lost ID fields' : 'Select incorrect fields'}
+                  </span>
                   <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-2">
-                    {INCORRECT_FIELD_OPTIONS.map((reason) => {
+                    {fieldOptions.map((reason) => {
                       const checked = selectedCancelReasons.includes(reason);
                       return (
                         <label
@@ -948,7 +843,7 @@ function AdminAppointments() {
                 <p className="mt-2">
                   {isUpdateReq
                     ? `Cancellation reason: ${customCancelReason.trim()}. Are you sure you want to cancel this update request?`
-                    : `You selected the following incorrect fields: ${selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment?`}
+                    : `You selected the following incorrect fields: ${selectedReasonLabels(cancelTarget).join(', ')}. Are you sure you want to cancel this ${isLostReq ? 'Lost ID request' : 'appointment'}?`}
                 </p>
               </div>
             )}
@@ -967,7 +862,13 @@ function AdminAppointments() {
                 disabled={updatingId === cancelTarget._id || hasNoChanges}
                 className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {updatingId === cancelTarget._id ? 'Cancelling...' : (isUpdateReq ? 'Confirm Cancel Update' : 'Confirm Cancellation')}
+                {updatingId === cancelTarget._id
+                  ? 'Cancelling...'
+                  : (isUpdateReq
+                    ? 'Confirm Cancel Update'
+                    : isLostReq
+                      ? 'Confirm Cancel Lost ID'
+                      : 'Confirm Cancellation')}
               </button>
             </div>
           </div>
@@ -989,27 +890,30 @@ function AdminAppointments() {
                 className="rounded-lg p-2 text-slate-400 hover:bg-slate-800"
                 aria-label="Close appointment details"
               >
-                <FiSlash />
+                <FiX className="h-5 w-5" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Citizen</span>{selectedAppointment.citizen?.name || selectedAppointment.citizenName || '--'}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Full Name</span>{selectedAppointment.citizen?.name || selectedAppointment.citizenName || '--'}</p>
               <p><span className="block text-xs font-bold uppercase text-slate-400">Email</span>{selectedAppointment.citizen?.email || '--'}</p>
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Phone</span>{selectedAppointment.citizen?.phone || '--'}</p>
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Center</span>{selectedAppointment.center?.name || '--'}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Phone</span>{getCitizenPhone(selectedAppointment)}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Center</span>{getAppointmentCenterName(selectedAppointment)}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Request Number</span>{selectedAppointment.ref}</p>
               <p><span className="block text-xs font-bold uppercase text-slate-400">Date</span>{formatDate(selectedAppointment.date)}</p>
               <p><span className="block text-xs font-bold uppercase text-slate-400">Time</span>{selectedAppointment.timeSlot || '--'}</p>
               <p>
                 <span className="block text-xs font-bold uppercase text-slate-400">Queue Number</span>
                 {selectedAppointment.requestType === 'update_information' ? '--' : getQueueNumber(selectedAppointment.ref)}
               </p>
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Request Type</span>{getRequestTypeLabel(selectedAppointment.requestType)}</p>
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Request Status</span>{selectedAppointment.requestStatus || 'Pending'}</p>
-              <p><span className="block text-xs font-bold uppercase text-slate-400">Status</span>{selectedAppointment.status}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Service</span>{getRequestTypeLabel(selectedAppointment.requestType)}</p>
+              <p><span className="block text-xs font-bold uppercase text-slate-400">Current Status</span>{getStatusLabel(selectedAppointment)}</p>
               {getCancellationReasonList(selectedAppointment).length > 0 && (
                 <div className="sm:col-span-2">
-                  <span className="block text-xs font-bold uppercase text-slate-400">Cancellation Reasons</span>
+                  <span className="block text-xs font-bold uppercase text-slate-400">Cancellation / Correction Feedback</span>
+                  <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-100">
+                    {getCancellationFeedbackText(selectedAppointment, 'No cancellation reason was provided.')}
+                  </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {getCancellationReasonList(selectedAppointment).map((reason) => (
                       <span key={reason} className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-black text-red-200">
@@ -1017,14 +921,26 @@ function AdminAppointments() {
                       </span>
                     ))}
                   </div>
-                  {selectedAppointment.cancellationNotes && (
-                    <p className="mt-3 rounded-lg border border-slate-700 bg-slate-950/50 p-3 text-sm text-slate-200">
-                      <span className="block text-xs font-bold uppercase text-slate-400">Additional Admin Note</span>
-                      {selectedAppointment.cancellationNotes}
-                    </p>
-                  )}
                 </div>
               )}
+            </div>
+
+            <div className="mt-5 rounded-xl border border-slate-700 bg-slate-950/40 p-4">
+              <h3 className="mb-3 text-sm font-bold text-white">Appointment History</h3>
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                {[
+                  ['Booked / Created', formatDate(selectedAppointment.createdAt)],
+                  ['Last Updated', formatDate(selectedAppointment.updatedAt)],
+                  ...(selectedAppointment.completedAt ? [['Completed', formatDate(selectedAppointment.completedAt)]] : []),
+                  ...(selectedAppointment.cancelledAt ? [['Cancelled', formatDate(selectedAppointment.cancelledAt)]] : []),
+                  ...(selectedAppointment.cancellationReason ? [['Cancellation Reason', selectedAppointment.cancellationReason]] : [])
+                ].map(([label, value]) => (
+                  <p key={label}>
+                    <span className="block text-xs font-bold uppercase text-slate-400">{label}</span>
+                    {value}
+                  </p>
+                ))}
+              </div>
             </div>
 
             {selectedAppointment && (
@@ -1033,7 +949,7 @@ function AdminAppointments() {
                 <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   {[
                     ['Existing registration found', selectedAppointment.existingRegistration?.found ? 'Yes' : 'No'],
-                    ['Previous Ticket Number', selectedAppointment.existingRegistration?.originalTicketReference || selectedAppointment.existingRegistration?.ticketNumber || '--'],
+                    ['Previous Request Number', selectedAppointment.existingRegistration?.originalTicketReference || selectedAppointment.existingRegistration?.ticketNumber || '--'],
                     ['Previous Queue Number', selectedAppointment.existingRegistration?.originalQueueNumber || selectedAppointment.existingRegistration?.queueNumber || '--'],
                     ['Previous Center', selectedAppointment.existingRegistration?.originalCenter || selectedAppointment.existingRegistration?.centerName || '--'],
                     ['Previous District', selectedAppointment.existingRegistration?.originalDistrict || '--'],
@@ -1104,6 +1020,19 @@ function AdminAppointments() {
                 <h3 className="mb-3 text-sm font-bold text-white">Update Information Details</h3>
                 <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                   <p><span className="block text-xs font-bold uppercase text-slate-400">National ID Number</span>{selectedAppointment.updateDetails?.nationalIdNumber || '--'}</p>
+                  {getPreviousDataRows(selectedAppointment).length > 0 && (
+                    <div className="sm:col-span-2 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                      <h4 className="mb-3 text-sm font-black text-white">Previous National ID Data</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {getPreviousDataRows(selectedAppointment).map(([label, value]) => (
+                          <p key={label}>
+                            <span className="block text-xs font-bold uppercase text-slate-400">{label}</span>
+                            {value || '--'}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {(selectedAppointment.updateDetails?.changes?.length ? selectedAppointment.updateDetails.changes : [{
                     field: selectedAppointment.updateDetails?.fieldToUpdate,
                     currentValue: selectedAppointment.updateDetails?.currentValue,
@@ -1124,6 +1053,19 @@ function AdminAppointments() {
           </div>
         </div>
       )}
+
+      <OtpGateModal
+        flow={otpFlow}
+        digits={otpDigits}
+        seconds={otpSeconds}
+        requesting={otpRequesting}
+        verifying={otpVerifying}
+        error={otpError}
+        onDigitChange={updateOtpDigit}
+        onVerify={verifyOtpGate}
+        onResend={resendOtpGate}
+        onClose={closeOtpGate}
+      />
     </div>
   );
 }

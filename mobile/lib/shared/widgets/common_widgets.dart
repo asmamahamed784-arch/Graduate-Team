@@ -13,19 +13,28 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = AppColors.forStatus(status);
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 3 : 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: color,
-          fontSize: dense ? 11 : 12,
-          fontWeight: FontWeight.w600,
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: dense ? 124 : 156),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: dense ? 8 : 10,
+          vertical: dense ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Text(
+          status,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: color,
+            fontSize: dense ? 11 : 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -91,43 +100,84 @@ class DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 17, color: AppColors.muted),
-            const SizedBox(width: 10),
-          ],
-          SizedBox(
-            width: 118,
-            child: Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(color: AppColors.muted),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value.trim().isEmpty ? '--' : value,
-              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
-            ),
-          ),
-          if (copyable && value.trim().isNotEmpty)
-            InkWell(
-              onTap: () {
-                Clipboard.setData(ClipboardData(text: value));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Copied to clipboard')),
-                );
-              },
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 4),
-                child: Icon(Icons.copy_rounded, size: 16, color: AppColors.muted),
+    final displayValue = value.trim().isEmpty ? '--' : value;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 390;
+        final labelStyle = theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.muted,
+          fontWeight: FontWeight.w600,
+        );
+        final valueStyle = theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          height: 1.28,
+        );
+
+        final valueWidget = Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Text(displayValue, style: valueStyle)),
+            if (copyable && value.trim().isNotEmpty)
+              InkWell(
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: value));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied to clipboard')),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Icon(
+                    Icons.copy_rounded,
+                    size: 16,
+                    color: AppColors.muted,
+                  ),
+                ),
               ),
+          ],
+        );
+
+        if (compact) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 18, color: AppColors.muted),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: labelStyle),
+                      const SizedBox(height: 3),
+                      valueWidget,
+                    ],
+                  ),
+                ),
+              ],
             ),
-        ],
-      ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 17, color: AppColors.muted),
+                const SizedBox(width: 10),
+              ],
+              SizedBox(width: 126, child: Text(label, style: labelStyle)),
+              Expanded(child: valueWidget),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -141,25 +191,23 @@ class BrandLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badge = Container(
+    final badge = SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.navy, AppColors.accent],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(size * 0.28),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        'NQ',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: size * 0.36,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.5,
+      child: Image.asset(
+        'assets/images/crest.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primarySoft,
+            borderRadius: BorderRadius.circular(size * 0.28),
+          ),
+          child: Icon(
+            Icons.shield_rounded,
+            size: size * 0.5,
+            color: AppColors.navy,
+          ),
         ),
       ),
     );
@@ -177,17 +225,15 @@ class BrandLogo extends StatelessWidget {
           children: [
             Text(
               'NQS National ID',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             Text(
               'National Queue System',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppColors.muted),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.muted),
             ),
           ],
         ),
@@ -222,13 +268,19 @@ class PrimaryButton extends StatelessWidget {
             ? const SizedBox(
                 height: 22,
                 width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.white,
+                ),
               )
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+                  if (icon != null) ...[
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                  ],
                   Text(label),
                 ],
               ),
@@ -259,10 +311,9 @@ class SectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
           if (actionLabel != null && onAction != null)
@@ -274,7 +325,11 @@ class SectionHeader extends StatelessWidget {
 }
 
 /// Shows an error or success message in a themed snack bar.
-void showAppSnackBar(BuildContext context, String message, {bool isError = false}) {
+void showAppSnackBar(
+  BuildContext context,
+  String message, {
+  bool isError = false,
+}) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(

@@ -7,6 +7,7 @@ class Formatters {
   const Formatters._();
 
   static final DateFormat _apiDate = DateFormat('yyyy-MM-dd');
+  static final DateFormat _usDate = DateFormat('MM/dd/yyyy');
   static final DateFormat _readableDate = DateFormat('EEE, d MMM yyyy');
   static final DateFormat _shortDate = DateFormat('d MMM yyyy');
   static final DateFormat _dateTime = DateFormat('d MMM yyyy • h:mm a');
@@ -14,9 +15,20 @@ class Formatters {
   /// The backend stores `Ticket.date` as a plain `yyyy-MM-dd` string.
   static String apiDate(DateTime date) => _apiDate.format(date);
 
+  /// Display format used by the Date of Birth field (image-3 style).
+  static String usDate(DateTime date) => _usDate.format(date);
+
   static DateTime? parseApiDate(String? value) {
     if (value == null || value.trim().isEmpty) return null;
-    return DateTime.tryParse(value.trim());
+    final text = value.trim();
+    final api = DateTime.tryParse(text);
+    if (api != null) return DateTime(api.year, api.month, api.day);
+    try {
+      final us = _usDate.parseStrict(text);
+      return DateTime(us.year, us.month, us.day);
+    } catch (_) {
+      return null;
+    }
   }
 
   static String readableDate(String? value) {

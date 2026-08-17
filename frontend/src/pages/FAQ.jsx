@@ -1,22 +1,26 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { useTheme } from '../hooks/useTheme';
 import {
   FiSearch,
   FiChevronDown,
   FiHelpCircle,
-  FiCalendar,
-  FiActivity,
+  FiPhone,
+  FiMail,
+  FiMapPin,
   FiMessageCircle,
 } from 'react-icons/fi';
-import { FaQuestionCircle } from 'react-icons/fa';
+import { FaWhatsapp } from 'react-icons/fa';
 
-/* ─── FAQ Data ─────────────────────────────────────── */
+const SUPPORT_PHONE = '+252 61 000 1000';
+const SUPPORT_PHONE_DIAL = '+252610001000';
+const SUPPORT_WHATSAPP = '252610001000';
+const SUPPORT_EMAIL = 'contact@nqs.gov.so';
+const HEAD_OFFICE = 'NQS Government Plaza, Hodan District, Mogadishu';
+
 const faqCategories = [
   {
     title: 'General Questions',
-    icon: <FiHelpCircle className="text-xl" />,
     items: [
       {
         q: 'What is the National Queue System (NQS)?',
@@ -34,66 +38,63 @@ const faqCategories = [
   },
   {
     title: 'Appointments & Booking',
-    icon: <FiCalendar className="text-xl" />,
     items: [
       {
-        q: 'How do I book an appointment?',
-        a: 'Log in to your NQS account, open the booking page, select National ID Registration, choose a Banaadir National ID center, pick a date and time, and confirm your booking. You will receive a digital queue ticket with a reference number.',
+        q: 'How can I reschedule or cancel my appointment?',
+        a: 'Log in to your NQS account, open My Appointments, find your active National ID queue ticket, and cancel or manage it from there. Cancellation is only available within 1 hour of booking.',
       },
       {
-        q: 'Can I cancel my appointment?',
-        a: 'Yes. Go to your dashboard, find your active National ID queue ticket, and cancel it from the ticket actions.',
-      },
-      {
-        q: 'What documents do I need to bring?',
+        q: 'What documents do I need for my appointment?',
         a: 'Bring your existing identification or birth record, a recent ID photo, and the completed National ID application form. Also bring your digital or printed NQS queue ticket.',
+      },
+      {
+        q: 'How long does it take to receive my ID?',
+        a: 'Once your appointment is completed and approved, your permanent National ID is issued immediately and reflected in your NQS account.',
+      },
+      {
+        q: 'What should I do if I lost my appointment confirmation?',
+        a: 'Your ticket reference is always available under My Appointments. You can also track your queue status at any time using your ticket reference.',
       },
     ],
   },
   {
     title: 'Queue & Tracking',
-    icon: <FiActivity className="text-xl" />,
     items: [
       {
-        q: 'How do I track my queue position?',
-        a: 'Open the Check Queue page and enter your request reference number, such as REQ-1023. The page shows your current position, estimated wait time, status, and counter information.',
+        q: 'How can I track my queue?',
+        a: 'Open the Track Queue page and enter your ticket reference number, such as REQ-1023. The page shows your current position, estimated wait time, status, and counter information.',
       },
       {
         q: 'What happens if I miss my turn?',
-        a: 'If you miss your turn, contact the operator at the Banaadir National ID center. The operator can place the ticket on hold or advise you to book another appointment if needed.',
+        a: 'If you miss your turn, contact the operator at your National ID center. The operator can place the ticket on hold or advise you to book another appointment if needed.',
       },
     ],
   },
 ];
 
-/* ─── Accordion Item ───────────────────────────────── */
-function AccordionItem({ item, isOpen, onToggle, colors }) {
+const quickActions = [
+  { key: 'call', label: 'Call Support', description: 'Speak with our support team', icon: FiPhone, tone: 'bg-blue-50 text-blue-600', href: `tel:${SUPPORT_PHONE_DIAL}` },
+  { key: 'whatsapp', label: 'WhatsApp', description: 'Chat with us on WhatsApp', icon: FaWhatsapp, tone: 'bg-emerald-50 text-emerald-600', href: `https://wa.me/${SUPPORT_WHATSAPP}`, external: true },
+  { key: 'email', label: 'Email', description: 'Send us an email', icon: FiMail, tone: 'bg-sky-50 text-sky-600', href: `mailto:${SUPPORT_EMAIL}` },
+  { key: 'faq', label: 'FAQ', description: 'Browse common questions', icon: FiHelpCircle, tone: 'bg-amber-50 text-amber-600', href: '#faq-list' },
+];
+
+function AccordionItem({ item, isOpen, onToggle }) {
   return (
-    <div
-      className="nqs-faq-item overflow-hidden rounded-xl border transition-colors"
-      style={{ backgroundColor: colors.card, borderColor: colors.border }}
-    >
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-gray-700 dark:bg-gray-800">
       <button
         onClick={onToggle}
-        className="nqs-faq-trigger flex w-full items-center justify-between gap-4 px-6 py-4 text-left transition-colors"
-        style={{ backgroundColor: colors.card }}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
       >
-        <span
-          className="nqs-faq-question text-[15px] font-semibold leading-snug"
-          style={{ color: colors.text }}
-        >
-          {item.q}
-        </span>
+        <span className="text-sm font-bold text-slate-900 dark:text-white">{item.q}</span>
         <motion.span
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.25 }}
-          className="flex-shrink-0"
-          style={{ color: colors.blue }}
+          className="shrink-0 text-slate-400"
         >
-          <FiChevronDown className="text-lg" />
+          <FiChevronDown />
         </motion.span>
       </button>
-
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -104,10 +105,7 @@ function AccordionItem({ item, isOpen, onToggle, colors }) {
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div
-              className="nqs-faq-answer border-t px-6 pb-5 pt-4 text-sm leading-relaxed"
-              style={{ backgroundColor: colors.answer, borderColor: colors.border, color: colors.muted }}
-            >
+            <div className="border-t border-slate-100 px-4 pb-4 pt-3 text-sm leading-relaxed text-slate-600 dark:border-gray-700 dark:text-gray-300">
               {item.a}
             </div>
           </motion.div>
@@ -117,40 +115,12 @@ function AccordionItem({ item, isOpen, onToggle, colors }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════
-   FAQ Page
-   ═══════════════════════════════════════════════════════ */
 function FAQ() {
-  const { isDark } = useTheme();
   const [openKey, setOpenKey] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const colors = useMemo(() => (
-    isDark
-      ? {
-          page: '#061225',
-          card: '#071a33',
-          answer: '#061225',
-          text: '#ffffff',
-          muted: '#cbd5e1',
-          border: '#1d355f',
-          blue: '#93c5fd',
-          iconBg: '#0b2444',
-        }
-      : {
-          page: '#f5f8fc',
-          card: '#ffffff',
-          answer: '#f8fafc',
-          text: '#000000',
-          muted: '#111827',
-          border: '#dbe7f3',
-          blue: '#2563eb',
-          iconBg: '#dbeafe',
-        }
-  ), [isDark]);
 
   const toggle = (key) => setOpenKey((prev) => (prev === key ? null : key));
 
-  /* filtered categories / items */
   const filteredCategories = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return faqCategories;
@@ -158,147 +128,122 @@ function FAQ() {
       .map((cat) => ({
         ...cat,
         items: cat.items.filter(
-          (item) =>
-            item.q.toLowerCase().includes(q) ||
-            item.a.toLowerCase().includes(q)
+          (item) => item.q.toLowerCase().includes(q) || item.a.toLowerCase().includes(q)
         ),
       }))
       .filter((cat) => cat.items.length > 0);
   }, [searchQuery]);
 
   return (
-    <section
-      className="nqs-faq-page min-h-screen"
-      style={{ backgroundColor: colors.page, color: colors.text }}
-    >
-      {/* ── Hero ─────────────────────────────────────── */}
-      <div
-        className="nqs-faq-hero border-b"
-        style={{ backgroundColor: colors.card, borderColor: colors.border }}
-      >
-        <motion.div
-          className="container mx-auto px-4 py-20 text-center"
-          initial={{ opacity: 0, y: -30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-        >
-          <FaQuestionCircle className="mx-auto mb-4 text-5xl" style={{ color: colors.blue }} />
-          <h1
-            className="nqs-faq-title mb-4 text-4xl font-bold tracking-tight md:text-5xl"
-            style={{ color: colors.text }}
-          >
-            Frequently Asked Questions
+    <div className="min-h-screen bg-[#F5F8FC] px-4 pb-10 pt-4 text-slate-900 dark:bg-gray-900 dark:text-white">
+      <div className="mx-auto max-w-2xl space-y-4">
+        <section>
+          <h1 className="flex items-center gap-2 text-2xl font-black text-[#0B3A75] dark:text-white sm:text-3xl">
+            <FiHelpCircle className="text-blue-700" /> Help &amp; Support
           </h1>
-          <p
-            className="nqs-faq-muted mx-auto max-w-2xl text-lg leading-relaxed md:text-xl"
-            style={{ color: colors.muted }}
-          >
-            Answers to common questions about National ID appointments and queue tickets.
-          </p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-gray-400">We&apos;re here to help. Find answers or get in touch.</p>
+        </section>
 
-          {/* Search bar */}
-          <div
-            className="nqs-faq-search mx-auto mt-8 flex max-w-xl items-center gap-3 rounded-xl border px-5 py-3 shadow-sm"
-            style={{ backgroundColor: colors.card, borderColor: colors.border }}
-          >
-            <FiSearch className="flex-shrink-0 text-xl" style={{ color: colors.muted }} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search questions..."
-              className="nqs-faq-input w-full bg-transparent text-base outline-none placeholder:text-slate-400"
-              style={{ color: colors.text }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="whitespace-nowrap text-sm transition"
-                style={{ color: colors.blue }}
+        <section className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <FiSearch className="shrink-0 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search for help topics, e.g. appointments, documents..."
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+          />
+        </section>
+
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <a
+                key={action.key}
+                href={action.href}
+                target={action.external ? '_blank' : undefined}
+                rel={action.external ? 'noreferrer' : undefined}
+                className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-gray-700 dark:bg-gray-800"
               >
-                Clear
-              </button>
-            )}
-          </div>
-        </motion.div>
-      </div>
+                <span className={`flex h-11 w-11 items-center justify-center rounded-full ${action.tone}`}>
+                  <Icon size={18} />
+                </span>
+                <span className="text-xs font-black text-slate-900 dark:text-white">{action.label}</span>
+                <span className="text-[10px] leading-tight text-slate-500 dark:text-gray-400">{action.description}</span>
+              </a>
+            );
+          })}
+        </section>
 
-      {/* ── FAQ Content ──────────────────────────────── */}
-      <div className="container mx-auto px-4 py-14 max-w-3xl">
-        {filteredCategories.length === 0 && (
-          <motion.p
-            className="nqs-faq-muted py-16 text-center text-lg"
-            style={{ color: colors.muted }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            No questions match your search. Try a different keyword.
-          </motion.p>
-        )}
+        <section id="faq-list" className="space-y-4 scroll-mt-4">
+          <h2 className="text-base font-black text-[#0B3A75] dark:text-white">Frequently Asked Questions</h2>
 
-        {filteredCategories.map((category, catIdx) => (
-          <motion.div
-            key={category.title}
-            className="mb-12"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: catIdx * 0.1, duration: 0.5 }}
-          >
-            {/* Category heading */}
-            <div className="flex items-center gap-3 mb-5">
-              <div
-                className="nqs-faq-icon flex h-10 w-10 items-center justify-center rounded-lg"
-                style={{ backgroundColor: colors.iconBg, color: colors.blue }}
-              >
-                {category.icon}
+          {filteredCategories.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              No questions match your search. Try a different keyword.
+            </p>
+          )}
+
+          {filteredCategories.map((category, catIdx) => (
+            <div key={category.title} className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-gray-500">{category.title}</p>
+              <div className="space-y-2">
+                {category.items.map((item, itemIdx) => {
+                  const key = `${catIdx}-${itemIdx}`;
+                  return (
+                    <AccordionItem key={key} item={item} isOpen={openKey === key} onToggle={() => toggle(key)} />
+                  );
+                })}
               </div>
-              <h2 className="nqs-faq-heading text-xl font-bold" style={{ color: colors.text }}>
-                {category.title}
-              </h2>
             </div>
+          ))}
+        </section>
 
-            {/* Accordion list */}
-            <div className="flex flex-col gap-3">
-              {category.items.map((item, itemIdx) => {
-                const key = `${catIdx}-${itemIdx}`;
-                return (
-                  <AccordionItem
-                    key={key}
-                    item={item}
-                    isOpen={openKey === key}
-                    onToggle={() => toggle(key)}
-                    colors={colors}
-                  />
-                );
-              })}
-            </div>
-          </motion.div>
-        ))}
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="text-sm font-black text-[#0B3A75] dark:text-white">Contact Information</h2>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <a href={`tel:${SUPPORT_PHONE_DIAL}`} className="flex items-start gap-2 text-sm text-slate-700 dark:text-gray-300">
+              <FiPhone className="mt-0.5 shrink-0 text-blue-600" />
+              <span>
+                <span className="block font-bold text-slate-900 dark:text-white">Phone</span>
+                {SUPPORT_PHONE}
+              </span>
+            </a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="flex items-start gap-2 text-sm text-slate-700 dark:text-gray-300">
+              <FiMail className="mt-0.5 shrink-0 text-blue-600" />
+              <span>
+                <span className="block font-bold text-slate-900 dark:text-white">Email</span>
+                {SUPPORT_EMAIL}
+              </span>
+            </a>
+            <span className="flex items-start gap-2 text-sm text-slate-700 dark:text-gray-300">
+              <FiMapPin className="mt-0.5 shrink-0 text-blue-600" />
+              <span>
+                <span className="block font-bold text-slate-900 dark:text-white">Head Office</span>
+                {HEAD_OFFICE}
+              </span>
+            </span>
+          </div>
+        </section>
 
-        {/* ── Still need help ────────────────────────── */}
-        <motion.div
-          className="nqs-faq-help mt-16 rounded-2xl border p-10 text-center shadow-sm"
-          style={{ backgroundColor: colors.card, borderColor: colors.border, color: colors.text }}
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-        >
-          <FiMessageCircle className="mx-auto mb-4 text-4xl" style={{ color: colors.blue }} />
-          <h3 className="nqs-faq-heading mb-2 text-2xl font-bold" style={{ color: colors.text }}>Need Help?</h3>
-          <p className="nqs-faq-muted mx-auto mb-6 max-w-md" style={{ color: colors.muted }}>
-            Contact the National ID office if you need help with booking or queue status.
-          </p>
+        <section className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 dark:border-blue-900/40 dark:bg-blue-900/20">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-600 shadow-sm dark:bg-gray-800">
+            <FiMessageCircle />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black text-[#0B2E59] dark:text-white">Need more help?</p>
+            <p className="text-xs text-slate-600 dark:text-gray-400">Our support team is ready to assist you with any questions or issues.</p>
+          </div>
           <Link
             to="/contact"
-            className="inline-block bg-[#4189DD] text-white font-semibold px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/15"
+            className="shrink-0 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-800"
           >
             Contact Us
           </Link>
-        </motion.div>
+        </section>
       </div>
-    </section>
+    </div>
   );
 }
 

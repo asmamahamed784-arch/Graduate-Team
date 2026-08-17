@@ -253,29 +253,42 @@ model SystemConfig {
 }
 
 model Ticket {
-  id                   String   @id @default(uuid())
-  ref                  String   @unique
-  service              String
-  citizenName          String
-  citizen              String?
-  counter              String   @default("--")
-  waitTime             String   @default("15 min")
-  status               String   @default("Waiting")
-  center               String
-  district             String   @default("")
-  date                 String   @default("")
-  timeSlot             String?
-  requestType          String   @default("new_national_id")
-  requestStatus        String   @default("Pending")
-  nationalIdNumber     String   @default("")
-  cardSerialNumber     String   @default("")
-  cardStatus           String   @default("")
-  registrationDetails  Json?
-  replacementDetails   Json?
-  updateDetails        Json?
-  existingRegistration Json?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @default(now())
+  id                               String    @id @default(uuid())
+  ref                              String    @unique
+  service                          String
+  citizenName                      String
+  citizen                          String?
+  counter                          String    @default("--")
+  waitTime                         String    @default("15 min")
+  status                           String    @default("Waiting")
+  center                           String
+  district                         String    @default("")
+  date                             String    @default("")
+  timeSlot                         String?
+  requestType                      String    @default("new_national_id")
+  requestStatus                    String    @default("Pending")
+  nationalIdNumber                 String    @default("")
+  cardSerialNumber                 String    @default("")
+  cardStatus                       String    @default("")
+  registrationDetails              Json?
+  replacementDetails               Json?
+  updateDetails                    Json?
+  existingRegistration             Json?
+  cancellationReason               String    @default("")
+  cancellationReasons              Json?
+  additionalCancellationReason     String    @default("")
+  cancellationNotes                String    @default("")
+  previousStatusBeforeCancellation String    @default("")
+  cancelledBy                      String?
+  cancelledAt                      DateTime?
+  rejectionReason                  String    @default("")
+  needsResubmission                Boolean   @default(false)
+  completedAt                      DateTime?
+  createdAt                        DateTime  @default(now())
+  updatedAt                        DateTime  @default(now())
+
+  @@index([completedAt])
+  @@index([status, completedAt])
 }
 
 model Citizen {

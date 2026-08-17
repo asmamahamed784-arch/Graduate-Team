@@ -20,6 +20,8 @@ class OtpArgs {
     this.identifier,
     this.title,
     this.subtitle,
+    this.resumeToken,
+    this.redirectTo,
   });
 
   final OtpMode mode;
@@ -32,11 +34,19 @@ class OtpArgs {
   final String? title;
   final String? subtitle;
 
+  /// Carried over from the Login screen (only relevant for [OtpMode.login])
+  /// so the citizen lands back on whatever protected action or page they
+  /// were trying to reach once the OTP step also succeeds.
+  final String? resumeToken;
+  final String? redirectTo;
+
   OtpArgs copyWith({OtpSession? session}) => OtpArgs(
         mode: mode,
         session: session ?? this.session,
         identifier: identifier,
         title: title,
         subtitle: subtitle,
+        resumeToken: resumeToken,
+        redirectTo: redirectTo,
       );
 }

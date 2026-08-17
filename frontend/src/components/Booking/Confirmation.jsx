@@ -52,9 +52,9 @@ const Confirmation = ({ data, onConfirm, onBack }) => {
         timeSlot,
         status: 'Confirmed'
       });
-      toast.success('Ticket downloaded.');
+      toast.success('Request downloaded.');
     } catch (err) {
-      toast.error(err.message || 'Could not download the QR ticket.');
+      toast.error(err.message || 'Could not download the QR Request.');
     }
   };
 
@@ -188,7 +188,7 @@ const Confirmation = ({ data, onConfirm, onBack }) => {
 
             <h2 className="mb-1.5 text-xl font-bold text-white">Appointment Booked</h2>
             <p className="mx-auto mb-2 max-w-sm text-xs text-slate-400">
-              Please show this QR ticket at the reception desk when you arrive.
+              Please show this QR Request at the reception desk when you arrive.
             </p>
             <p className="mx-auto mb-5 max-w-sm rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-200">
               You can cancel this appointment only within 1 hour after booking.
@@ -202,7 +202,7 @@ const Confirmation = ({ data, onConfirm, onBack }) => {
 
               <div className="mb-4 flex justify-center rounded-lg border border-gray-100 bg-white p-3 shadow-sm dark:bg-white">
                 {qrCodeUrl ? (
-                  <img src={qrCodeUrl} alt="QR Code Ticket" className="mx-auto h-32 w-32 object-contain" />
+                  <img src={qrCodeUrl} alt="QR Code Request" className="mx-auto h-32 w-32 object-contain" />
                 ) : (
                   <div className="flex h-32 w-32 items-center justify-center text-xs text-gray-400">Generating QR Code...</div>
                 )}
@@ -225,7 +225,7 @@ const Confirmation = ({ data, onConfirm, onBack }) => {
                 className="flex w-full items-center justify-center space-x-2 rounded-lg border border-slate-700 bg-slate-950/70 px-4 py-2 text-xs font-semibold text-slate-300 transition duration-200 hover:bg-slate-800 sm:w-auto"
               >
                 <FiPrinter className="h-3.5 w-3.5" />
-                <span>Print Ticket</span>
+                <span>Print Request</span>
               </button>
               <button
                 type="button"
@@ -233,7 +233,7 @@ const Confirmation = ({ data, onConfirm, onBack }) => {
                 className="flex w-full items-center justify-center space-x-2 rounded-lg bg-[#4189DD] px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-950/30 transition duration-200 hover:bg-blue-500 sm:w-auto"
               >
                 <FiDownload className="h-3.5 w-3.5" />
-                <span>Download Ticket</span>
+                <span>Download Request</span>
               </button>
             </div>
           </motion.div>

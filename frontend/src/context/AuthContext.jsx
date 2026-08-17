@@ -10,12 +10,20 @@ const normalizeRole = (role) => {
   return value;
 };
 const ROLE_KEY = 'role';
+const safeStorage = (storage, action, fallback = null) => {
+  try {
+    return action(storage);
+  } catch {
+    return fallback;
+  }
+};
+
 const setStoredRole = (nextRole) => {
-  localStorage.removeItem(ROLE_KEY);
+  safeStorage(localStorage, (store) => store.removeItem(ROLE_KEY));
   if (nextRole) {
-    sessionStorage.setItem(ROLE_KEY, nextRole);
+    safeStorage(sessionStorage, (store) => store.setItem(ROLE_KEY, nextRole));
   } else {
-    sessionStorage.removeItem(ROLE_KEY);
+    safeStorage(sessionStorage, (store) => store.removeItem(ROLE_KEY));
   }
 };
 

@@ -3,19 +3,27 @@ import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'react-toastify';
 import {
-  FaCalendarAlt,
-  FaCheckCircle,
-  FaClock,
-  FaClipboardList,
-  FaPhoneAlt,
-  FaRedo,
-  FaShieldAlt,
-  FaSyncAlt,
-  FaUserCircle,
-  FaExclamationTriangle,
-} from 'react-icons/fa';
+  FiBell,
+  FiCalendar,
+  FiCheckCircle,
+  FiClock,
+  FiFlag,
+  FiGrid,
+  FiHash,
+  FiMapPin,
+  FiPhoneCall,
+  FiRefreshCw,
+  FiUserCheck,
+  FiUsers,
+  FiVolume2,
+  FiChevronRight,
+} from 'react-icons/fi';
+import { FaExclamationTriangle, FaRedo } from 'react-icons/fa';
 import api from '../api/axiosInstance';
 import { useAuth } from '../hooks/useAuth';
+import { useNotifications } from '../context/NotificationContext';
+import { timeAgo } from '../dashboard/admin/AdminDashboardParts';
+import CitizenStaffFeedback from '../components/CitizenStaffFeedback';
 import Modal from '../components/Modal';
 
 const requestTypeLabels = {
@@ -35,13 +43,6 @@ const asName = (value, fallback = 'Not available') => {
   return value.name || value.title || fallback;
 };
 
-const formatIssuedDate = (value) => {
-  if (!value) return 'Not issued yet';
-  const date = new Date(String(value).includes('T') ? value : `${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return 'Not issued yet';
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-};
-
 const formatLongDate = (value) => {
   if (!value) return 'Not scheduled';
   const date = new Date(String(value).includes('T') ? value : `${value}T00:00:00`);
@@ -53,13 +54,6 @@ const formatMaritalStatus = (value) => {
   if (value === 'SINGLE') return 'Single';
   if (value === 'MARRIED') return 'Married';
   return 'Not recorded';
-};
-
-const formatAccountStatus = (value) => {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'active') return 'Active';
-  if (normalized === 'inactive') return 'Inactive';
-  return 'Active';
 };
 
 const buildFullName = (...values) => values
@@ -75,13 +69,14 @@ const getCitizenNameFromTicket = (ticket) => (
   ticket?.citizenName
 );
 
-const CURRENT_STATUSES = new Set(['Pending', 'Scheduled', 'Waiting', 'On Hold', 'Now Serving', 'In Progress', 'Resubmitted']);
+const CURRENT_STATUSES = new Set(['Pending', 'Scheduled', 'Waiting', 'On Hold', 'Now Serving', 'Resubmitted']);
 
 const normalizeStatus = (status) => {
   const value = String(status || 'Pending').trim().toLowerCase();
   if (value === 'approved' || value === 'confirmed') return 'Scheduled';
   if (value === 'being served' || value === 'serving' || value === 'now serving') return 'Now Serving';
-  if (value === 'in progress' || value === 'under review') return 'In Progress';
+  if (value === 'in progress') return 'Now Serving';
+  if (value === 'under review') return 'Waiting';
   if (value === 'on hold' || value === 'hold') return 'On Hold';
   if (value === 'cancelled' || value === 'canceled' || value === 'rejected') return 'Cancelled';
   if (value === 'completed' || value === 'complete') return 'Completed';
@@ -130,54 +125,6 @@ const sortByAppointmentDate = (appointments) => [...appointments].sort((a, b) =>
   return bKey.localeCompare(aKey);
 });
 
-const normalizeNationalIdProcessStatus = (value) => {
-  const status = String(value || '').trim().toUpperCase();
-  if (status === 'ACTIVE') return 'COMPLETED';
-  if (status === 'PENDING') return 'WAITING';
-  if (status === 'NOT_ISSUED') return 'NOT_STARTED';
-  if (status === 'BEING SERVED' || status === 'IN PROGRESS') return 'UNDER_REVIEW';
-  if (status === 'SCHEDULED') return 'WAITING';
-  if (status === 'CANCELED') return 'CANCELLED';
-  return status || 'NOT_STARTED';
-};
-
-const formatNationalIdProcessStatus = (status) => {
-  const normalized = normalizeNationalIdProcessStatus(status);
-  const labels = {
-    NOT_STARTED: 'Not Started',
-    WAITING: 'Waiting',
-    UNDER_REVIEW: 'Under Review',
-    APPROVED: 'Approved',
-    COMPLETED: 'Completed',
-    REJECTED: 'Rejected',
-    CANCELLED: 'Cancelled',
-    SUSPENDED: 'Suspended',
-    EXPIRED: 'Expired',
-    DECEASED: 'Deceased',
-  };
-  return labels[normalized] || 'Not Started';
-};
-
-const nationalIdStatusBadge = (status) => {
-  const normalized = normalizeNationalIdProcessStatus(status);
-  const base = 'inline-flex w-fit rounded-full px-3 py-1 text-xs font-black';
-  if (normalized === 'COMPLETED' || normalized === 'APPROVED') return `${base} bg-emerald-100 text-emerald-700`;
-  if (normalized === 'REJECTED' || normalized === 'CANCELLED') return `${base} bg-red-100 text-red-700`;
-  if (normalized === 'WAITING' || normalized === 'UNDER_REVIEW') return `${base} bg-amber-100 text-amber-700`;
-  return `${base} bg-slate-100 text-slate-600`;
-};
-
-const getCancellationReasonList = (item = {}) => {
-  const reasons = Array.isArray(item.cancellationReasons) ? item.cancellationReasons : [];
-  const additional = String(item.additionalCancellationReason || '').trim();
-  const filtered = reasons
-    .filter((reason) => reason && reason !== 'Other')
-    .concat(reasons.includes('Other') && additional ? [additional] : []);
-
-  if (filtered.length) return filtered;
-  return item.cancellationReason ? [item.cancellationReason] : [];
-};
-
 const getResubmitPath = (ticket) => {
   const type = ticket?.requestType || ticket?.type;
   const id = encodeURIComponent(ticket?.id || ticket?._id || '');
@@ -186,61 +133,121 @@ const getResubmitPath = (ticket) => {
   return `/dashboard/user/new-id-registration?resubmit=${id}`;
 };
 
-const StatCard = ({ icon, label, value, helper, tone = 'blue', to, onClick }) => {
-  const tones = {
-    blue: 'bg-blue-50 text-blue-700',
-    green: 'bg-emerald-50 text-emerald-700',
-    amber: 'bg-amber-50 text-amber-700',
-    purple: 'bg-indigo-50 text-indigo-700',
+// Real backend states only (no fabricated "Confirmed"/"Checked In" steps —
+// the Ticket model has no such statuses). Mirrors TrackQueue.jsx's stepper.
+const appointmentSteps = [
+  { key: 'booked', label: 'Booked', icon: FiCheckCircle },
+  { key: 'waiting', label: 'Waiting', icon: FiUsers },
+  { key: 'serving', label: 'Serving', icon: FiVolume2 },
+  { key: 'completed', label: 'Completed', icon: FiFlag },
+];
+
+const appointmentStepKey = (status) => {
+  if (status === 'Completed') return 'completed';
+  if (status === 'Now Serving') return 'serving';
+  return 'waiting';
+};
+
+// The 5-stage visual queue progress (Waiting Area / People Ahead / In
+// Progress / Almost Next / Your Turn) is derived from the real `position`
+// value returned by /api/queue/track — it's a presentational bucketing of
+// that number, not a separate backend state.
+const queueProgressSteps = [
+  { key: 'waiting_area', label: 'Waiting Area', icon: FiMapPin },
+  { key: 'people_ahead', label: 'People Ahead', icon: FiUsers },
+  { key: 'in_progress', label: 'In Progress', icon: FiUserCheck },
+  { key: 'almost_next', label: 'Almost Next', icon: FiClock },
+  { key: 'your_turn', label: 'Your Turn', icon: FiCheckCircle },
+];
+
+const queueProgressStepIndex = (ticket, trackData) => {
+  if (!ticket) return -1;
+  if (ticket.currentStatus === 'Completed' || ticket.currentStatus === 'Now Serving') return 4;
+  const position = trackData ? Number(trackData.position || 0) : null;
+  if (position === null || Number.isNaN(position)) return 0;
+  if (position <= 0) return 4;
+  if (position === 1) return 3;
+  if (position <= 3) return 2;
+  return 1;
+};
+
+const activityFor = (ticket) => {
+  const events = [];
+  if (ticket.createdAt) events.push({ label: 'Appointment booked', at: ticket.createdAt, icon: FiCalendar, tone: 'blue' });
+  if (ticket.currentStatus === 'Completed' && ticket.completedAt) {
+    events.push({ label: 'Appointment completed', at: ticket.completedAt, icon: FiCheckCircle, tone: 'green' });
+  }
+  if (ticket.currentStatus === 'Cancelled' && ticket.cancelledAt) {
+    events.push({ label: 'Appointment cancelled', at: ticket.cancelledAt, icon: FaExclamationTriangle, tone: 'pink' });
+  }
+  return events;
+};
+
+const ticketStatusBadgeClass = (status) => {
+  const base = 'inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-black';
+  if (status === 'Completed') return `${base} nqs-badge-tone-green`;
+  if (['Cancelled', 'Rejected', 'Expired'].includes(status)) return `${base} nqs-badge-tone-pink`;
+  if (['Now Serving', 'On Hold'].includes(status)) return `${base} nqs-badge-tone-orange`;
+  return `${base} nqs-badge-tone-blue`;
+};
+
+// Sitewide soft-pastel card tone system (styles/nqs-theme-system.css).
+const StatCard = ({ icon, label, value, helper, tone = 'blue', to, linkLabel }) => {
+  const iconTones = {
+    blue: 'nqs-card-tone-icon-blue',
+    green: 'nqs-card-tone-icon-green',
+    amber: 'nqs-card-tone-icon-orange',
+    purple: 'nqs-card-tone-icon-purple',
+  };
+  const cardTones = {
+    blue: 'nqs-card-tone-blue',
+    green: 'nqs-card-tone-green',
+    amber: 'nqs-card-tone-orange',
+    purple: 'nqs-card-tone-purple',
   };
 
-  const className = 'min-w-0 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500';
-  const content = (
-      <div className="flex min-w-0 items-center gap-3">
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-xl ${tones[tone]}`}>
+  return (
+    <div className={`flex min-w-0 flex-col gap-3 rounded-2xl border p-4 shadow-sm ${cardTones[tone]}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg ${iconTones[tone]}`}>
           {icon}
         </div>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold leading-tight text-slate-600">{label}</p>
-          <p className="mt-1 text-2xl font-black leading-none text-[#06194A]">{value}</p>
-          <p className="mt-1 text-xs leading-snug text-slate-500">{helper}</p>
-        </div>
+        <p className="pt-1 text-right text-xs font-bold leading-tight text-slate-600">{label}</p>
       </div>
+      <div>
+        <p className="text-2xl font-black leading-none text-[#06194A]">{value}</p>
+        <p className="mt-1 text-xs font-semibold text-slate-500">{helper}</p>
+      </div>
+      {to && (
+        <Link to={to} className="mt-1 inline-flex items-center gap-1 text-xs font-black text-blue-700 hover:text-blue-800">
+          {linkLabel}
+          <FiChevronRight />
+        </Link>
+      )}
+    </div>
   );
-
-  if (to) {
-    return <Link to={to} className={className}>{content}</Link>;
-  }
-
-  if (onClick) {
-    return <button type="button" onClick={onClick} className={className}>{content}</button>;
-  }
-
-  return <section className={className}>{content}</section>;
 };
 
-const ModalDetail = ({ label, value, wide = false, to, onClick }) => {
-  const className = `rounded-2xl border border-slate-200 bg-[#f1f8ff] p-4 text-left transition hover:border-blue-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${wide ? 'sm:col-span-2' : ''}`;
-  const content = (
-    <>
-      <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-black text-[#06194A]">{value || 'Not available'}</p>
-    </>
-  );
+const ModalDetail = ({ label, value, wide = false }) => (
+  <div className={`rounded-2xl border border-slate-200 bg-[#f1f8ff] p-4 text-left ${wide ? 'sm:col-span-2' : ''}`}>
+    <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">{label}</p>
+    <p className="mt-1 text-sm font-black text-[#06194A]">{value || 'Not available'}</p>
+  </div>
+);
 
-  if (to) {
-    return <Link to={to} className={className}>{content}</Link>;
-  }
-
-  if (onClick) {
-    return <button type="button" onClick={onClick} className={className}>{content}</button>;
-  }
-
-  return <div className={className}>{content}</div>;
-};
+const PanelHeader = ({ icon, title, action }) => (
+  <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="flex items-center gap-2 text-sm font-black text-[#06194A]">
+      <span className="text-blue-700">{icon}</span>
+      {title}
+    </div>
+    {action}
+  </div>
+);
 
 const UserDashboard = () => {
   const { user, loading: authLoading } = useAuth();
+  const { notifications } = useNotifications();
   const [bookings, setBookings] = useState([]);
   const [trackData, setTrackData] = useState(null);
   const [profileUser, setProfileUser] = useState(null);
@@ -252,6 +259,10 @@ const UserDashboard = () => {
   const citizen = profileUser || user || {};
   const dashboardTicket = activeTicket;
   const recentRequests = useMemo(() => sortByAppointmentDate(bookings).slice(0, 5), [bookings]);
+  const recentActivity = useMemo(
+    () => recentRequests.flatMap(activityFor).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 4),
+    [recentRequests]
+  );
   const cancelledForResubmission = useMemo(
     () => sortByAppointmentDate(bookings.filter((ticket) => (
       ticket.currentStatus === 'Cancelled'
@@ -259,20 +270,9 @@ const UserDashboard = () => {
     [bookings]
   );
   const stats = useMemo(() => {
-    const completed = bookings.filter((ticket) => ticket.currentStatus === 'Completed').length;
     const pending = bookings.filter((ticket) => CURRENT_STATUSES.has(ticket.currentStatus)).length;
-    const rejected = bookings.filter((ticket) => ['Rejected', 'Cancelled', 'Expired'].includes(ticket.currentStatus)).length;
-    const replacements = bookings.filter((ticket) => ['lost_replacement', 'replace_lost_id'].includes(ticket.requestType)).length;
-
-    return {
-      total: bookings.length,
-      completed,
-      pending,
-      rejected,
-      active: dashboardTicket ? 1 : 0,
-      replacements,
-    };
-  }, [bookings, dashboardTicket]);
+    return { pending };
+  }, [bookings]);
 
   const citizenSummary = citizen.citizenSummary || {};
   const nameFromParts = buildFullName(citizen.firstName, citizen.middleName, citizen.lastName);
@@ -284,22 +284,7 @@ const UserDashboard = () => {
     || latestTicketName
     || citizen.username
     || 'Citizen';
-  const hasIssuedNationalId = ['ACTIVE', 'COMPLETED', 'ISSUED'].includes(String(citizenSummary.nationalIdStatus || citizen.nationalIdStatus || '').toUpperCase());
-  const profileProcessStatus = normalizeNationalIdProcessStatus(citizenSummary.nationalIdStatus || citizen.nationalIdStatus);
-  const nationalIdStatus = hasIssuedNationalId
-    ? 'COMPLETED'
-    : stats.pending && profileProcessStatus === 'NOT_STARTED'
-      ? 'WAITING'
-      : profileProcessStatus;
-  const nationalIdNumber = citizenSummary.nationalIdNumber || citizen.nationalId || 'Not assigned yet';
-  const issueDate = citizenSummary.issueDate || citizen.cardIssueDate;
-  const expiryDate = citizenSummary.expiryDate || citizen.cardExpiryDate;
-  const currentCenter = citizenSummary.centerName
-    || dashboardTicket?.centerName
-    || citizen.center?.name
-    || citizenSummary.districtName
-    || citizen.district
-    || 'Not selected';
+
   const fetchDashboard = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
 
@@ -355,107 +340,297 @@ const UserDashboard = () => {
     );
   }
 
+  const queueStepIndex = queueProgressStepIndex(dashboardTicket, trackData);
+  const recentNotifications = safeArray(notifications).slice(0, 4);
+
   return (
     <div className="nqs-citizen-portal min-h-screen bg-[#eef5ff] text-[#06194A]">
       <div className="mx-auto max-w-[1500px] space-y-5 p-4 sm:p-6">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr] lg:items-center">
-            <div className="flex items-center gap-5">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-blue-800 text-white shadow-lg shadow-blue-100">
-                <FaUserCircle className="text-5xl" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">Welcome back,</p>
-                <h1 className="text-3xl font-black leading-tight text-[#06194A]">{citizenName}</h1>
-                <p className="mt-1 text-base font-semibold text-slate-600">Citizen Dashboard</p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-[190px_1fr] md:items-center">
-              <div className="hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-3 shadow-inner md:block">
-                <div className="rounded-lg border border-blue-200 bg-white/80 p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-700 text-xs font-black text-white">NQS</span>
-                    <span className="text-xs font-black text-blue-900">NQS National ID</span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-[40px_1fr] gap-2">
-                    <span className="h-10 rounded-md bg-blue-100" />
-                    <span className="space-y-1.5">
-                      <span className="block h-2 rounded bg-blue-100" />
-                      <span className="block h-2 rounded bg-blue-100" />
-                      <span className="block h-2 w-2/3 rounded bg-blue-100" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 border-l border-slate-200 pl-0 md:pl-5">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-700 text-white">
-                  <FaShieldAlt className="text-2xl" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-black text-[#06194A]">Your Identity, Our Priority</h2>
-                  <p className="mt-1 max-w-xl text-sm leading-6 text-slate-600">
-                    Manage your National ID requests, appointments, and queue status from one place.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-700">
-                <FaUserCircle />
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Citizen Summary</p>
-                <h2 className="text-xl font-black text-[#06194A]">Account and National ID overview</h2>
-              </div>
-            </div>
-            <span className={nationalIdStatusBadge(nationalIdStatus)}>
-              {formatNationalIdProcessStatus(nationalIdStatus)}
-            </span>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <ModalDetail label="Full Name" value={citizenName} to="/profile" />
-            <ModalDetail label="National ID Number" value={nationalIdNumber} to="/profile" />
-            <ModalDetail
-              label="National ID Status"
-              to="/dashboard/user/appointments"
-              value={(
-                <span className={nationalIdStatusBadge(nationalIdStatus)}>
-                  {formatNationalIdProcessStatus(nationalIdStatus)}
-                </span>
-              )}
-            />
-            <ModalDetail label="Marital Status" value={formatMaritalStatus(citizenSummary.maritalStatus || citizen.maritalStatus || activeTicket?.registrationDetails?.maritalStatus)} to="/profile" />
-            <ModalDetail label="Account Status" value={formatAccountStatus(citizenSummary.accountStatus || citizen.status)} to="/profile" />
-            <ModalDetail label="Registration Date" value={formatIssuedDate(citizenSummary.registrationDate || citizen.createdAt)} to="/profile" />
-            <ModalDetail label="Issue Date" value={formatIssuedDate(issueDate)} to="/profile" />
-            <ModalDetail label="Expiry Date" value={formatIssuedDate(expiryDate)} to="/profile" />
-            <ModalDetail label="District / Center" value={currentCenter} to="/centers" />
-          </div>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <StatCard icon={<FaClipboardList />} label="Total Requests" value={stats.total} helper="All time" to="/dashboard/user/appointments" />
-          <StatCard icon={<FaCheckCircle />} label="Completed Requests" value={stats.completed} helper="All time" tone="green" to="/dashboard/user/appointments?status=Completed" />
-          <StatCard icon={<FaClock />} label="Pending Requests" value={stats.pending} helper="Awaiting action" tone="amber" to="/dashboard/user/appointments?status=Pending" />
-          <StatCard icon={<FaShieldAlt />} label="Rejected Requests" value={stats.rejected} helper="Needs attention" tone="amber" to="/dashboard/user/appointments?status=Cancelled" />
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            icon={<FaCalendarAlt />}
-            label="Active Appointment"
-            value={stats.active}
-            helper={dashboardTicket ? dashboardTicket.ref : 'No active appointment'}
-            tone="purple"
-            to={dashboardTicket ? undefined : '/dashboard/user/appointments'}
-            onClick={dashboardTicket ? () => handleViewTicket(dashboardTicket) : undefined}
+            icon={<FiCalendar />}
+            label="My Appointments"
+            value={stats.pending}
+            helper="Upcoming"
+            tone="blue"
+            to="/dashboard/user/my-appointments"
+            linkLabel="View all appointments"
           />
-          <StatCard icon={<FaSyncAlt />} label="Replacement Requests" value={stats.replacements} helper="Lost ID requests" tone="blue" to="/dashboard/user/appointments?type=replace_lost_id" />
+          <StatCard
+            icon={<FiUsers />}
+            label="Queue Position"
+            value={trackData ? (trackData.peopleAhead ?? 0) : '--'}
+            helper="People ahead of you"
+            tone="green"
+            to="/dashboard/user/track"
+            linkLabel="Track queue"
+          />
+          <StatCard
+            icon={<FiClock />}
+            label="Estimated Wait Time"
+            value={trackData?.estimatedWait || '--'}
+            helper="Approximate"
+            tone="amber"
+            to="/dashboard/user/track"
+            linkLabel="View queue"
+          />
+          <StatCard
+            icon={<FiHash />}
+            label="My Ticket"
+            value={dashboardTicket?.ref || '--'}
+            helper={dashboardTicket?.currentStatus || 'No active ticket'}
+            tone="purple"
+            to={dashboardTicket ? `/dashboard/user/booking/ticket/${encodeURIComponent(dashboardTicket.ref)}` : '/dashboard/user/services'}
+            linkLabel="View QR Ticket"
+          />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <PanelHeader icon={<FiCalendar />} title="Active Appointment" />
+            {dashboardTicket ? (
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-700">
+                      <FiCalendar />
+                    </div>
+                    <div>
+                      <p className="text-base font-black text-[#06194A]">{dashboardTicket.serviceName}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
+                        <FiMapPin className="shrink-0" /> {dashboardTicket.centerName}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
+                        <FiCalendar className="shrink-0" /> {formatLongDate(dashboardTicket.appointmentDate)}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
+                        <FiClock className="shrink-0" /> {dashboardTicket.appointmentTime || 'Not scheduled'}
+                      </p>
+                      <span className={`mt-2 ${ticketStatusBadgeClass(dashboardTicket.currentStatus)}`}>
+                        {dashboardTicket.currentStatus}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleViewTicket(dashboardTicket)}
+                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-800"
+                  >
+                    View Appointment Details
+                  </button>
+                </div>
+                <div className="flex flex-col items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <QRCodeSVG value={dashboardTicket.ref} size={96} level="M" includeMargin />
+                  <div className="text-center">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Ticket Number</p>
+                    <p className="font-mono text-sm font-black text-[#06194A]">{dashboardTicket.ref}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center">
+                <p className="text-sm font-semibold text-slate-600">No active appointment right now.</p>
+                <Link to="/dashboard/user/services" className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-800">
+                  Book an Appointment
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <PanelHeader
+              icon={<FiVolume2 />}
+              title="Live Queue Status"
+              action={dashboardTicket && trackData ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-black text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Live
+                </span>
+              ) : null}
+            />
+            {dashboardTicket && trackData ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-slate-500">My Ticket</p>
+                    <p className="mt-1 font-mono text-sm font-black text-[#06194A]">{trackData.reference || dashboardTicket.ref}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-slate-500">Now Serving</p>
+                    <p className="mt-1 font-mono text-sm font-black text-green-700">{trackData.nowServing?.reference || '--'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-slate-500">People Ahead</p>
+                    <p className="mt-1 text-sm font-black text-[#06194A]">{trackData.peopleAhead ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase text-slate-500">Estimated Wait</p>
+                    <p className="mt-1 text-sm font-black text-[#06194A]">{trackData.estimatedWait || '--'}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <p className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">Queue Progress</p>
+                  <div className="flex items-start justify-between">
+                    {queueProgressSteps.map((step, index) => {
+                      const Icon = step.icon;
+                      const isDone = index < queueStepIndex;
+                      const isCurrent = index === queueStepIndex;
+                      const circleClass = isDone
+                        ? 'bg-green-500 text-white'
+                        : isCurrent
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-slate-100 text-slate-400';
+                      return (
+                        <React.Fragment key={step.key}>
+                          <div className="flex flex-col items-center gap-1.5 text-center">
+                            <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm ${circleClass}`}>
+                              {isDone ? <FiCheckCircle /> : isCurrent && step.key === 'people_ahead' ? trackData.peopleAhead ?? 0 : <Icon />}
+                            </span>
+                            <span className="max-w-[64px] text-[10px] font-bold leading-tight text-slate-600">{step.label}</span>
+                          </div>
+                          {index < queueProgressSteps.length - 1 && (
+                            <span className={`mt-4 h-0.5 flex-1 ${index < queueStepIndex ? 'bg-green-400' : 'bg-slate-200'}`} />
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Link
+                  to="/dashboard/user/track"
+                  className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-100"
+                >
+                  Track Live Queue
+                </Link>
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center">
+                <p className="text-sm font-semibold text-slate-600">No live queue activity right now.</p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <PanelHeader icon={<FiGrid />} title="Quick Actions" />
+            <div className="grid grid-cols-2 gap-3">
+              <Link to="/dashboard/user/services" className="flex flex-col items-start gap-2 rounded-xl border p-3 nqs-card-tone-blue hover:-translate-y-0.5 hover:shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg nqs-card-tone-icon-blue"><FiCalendar /></span>
+                <span className="text-sm font-black text-[#06194A]">Book Appointment</span>
+                <span className="text-[11px] text-slate-500">Schedule a new appointment</span>
+              </Link>
+              <Link to="/dashboard/user/track" className="flex flex-col items-start gap-2 rounded-xl border p-3 nqs-card-tone-green hover:-translate-y-0.5 hover:shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg nqs-card-tone-icon-green"><FiUsers /></span>
+                <span className="text-sm font-black text-[#06194A]">Track Queue</span>
+                <span className="text-[11px] text-slate-500">Check real-time queue status</span>
+              </Link>
+              {dashboardTicket ? (
+                <button
+                  type="button"
+                  onClick={() => handleViewTicket(dashboardTicket)}
+                  className="flex flex-col items-start gap-2 rounded-xl border p-3 text-left nqs-card-tone-purple hover:-translate-y-0.5 hover:shadow-sm"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg nqs-card-tone-icon-purple"><FiGrid /></span>
+                  <span className="text-sm font-black text-[#06194A]">My QR Ticket</span>
+                  <span className="text-[11px] text-slate-500">View and download your QR ticket</span>
+                </button>
+              ) : (
+                <Link to="/dashboard/user/services" className="flex flex-col items-start gap-2 rounded-xl border p-3 nqs-card-tone-purple hover:-translate-y-0.5 hover:shadow-sm">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg nqs-card-tone-icon-purple"><FiGrid /></span>
+                  <span className="text-sm font-black text-[#06194A]">My QR Ticket</span>
+                  <span className="text-[11px] text-slate-500">View and download your QR ticket</span>
+                </Link>
+              )}
+              <Link to="/dashboard/user/my-appointments" className="flex flex-col items-start gap-2 rounded-xl border p-3 nqs-card-tone-orange hover:-translate-y-0.5 hover:shadow-sm">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg text-lg nqs-card-tone-icon-orange"><FiRefreshCw /></span>
+                <span className="text-sm font-black text-[#06194A]">Reschedule / Cancel</span>
+                <span className="text-[11px] text-slate-500">Reschedule or cancel your appointment</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <PanelHeader icon={<FiFlag />} title="Appointment Status" />
+            {dashboardTicket ? (
+              <ol className="space-y-4">
+                {appointmentSteps.map((step, index) => {
+                  const currentIndex = appointmentSteps.findIndex((s) => s.key === appointmentStepKey(dashboardTicket.currentStatus));
+                  const isDone = index < currentIndex;
+                  const isCurrent = index === currentIndex;
+                  const Icon = step.icon;
+                  return (
+                    <li key={step.key} className="flex items-center gap-3">
+                      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${
+                        isDone ? 'bg-green-500 text-white' : isCurrent ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-400'
+                      }`}
+                      >
+                        {isDone ? <FiCheckCircle /> : <Icon />}
+                      </span>
+                      <span className={`text-sm font-bold ${isCurrent ? 'text-[#06194A]' : 'text-slate-500'}`}>{step.label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-sm font-semibold text-slate-600">No appointment to track yet.</p>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <PanelHeader
+                icon={<FiClock />}
+                title="Recent Activity"
+                action={<Link to="/dashboard/user/my-appointments" className="text-xs font-black text-blue-700">View all</Link>}
+              />
+              {recentActivity.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-600">No recent activity yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {recentActivity.map((event, index) => {
+                    const Icon = event.icon;
+                    return (
+                      <li key={`${event.label}-${index}`} className="flex items-center gap-3">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm nqs-card-tone-icon-${event.tone}`}>
+                          <Icon />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-[#06194A]">{event.label}</p>
+                          <p className="text-[11px] text-slate-500">{timeAgo(event.at)}</p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <PanelHeader
+                icon={<FiBell />}
+                title="Notifications"
+                action={<Link to="/notifications" className="text-xs font-black text-blue-700">View all</Link>}
+              />
+              {recentNotifications.length === 0 ? (
+                <p className="text-sm font-semibold text-slate-600">No notifications yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {recentNotifications.map((notification) => (
+                    <li key={notification.id || notification._id} className="flex items-start gap-3">
+                      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${notification.read ? 'bg-slate-300' : 'bg-blue-600'}`} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-[#06194A]">{notification.title || 'Notification'}</p>
+                        <p className="truncate text-[11px] text-slate-500">{notification.desc || ''}</p>
+                        <p className="text-[10px] text-slate-400">{timeAgo(notification.timestamp)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </section>
 
         {cancelledForResubmission.length > 0 && (
@@ -476,9 +651,7 @@ const UserDashboard = () => {
             </div>
 
             <div className="grid gap-3 lg:grid-cols-2">
-              {cancelledForResubmission.map((ticket) => {
-                const reasons = getCancellationReasonList(ticket);
-                return (
+              {cancelledForResubmission.map((ticket) => (
                   <article key={ticket.id || ticket.ref} className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -496,22 +669,12 @@ const UserDashboard = () => {
                       <ModalDetail label="Appointment Time" value={ticket.appointmentTime || 'Not scheduled'} />
                     </div>
 
-                    <div className="mt-4 rounded-xl border border-red-200 bg-white p-3">
-                      <p className="text-xs font-black uppercase tracking-wide text-red-600">Admin feedback</p>
-                      {reasons.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {reasons.map((reason) => (
-                            <span key={reason} className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">
-                              {reason}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-sm font-semibold text-slate-700">Please correct your information and resubmit.</p>
-                      )}
-                      {ticket.cancellationNotes && (
-                        <p className="mt-3 text-sm font-semibold text-slate-700">Admin note: {ticket.cancellationNotes}</p>
-                      )}
+                    <div className="mt-4">
+                      <CitizenStaffFeedback
+                        ticket={ticket}
+                        title="Admin / operator feedback"
+                        forceShow
+                      />
                     </div>
 
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -531,8 +694,7 @@ const UserDashboard = () => {
                       </Link>
                     </div>
                   </article>
-                );
-              })}
+              ))}
             </div>
           </section>
         )}
@@ -541,15 +703,15 @@ const UserDashboard = () => {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title="NQ Ticket Details"
+        title="NQ Request Details"
         className="max-w-4xl overflow-hidden border border-slate-200 bg-white"
       >
         {selectedTicket && (
           <div className="space-y-5 p-1">
-            <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-[#0B3A75] to-[#2563eb] p-5 text-white">
+            <div className="rounded-3xl border border-blue-100 bg-[#0B3A75] p-5 text-white">
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-100">National ID Appointment Ticket</p>
+                  <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-100">National ID Appointment Request</p>
                   <p className="mt-3 font-mono text-3xl font-black text-white sm:text-4xl">{selectedTicket.ref}</p>
                   <p className="mt-2 text-sm font-semibold text-blue-100">
                     {selectedTicket.citizenDisplayName || citizenName}
@@ -566,7 +728,7 @@ const UserDashboard = () => {
               <ModalDetail label="Phone Number" value={selectedTicket.citizenPhone} />
               <ModalDetail label="Marital Status" value={formatMaritalStatus(selectedTicket.registrationDetails?.maritalStatus || citizen.maritalStatus)} />
               <ModalDetail label="National ID Number" value={selectedTicket.nationalIdNumber || citizen.nationalId || 'Not issued yet'} />
-              <ModalDetail label="Ticket Reference" value={selectedTicket.ref} />
+              <ModalDetail label="Request Reference" value={selectedTicket.ref} />
               <ModalDetail label="Queue Number" value={queueNumberOf(selectedTicket, selectedTicket.ref === activeTicket?.ref ? trackData : null)} />
               <ModalDetail label="Service Type" value={selectedTicket.serviceName} />
               <ModalDetail label="Appointment Status" value={selectedTicket.currentStatus} />
@@ -580,37 +742,25 @@ const UserDashboard = () => {
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white">
-                  <FaPhoneAlt />
+                  <FiPhoneCall />
                 </div>
                 <div>
                   <h3 className="font-black text-[#0B3A75]">Important information</h3>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Bring your original documents and arrive 15 minutes before your appointment. Show this ticket reference or QR code at the selected center.
+                    Bring your original documents and arrive 15 minutes before your appointment. Show this request reference or QR code at the selected center.
                   </p>
                 </div>
               </div>
             </div>
 
             {selectedTicket.currentStatus === 'Cancelled' && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
-                <p className="text-xs font-black uppercase tracking-wide text-red-600">Cancellation Reasons</p>
-                {getCancellationReasonList(selectedTicket).length ? (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {getCancellationReasonList(selectedTicket).map((reason) => (
-                      <span key={reason} className="rounded-full bg-white px-3 py-1 text-xs font-black text-red-700">
-                        {reason}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm font-semibold">No cancellation reason was provided.</p>
-                )}
+              <div className="space-y-3">
                 {selectedTicket.cancelledAt && (
-                  <p className="mt-3 text-sm font-semibold">Cancelled on {formatLongDate(selectedTicket.cancelledAt)}</p>
+                  <p className="text-sm font-semibold text-slate-700">
+                    Cancelled on {formatLongDate(selectedTicket.cancelledAt)}
+                  </p>
                 )}
-                {selectedTicket.cancellationNotes && (
-                  <p className="mt-2 text-sm font-semibold">Admin note: {selectedTicket.cancellationNotes}</p>
-                )}
+                <CitizenStaffFeedback ticket={selectedTicket} />
               </div>
             )}
             {selectedTicket.currentStatus === 'Completed' && (

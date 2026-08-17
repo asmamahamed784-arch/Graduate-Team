@@ -5,23 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../shared/models/appointment.dart';
 import '../../../shared/widgets/common_widgets.dart';
 import '../../../shared/widgets/state_views.dart';
 import '../application/appointments_controller.dart';
-import '../data/booking_repository.dart';
-
-/// Reads from the cached list first, then falls back to
-/// `GET /api/bookings/:refOrId` for deep links.
-final _appointmentDetailProvider = FutureProvider.family<Appointment, String>(
-  isAutoDispose: true,
-  (ref, id) async {
-    final cached = ref.watch(appointmentByIdProvider(id));
-    if (cached != null) return cached;
-    return ref.watch(bookingRepositoryProvider).byReference(id);
-  },
-);
+import 'appointment_detail_helpers.dart';
+import 'appointment_section_screen.dart';
+import 'widgets/cancel_reason_sheet.dart';
+import 'widgets/request_status_timeline.dart';
 
 class AppointmentDetailScreen extends ConsumerWidget {
   const AppointmentDetailScreen({super.key, required this.appointmentId});
@@ -33,45 +24,40 @@ class AppointmentDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     Appointment appointment,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cancel this request?'),
-        content: Text('Reference ${appointment.reference} will be cancelled.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep it'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Cancel request'),
-          ),
-        ],
-      ),
+    final reason = await showCancelReasonSheet(
+      context,
+      reference: appointment.reference,
     );
-    if (confirmed != true) return;
+    if (reason == null || !context.mounted) return;
 
     try {
-      await ref.read(appointmentsControllerProvider.notifier).cancel(appointment.id);
-      ref.invalidate(_appointmentDetailProvider(appointmentId));
-      if (context.mounted) showAppSnackBar(context, 'Request cancelled.');
+      await ref
+          .read(appointmentsControllerProvider.notifier)
+          .cancel(appointment.id, reason: reason);
+      ref.invalidate(appointmentDetailProvider(appointmentId));
+      if (context.mounted) {
+        showAppSnackBar(context, 'Appointment cancelled.');
+      }
     } on ApiException catch (error) {
-      if (context.mounted) showAppSnackBar(context, error.message, isError: true);
+      if (context.mounted) {
+        showAppSnackBar(context, error.message, isError: true);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appointment = ref.watch(_appointmentDetailProvider(appointmentId));
+    final appointment = ref.watch(appointmentDetailProvider(appointmentId));
 
     return Scaffold(
+      backgroundColor: AppColors.lightBackground,
       appBar: AppBar(title: const Text('Request details')),
       body: appointment.when(
         loading: () => const LoadingView(),
         error: (error, _) => ErrorStateView(
           error: error,
-          onRetry: () => ref.invalidate(_appointmentDetailProvider(appointmentId)),
+          onRetry: () =>
+              ref.invalidate(appointmentDetailProvider(appointmentId)),
         ),
         data: (data) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
@@ -87,11 +73,12 @@ class AppointmentDetailScreen extends ConsumerWidget {
                           data.reference,
                           style: const TextStyle(
                             fontSize: 21,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navy,
                           ),
                         ),
                       ),
-                      StatusChip(status: data.status),
+                      StatusChip(status: queueStatusHeadline(data)),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -101,114 +88,155 @@ class AppointmentDetailScreen extends ConsumerWidget {
                         : data.serviceName,
                     style: const TextStyle(color: AppColors.muted),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => context.push(AppRoutes.ticket(data.reference)),
-                          icon: const Icon(Icons.qr_code_2_rounded, size: 18),
-                          label: const Text('QR ticket'),
-                          style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-                        ),
+                  if (data.status.toLowerCase() == 'completed' ||
+                      data.requestStatus.toLowerCase() == 'completed') ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
                       ),
-                      if (data.isTrackable) ...[
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () =>
-                                context.push(AppRoutes.trackRef(data.reference)),
-                            icon: const Icon(Icons.timeline_rounded, size: 18),
-                            label: const Text('Track'),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 44),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.success,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'This appointment is completed. Open the cards below to view full details.',
+                              style: TextStyle(
+                                color: Color(0xFF065F46),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                                height: 1.35,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () =>
+                            context.push(AppRoutes.ticket(data.reference)),
+                        icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                        label: const Text('QR Request'),
+                      ),
+                      if (data.isTrackable)
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              context.push(AppRoutes.trackRef(data.reference)),
+                          icon: const Icon(Icons.timeline_rounded, size: 18),
+                          label: const Text('Track queue'),
                         ),
-                      ],
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 22),
-            const SectionHeader(title: 'Request'),
-            SectionCard(
-              child: Column(
-                children: [
-                  DetailRow(
-                    label: 'Type',
-                    value: data.requestTypeLabel,
-                    icon: Icons.category_outlined,
-                  ),
-                  DetailRow(
-                    label: 'Progress',
-                    value: data.requestStatus,
-                    icon: Icons.timeline_rounded,
-                  ),
-                  DetailRow(
-                    label: 'Submitted',
-                    value: Formatters.dateTime(data.createdAt),
-                    icon: Icons.schedule_rounded,
-                  ),
-                  if (data.nationalIdNumber.isNotEmpty)
-                    DetailRow(
-                      label: 'National ID',
-                      value: data.nationalIdNumber,
-                      icon: Icons.badge_outlined,
-                      copyable: true,
-                    ),
-                ],
-              ),
-            ),
-            if (data.hasAppointmentSlot) ...[
-              const SizedBox(height: 22),
-              const SectionHeader(title: 'Appointment'),
-              SectionCard(
-                child: Column(
-                  children: [
-                    DetailRow(
-                      label: 'Center',
-                      value: data.centerName,
-                      icon: Icons.location_city_rounded,
-                    ),
-                    if (data.centerAddress.isNotEmpty)
-                      DetailRow(
-                        label: 'Address',
-                        value: data.centerAddress,
-                        icon: Icons.place_outlined,
-                      ),
-                    DetailRow(
-                      label: 'Date',
-                      value: Formatters.readableDate(data.date),
-                      icon: Icons.event_outlined,
-                    ),
-                    DetailRow(
-                      label: 'Time',
-                      value: data.timeSlot ?? '--',
-                      icon: Icons.schedule_rounded,
-                    ),
-                    DetailRow(
-                      label: 'Counter',
-                      value: data.counter,
-                      icon: Icons.desk_outlined,
-                    ),
-                  ],
+            const SizedBox(height: 16),
+            SectionCard(child: RequestStatusTimeline(appointment: data)),
+            const SizedBox(height: 18),
+            const SectionHeader(title: 'Open a section'),
+            const SizedBox(height: 10),
+            _SectionNavCard(
+              title: 'Request',
+              subtitle: '${data.requestTypeLabel} · ${data.requestStatus}',
+              icon: Icons.description_outlined,
+              onTap: () => context.push(
+                AppRoutes.appointmentSection(
+                  appointmentId,
+                  AppointmentSection.request.path,
                 ),
               ),
+            ),
+            const SizedBox(height: 10),
+            if (data.hasAppointmentSlot) ...[
+              _SectionNavCard(
+                title: 'Appointment',
+                subtitle:
+                    '${data.centerName} · ${data.timeSlot ?? data.date}',
+                icon: Icons.event_available_rounded,
+                onTap: () => context.push(
+                  AppRoutes.appointmentSection(
+                    appointmentId,
+                    AppointmentSection.appointment.path,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (data.isCancelled || data.needsResubmission) ...[
+              _SectionNavCard(
+                title: 'Staff feedback',
+                subtitle: data.cancellationReasons.isEmpty
+                    ? 'View notes and incorrect fields'
+                    : data.cancellationReasons.take(3).join(' · '),
+                icon: Icons.feedback_outlined,
+                iconColor: AppColors.danger,
+                iconBg: const Color(0xFFFEF2F2),
+                onTap: () => context.push(
+                  AppRoutes.appointmentSection(
+                    appointmentId,
+                    AppointmentSection.feedback.path,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
             ],
             if (data.details.isNotEmpty) ...[
-              const SizedBox(height: 22),
-              const SectionHeader(title: 'Submitted information'),
-              SectionCard(child: _DetailsBlock(details: data.details)),
+              _SectionNavCard(
+                title: 'Submitted information',
+                subtitle: 'View each citizen detail on its own page',
+                icon: Icons.person_outline_rounded,
+                onTap: () => context.push(
+                  AppRoutes.appointmentSection(
+                    appointmentId,
+                    AppointmentSection.submitted.path,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 12),
+            if (data.needsResubmission ||
+                (data.isCancelled && data.hasStaffCancellationFeedback))
+              PrimaryButton(
+                label: 'Correct information',
+                icon: Icons.edit_note_rounded,
+                onPressed: () => context.push(AppRoutes.correction(data.id)),
+              ),
+            if (data.hasAppointmentSlot &&
+                (data.isActive ||
+                    data.isCancelled ||
+                    data.needsResubmission)) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => context.push(AppRoutes.reschedule(data.id)),
+                icon: const Icon(Icons.event_repeat_rounded, size: 19),
+                label: const Text('Reschedule appointment'),
+              ),
             ],
             if (data.canCancel) ...[
-              const SizedBox(height: 26),
+              const SizedBox(height: 10),
               OutlinedButton.icon(
                 onPressed: () => _cancel(context, ref, data),
                 icon: const Icon(Icons.cancel_outlined, size: 19),
-                label: const Text('Cancel this request'),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
+                label: const Text('Cancel appointment'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.danger,
+                ),
               ),
             ],
           ],
@@ -218,51 +246,88 @@ class AppointmentDetailScreen extends ConsumerWidget {
   }
 }
 
-/// Renders the free-form `registrationDetails` / `replacementDetails` /
-/// `updateDetails` JSON the backend stores per request type.
-class _DetailsBlock extends StatelessWidget {
-  const _DetailsBlock({required this.details});
+class _SectionNavCard extends StatelessWidget {
+  const _SectionNavCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+    this.iconColor = AppColors.primary,
+    this.iconBg = AppColors.primarySoft,
+  });
 
-  final Map<String, dynamic> details;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color iconColor;
+  final Color iconBg;
 
   @override
   Widget build(BuildContext context) {
-    final rows = <Widget>[];
-
-    details.forEach((key, value) {
-      if (value == null) return;
-      if (value is String && value.trim().isEmpty) return;
-      if (value is List && value.isEmpty) return;
-
-      if (key == 'changes' && value is List) {
-        for (final change in value.whereType<Map>()) {
-          rows.add(
-            DetailRow(
-              label: '${change['field'] ?? 'Change'}',
-              value: '${change['currentValue'] ?? ''} → ${change['newValue'] ?? ''}',
-            ),
-          );
-        }
-        return;
-      }
-
-      rows.add(
-        DetailRow(
-          label: Formatters.titleCase(_humanize(key)),
-          value: value is List ? value.join(', ') : value.toString(),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.lightBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15.5,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            ],
+          ),
         ),
-      );
-    });
-
-    if (rows.isEmpty) {
-      return const Text(
-        'No extra information was submitted.',
-        style: TextStyle(color: AppColors.muted),
-      );
-    }
-    return Column(children: rows);
+      ),
+    );
   }
-
-  String _humanize(String key) =>
-      key.replaceAllMapped(RegExp(r'([A-Z])'), (match) => ' ${match[1]}').trim();
 }

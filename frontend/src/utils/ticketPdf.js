@@ -41,7 +41,7 @@ const convertImageToJpegDataUrl = (dataUrl, size = 260) => new Promise((resolve,
     resolve(canvas.toDataURL('image/jpeg', 0.95));
   };
 
-  image.onerror = () => reject(new Error('Could not prepare the QR code image for the PDF ticket.'));
+  image.onerror = () => reject(new Error('Could not prepare the QR code image for the PDF request.'));
   image.src = dataUrl;
 });
 
@@ -50,7 +50,7 @@ const getQrJpegHex = async (ref) => {
   const qrDataUrl = response.data?.data;
 
   if (!response.data?.success || !qrDataUrl) {
-    throw new Error('Could not generate the QR code for this ticket.');
+    throw new Error('Could not generate the QR code for this request.');
   }
 
   const jpegDataUrl = await convertImageToJpegDataUrl(qrDataUrl);
@@ -69,7 +69,7 @@ const buildPdf = ({ lines, qrImageHex }) => {
     'BT',
     '/F1 20 Tf',
     '72 740 Td',
-    '(National Queue System Ticket) Tj',
+    '(National Queue System Request) Tj',
     '/F1 11 Tf',
     '0 -22 Td',
     '(National ID Appointment - Banaadir Portal) Tj',
@@ -86,10 +86,10 @@ const buildPdf = ({ lines, qrImageHex }) => {
     'BT',
     '/F1 12 Tf',
     '372 710 Td',
-    '(Scan QR Ticket) Tj',
+    '(Scan QR Request) Tj',
     '/F1 9 Tf',
     '0 -18 Td',
-    '(QR contains ticket reference only.) Tj',
+    '(QR contains request reference only.) Tj',
     'ET',
     'q',
     '160 0 0 160 372 520 cm',
@@ -137,7 +137,7 @@ const buildPdf = ({ lines, qrImageHex }) => {
 };
 
 export const downloadTicketPdf = async (ticket) => {
-  const ref = ticket.ref || ticket.reference || 'REQ-TICKET';
+  const ref = ticket.ref || ticket.reference || 'REQ-UNKNOWN';
   const lines = [
     `Reference: ${ref}`,
     `Service: ${ticket.service || 'N/A'}`,
@@ -147,7 +147,7 @@ export const downloadTicketPdf = async (ticket) => {
     `Estimated Wait: ${ticket.waitTime || ticket.estimatedWait || 'N/A'}`,
     `Status: ${ticket.status || 'Confirmed'}`,
     '',
-    'Present this PDF ticket at the selected National ID center.'
+    'Present this PDF request at the selected National ID center.'
   ];
 
   const qrImageHex = await getQrJpegHex(ref);

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(jobs)",
+      "Bash(wait %1)",
+      "Bash(node _tmp_approve_check.mjs)",
+      "Bash(node -e ' *)"
+    ]
+  }
+}

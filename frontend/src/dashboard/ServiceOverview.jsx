@@ -87,7 +87,7 @@ export default function ServiceOverview({
                 Service Name
               </th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">
-                Tickets Today
+                Requests Today
               </th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-center">
                 Avg Wait

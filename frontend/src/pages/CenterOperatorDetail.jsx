@@ -20,12 +20,19 @@ import {
   FiXCircle
 } from 'react-icons/fi';
 import api from '../api/axiosInstance';
-import { useAuth } from '../hooks';
+import { useAuth, useOtpGate } from '../hooks';
 import {
   canCancelAppointment,
   canCompleteAppointment,
+  canReacceptAppointment,
 } from '../utils/appointmentActions';
-import { INCORRECT_FIELD_OPTIONS } from '../utils/cancellationFields';
+import { getCancellationFeedbackText, getCancellationReasonList } from '../utils/cancellationDisplay';
+import LostIdCancelDetails from '../components/LostIdCancelDetails';
+import OtpGateModal from '../components/OtpGateModal';
+import {
+  getIncorrectFieldOptionsForTicket,
+  isLostReplacementRequest,
+} from '../utils/cancellationFields';
 import { getChangedUpdateFields } from '../utils/updateRequestFields';
 
 const emptyForm = {
@@ -44,21 +51,29 @@ const getRequestTypeLabel = (requestType) => {
   return 'New Registration';
 };
 
-const statusLabel = (status = '') => String(status || 'active').replace(/_/g, ' ');
+const statusLabel = (status = '') => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'pending_approval') return 'Pending Approval';
+  if (normalized === 'active') return 'Active';
+  if (normalized === 'inactive') return 'Inactive';
+  if (normalized === 'rejected') return 'Rejected';
+  return status || 'Unknown';
+};
 
 const statusClass = (status = '') => {
-  if (status === 'active') return 'bg-emerald-500/15 text-emerald-300';
-  if (status === 'pending_approval') return 'bg-amber-500/15 text-amber-200';
-  if (status === 'rejected') return 'bg-red-500/15 text-red-300';
-  return 'bg-slate-500/15 text-slate-300';
+  if (status === 'active') return 'nqs-badge-tone-green';
+  if (status === 'pending_approval') return 'nqs-badge-tone-orange';
+  if (status === 'rejected') return 'nqs-badge-tone-pink';
+  if (status === 'inactive') return 'nqs-badge-tone-pink';
+  return 'nqs-badge-tone-blue';
 };
 
 const appointmentStatusClass = (status = '') => {
   const normalized = normalizeStatus(status);
-  if (['completed', 'complete'].includes(normalized)) return 'bg-emerald-500/15 text-emerald-300';
-  if (['cancelled', 'canceled', 'rejected', 'resubmission required', 'correction required'].includes(normalized)) return 'bg-red-500/15 text-red-300';
-  if (['being served', 'in progress'].includes(normalized)) return 'bg-blue-500/15 text-blue-200';
-  return 'bg-amber-500/15 text-amber-200';
+  if (['completed', 'complete'].includes(normalized)) return 'nqs-badge-tone-green';
+  if (['cancelled', 'canceled', 'rejected', 'resubmission required', 'correction required'].includes(normalized)) return 'nqs-badge-tone-pink';
+  if (['being served', 'in progress'].includes(normalized)) return 'nqs-badge-tone-blue';
+  return 'nqs-badge-tone-orange';
 };
 
 const inputClass = 'w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-card)] px-3 py-2.5 text-sm text-[var(--text-main)] outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20 disabled:opacity-80';
@@ -108,6 +123,23 @@ const roleLabel = (operator = {}) => {
 };
 
 const normalizeStatus = (value = '') => String(value || '').trim().toLowerCase();
+
+const isPendingOrRejectedOperator = (operator = {}) => (
+  ['pending_approval', 'rejected'].includes(normalizeStatus(operator.status))
+);
+
+const isOperatorActiveToday = (operator = {}) => {
+  if (normalizeStatus(operator.status) !== 'active') return false;
+  if (!operator.lastActiveAt) return false;
+  const seen = new Date(operator.lastActiveAt);
+  if (Number.isNaN(seen.getTime())) return false;
+  const now = new Date();
+  return seen.getFullYear() === now.getFullYear() && seen.getMonth() === now.getMonth() && seen.getDate() === now.getDate();
+};
+
+const operatorDisplayStatus = (operator = {}) => (
+  isPendingOrRejectedOperator(operator) ? normalizeStatus(operator.status) : (isOperatorActiveToday(operator) ? 'active' : 'inactive')
+);
 
 const isWaitingAppointment = (appointment) => {
   const status = normalizeStatus(appointment.status);
@@ -228,12 +260,14 @@ const CenterOperatorDetail = () => {
   const [cancelNotes, setCancelNotes] = useState('');
   const [customCancelReason, setCustomCancelReason] = useState('');
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
-  const [completeOtpTarget, setCompleteOtpTarget] = useState(null);
-  const [completeOtp, setCompleteOtp] = useState('');
-  const [completeOtpLoading, setCompleteOtpLoading] = useState(false);
+  const {
+    otpFlow, otpDigits, otpSeconds, otpRequesting, otpVerifying, otpError,
+    requestOtp, updateOtpDigit, verifyOtpGate, resendOtpGate, closeOtpGate
+  } = useOtpGate();
   const [operatorModalOpen, setOperatorModalOpen] = useState(false);
   const [editingId, setEditingId] = useState('');
   const [form, setForm] = useState(emptyForm);
+  const [approvingOperatorId, setApprovingOperatorId] = useState('');
 
   const centerBasePath = `/dashboard/admin/operators/center/${encodeURIComponent(decodedCenterKey)}`;
   const openPanel = (panelKey) => navigate(`${centerBasePath}/${panelKey}`);
@@ -346,7 +380,7 @@ const CenterOperatorDetail = () => {
         toast.success('Operator updated.');
       } else {
         await api.post('/api/operators', payload);
-        toast.success('Operator created and sent for Super Admin approval.');
+        toast.success('Operator created.');
       }
 
       closeOperatorModal();
@@ -356,17 +390,23 @@ const CenterOperatorDetail = () => {
     }
   };
 
-  const setOperatorStatus = async (operator, status) => {
-    if (!isAdmin) return;
+  const approveOperator = async (operator) => {
+    if (!isAdmin || operator.status !== 'pending_approval') return;
+    const operatorId = operator._id || operator.id;
+    if (!operatorId) return;
     try {
-      const endpoint = status === 'active'
-        ? (operator.status === 'pending_approval' ? 'approve' : 'activate')
-        : 'deactivate';
-      await api.put(`/api/operators/${operator._id}/${endpoint}`);
-      toast.success(status === 'active' ? 'Operator is active now.' : 'Operator deactivated.');
+      setApprovingOperatorId(operatorId);
+      await api.put(`/api/operators/${operatorId}/approve`);
+      setOperators((current) => current.map((item) => {
+        const itemId = item._id || item.id;
+        return itemId === operatorId ? { ...item, status: 'active' } : item;
+      }));
+      toast.success('Operator approved.');
       await loadData();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Unable to update operator status.');
+      toast.error(error.response?.data?.message || 'Unable to approve operator.');
+    } finally {
+      setApprovingOperatorId('');
     }
   };
 
@@ -375,51 +415,27 @@ const CenterOperatorDetail = () => {
     if (!appointmentId) return;
     setActionLoading(`complete-${appointmentId}`);
     try {
-      const otpRequest = await api.post('/api/otp/request', {
-        purpose: 'complete_service',
-        ticketId: appointmentId
-      });
-      setCompleteOtpTarget({
-        ...appointment,
-        completeOtpId: otpRequest.data?.data?.otpId,
-        completeOtpPhone: otpRequest.data?.data?.phone
-      });
-      setCompleteOtp('');
-      toast.success('OTP sent to citizen phone.');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Unable to send complete-service OTP.');
-    } finally {
-      setActionLoading('');
-    }
-  };
-
-  const verifyCompleteOtp = async () => {
-    if (!completeOtpTarget || completeOtp.length !== 6) {
-      toast.error('Enter the 6-digit OTP from the SMS.');
-      return;
-    }
-
-    const appointmentId = getAppointmentId(completeOtpTarget);
-    setCompleteOtpLoading(true);
-    try {
-      const otpRes = await api.post('/api/otp/verify', {
+      const otpToken = await requestOtp({
         purpose: 'complete_service',
         ticketId: appointmentId,
-        otpId: completeOtpTarget.completeOtpId,
-        code: completeOtp.trim()
+        ticketRef: appointment.ref,
+        title: 'Verify to Complete',
+        description: `Ask the citizen for the 6-digit code sent to their phone to complete ${appointment.ref || 'this request'}.`
       });
+      if (!otpToken) {
+        toast.info('Complete service cancelled.');
+        return;
+      }
       await api.put(`/api/bookings/admin/${appointmentId}/status`, {
         status: 'Completed',
-        otpToken: otpRes.data?.data?.verificationToken
+        otpToken
       });
-      toast.success(`Ticket ${completeOtpTarget.ref || ''} completed and citizen notified.`);
-      setCompleteOtpTarget(null);
-      setCompleteOtp('');
+      toast.success(`Request ${appointment.ref || ''} completed and citizen notified.`);
       await loadData();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Invalid OTP.');
+      toast.error(error.response?.data?.message || 'Unable to complete this appointment.');
     } finally {
-      setCompleteOtpLoading(false);
+      setActionLoading('');
     }
   };
 
@@ -452,20 +468,34 @@ const CenterOperatorDetail = () => {
     );
   };
 
-  const selectedReasonLabels = () =>
-    selectedCancelReasons.filter((reason) => INCORRECT_FIELD_OPTIONS.includes(reason));
+  const selectedReasonLabels = (ticket = cancelModalTicket) => {
+    const allowed = getIncorrectFieldOptionsForTicket(ticket);
+    return selectedCancelReasons.filter((reason) => allowed.includes(reason));
+  };
 
   const handleCancelAppointment = async (appointment, cancelData = {}) => {
     const appointmentId = getAppointmentId(appointment);
     if (!appointmentId) return;
     setActionLoading(`cancel-${appointmentId}`);
     try {
+      const otpToken = await requestOtp({
+        purpose: 'cancel_service',
+        ticketId: appointmentId,
+        ticketRef: appointment.ref,
+        title: 'Verify to Cancel',
+        description: `Ask the citizen for the 6-digit code sent to their phone to cancel ${appointment.ref || 'this request'}.`
+      });
+      if (!otpToken) {
+        toast.info('Cancellation aborted.');
+        return;
+      }
       await api.put(`/api/bookings/${appointmentId}/cancel`, {
         cancellationReason: cancelData.cancellationReason || 'Cancelled by center staff',
         cancellationReasons: cancelData.cancellationReasons || [],
         additionalNotes: cancelData.additionalNotes || '',
+        otpToken
       });
-      toast.success(`Ticket ${appointment.ref || ''} cancelled. Citizen has been notified.`);
+      toast.success(`Request ${appointment.ref || ''} cancelled. Citizen has been notified.`);
       closeCancelModal();
       await loadData();
     } catch (error) {
@@ -475,9 +505,32 @@ const CenterOperatorDetail = () => {
     }
   };
 
+  const handleReacceptAppointment = async (appointment) => {
+    const appointmentId = getAppointmentId(appointment);
+    if (!appointmentId) return;
+    if (!canReacceptAppointment(appointment)) {
+      toast.info('Re-accept is available only after the appointment is completed.');
+      return;
+    }
+    const confirmed = window.confirm(`Re-accept ${appointment.ref || 'this request'}? This will return it to Waiting so it can be handled again.`);
+    if (!confirmed) return;
+
+    setActionLoading(`reaccept-${appointmentId}`);
+    try {
+      await api.put(`/api/bookings/admin/${appointmentId}/status`, { status: 'Waiting' });
+      toast.success(`Request ${appointment.ref || ''} returned to Waiting.`);
+      await loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Unable to re-accept this appointment.');
+    } finally {
+      setActionLoading('');
+    }
+  };
+
   const submitCancel = () => {
     if (!cancelModalTicket) return;
     const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+    const isLostReq = isLostReplacementRequest(cancelModalTicket);
 
     if (isUpdateReq) {
       const changedFields = getChangedUpdateFields(cancelModalTicket);
@@ -502,9 +555,13 @@ const CenterOperatorDetail = () => {
       return;
     }
 
-    const validReasons = selectedReasonLabels();
+    const validReasons = selectedReasonLabels(cancelModalTicket);
     if (!validReasons.length) {
-      toast.error('Please select at least one incorrect field.');
+      toast.error(
+        isLostReq
+          ? 'Please select at least one incorrect Lost ID field.'
+          : 'Please select at least one incorrect field.'
+      );
       return;
     }
     if (!showCancelConfirmation) {
@@ -520,13 +577,13 @@ const CenterOperatorDetail = () => {
 
   const stats = center?.stats || {};
   const statCards = [
-    { key: 'allAppointments', label: 'All History', value: centerAppointments.length || stats.allAppointments || 0, helper: 'All center records', icon: FiList, color: 'text-blue-600 dark:text-[#7CB8FF]' },
-    { key: 'waiting', label: 'Waiting', value: stats.waiting || centerAppointments.filter(isWaitingAppointment).length || 0, helper: 'Waiting and on-hold work', icon: FiClock, color: 'text-amber-600 dark:text-amber-300' },
-    { key: 'completed', label: 'Completed', value: stats.completed || centerAppointments.filter(isCompletedAppointment).length || 0, helper: 'Completed services', icon: FiCheckCircle, color: 'text-emerald-600 dark:text-emerald-300' },
-    { key: 'newRegistration', label: 'New Registration', value: stats.newRegistration || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'newRegistration').length || 0, helper: 'New National ID requests', icon: FiShield, color: 'text-blue-600 dark:text-[#7CB8FF]' },
-    { key: 'updateInformation', label: 'Update Info', value: stats.updateInformation || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'updateInformation').length || 0, helper: 'Information update requests', icon: FiFileText, color: 'text-sky-600 dark:text-sky-300' },
-    { key: 'replaceLostId', label: 'Replace Lost ID', value: stats.replaceLostId || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'replaceLostId').length || 0, helper: 'Lost ID requests', icon: FiRepeat, color: 'text-purple-600 dark:text-purple-300' },
-    { key: 'staff', label: 'Staff', value: centerOperators.length, helper: 'Operators in this center', icon: FiUsers, color: 'text-indigo-600 dark:text-indigo-300' }
+    { key: 'allAppointments', label: 'All History', value: centerAppointments.length || stats.allAppointments || 0, helper: 'All center records', icon: FiList, tone: 'blue' },
+    { key: 'waiting', label: 'Waiting', value: stats.waiting || centerAppointments.filter(isWaitingAppointment).length || 0, helper: 'Waiting and on-hold work', icon: FiClock, tone: 'purple' },
+    { key: 'completed', label: 'Completed', value: stats.completed || centerAppointments.filter(isCompletedAppointment).length || 0, helper: 'Completed services', icon: FiCheckCircle, tone: 'green' },
+    { key: 'newRegistration', label: 'New Registration', value: stats.newRegistration || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'newRegistration').length || 0, helper: 'New National ID requests', icon: FiShield, tone: 'blue' },
+    { key: 'updateInformation', label: 'Update Info', value: stats.updateInformation || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'updateInformation').length || 0, helper: 'Information update requests', icon: FiFileText, tone: 'purple' },
+    { key: 'replaceLostId', label: 'Replace Lost ID', value: stats.replaceLostId || centerAppointments.filter((appointment) => getRequestGroup(appointment) === 'replaceLostId').length || 0, helper: 'Lost ID requests', icon: FiRepeat, tone: 'pink' },
+    { key: 'staff', label: 'Staff', value: centerOperators.length, helper: 'Operators in this center', icon: FiUsers, tone: 'green' }
   ];
 
   const appointmentPanels = useMemo(() => ({
@@ -632,18 +689,17 @@ const CenterOperatorDetail = () => {
                 type="button"
                 key={card.key}
                 onClick={() => openPanel(card.key)}
-                className="group relative overflow-hidden rounded-[1.5rem] border border-[var(--border-light)] bg-[var(--bg-card)] p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#2563EB] hover:shadow-xl hover:shadow-blue-950/10 focus:outline-none focus:ring-4 focus:ring-blue-500/15"
+                className={`nqs-card-tone-${card.tone} group relative overflow-hidden rounded-[1.5rem] border p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-500/15`}
               >
-                <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#2563EB] to-transparent opacity-0 transition group-hover:opacity-100" />
                 <div className="flex items-center gap-4">
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--nqs-panel-soft)] text-xl">
-                    <Icon className={card.color} />
+                  <span className={`nqs-card-tone-icon-${card.tone} flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl`}>
+                    <Icon />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-2xl font-black tracking-tight">{card.value}</p>
+                    <p className="text-2xl font-black tracking-tight text-[var(--text-main)]">{card.value}</p>
                     <p className="text-sm font-black text-[var(--text-main)]">{card.label}</p>
                     <p className="text-xs text-[var(--text-muted)]">{card.helper}</p>
-                    <p className="mt-2 text-[11px] font-black text-[#2563EB]">
+                    <p className="mt-2 text-[11px] font-black text-[var(--text-muted)]">
                       Open separate page →
                     </p>
                   </div>
@@ -700,7 +756,7 @@ const CenterOperatorDetail = () => {
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[var(--nqs-panel-soft)] text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
                   <tr>
-                    {['Name', 'Username', 'Phone', 'Type', 'Status', 'Password', ...(isAdmin ? ['Admin Approval'] : [])].map((heading) => (
+                    {['Name', 'Username', 'Phone', 'Type', 'Status', 'Password', ...(isAdmin ? ['Actions'] : [])].map((heading) => (
                       <th key={heading} className="px-4 py-3.5 font-black">{heading}</th>
                     ))}
                   </tr>
@@ -710,38 +766,46 @@ const CenterOperatorDetail = () => {
                     <tr><td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-[var(--text-muted)]">Loading center staff...</td></tr>
                   ) : centerOperators.length === 0 ? (
                     <tr><td colSpan={isAdmin ? 7 : 6} className="px-4 py-10 text-center text-[var(--text-muted)]">No staff created for this center yet.</td></tr>
-                  ) : centerOperators.map((operator) => (
-                    <tr key={operator._id} className="transition hover:bg-blue-500/5">
-                      <td className="px-4 py-3.5 font-semibold">{titleCase(operator.name)}</td>
-                      <td className="px-4 py-3.5 font-mono text-xs text-[#2563EB]">{operator.username}</td>
-                      <td className="px-4 py-3.5 text-[var(--text-muted)]">{operator.phone || '--'}</td>
-                      <td className="px-4 py-3.5 text-[var(--text-muted)]">{roleLabel(operator)}</td>
-                      <td className="px-4 py-3.5">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${statusClass(operator.status)}`}>
-                          {statusLabel(operator.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-[var(--text-muted)]">Hidden</td>
-                      {isAdmin && (
+                  ) : centerOperators.map((operator) => {
+                    const displayStatus = operatorDisplayStatus(operator);
+                    return (
+                      <tr key={operator._id} className="transition hover:bg-blue-500/5">
+                        <td className="px-4 py-3.5 font-semibold">{titleCase(operator.name)}</td>
+                        <td className="px-4 py-3.5 font-mono text-xs text-[#2563EB]">{operator.username}</td>
+                        <td className="px-4 py-3.5 text-[var(--text-muted)]">{operator.phone || '--'}</td>
+                        <td className="px-4 py-3.5 text-[var(--text-muted)]">{roleLabel(operator)}</td>
                         <td className="px-4 py-3.5">
-                          {operator.status === 'active' ? (
-                            <button onClick={() => setOperatorStatus(operator, 'inactive')} className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-bold text-red-500">Deactivate</button>
-                          ) : (
-                            <button onClick={() => setOperatorStatus(operator, 'active')} className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-xs font-bold text-emerald-600">
-                              {operator.status === 'pending_approval' ? 'Approve' : 'Activate'}
-                            </button>
-                          )}
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(displayStatus)}`}>
+                            {statusLabel(displayStatus)}
+                          </span>
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3.5 text-xs text-[var(--text-muted)]">Hidden</td>
+                        {isAdmin && (
+                          <td className="px-4 py-3.5">
+                            {operator.status === 'pending_approval' ? (
+                              <button
+                                type="button"
+                                onClick={() => approveOperator(operator)}
+                                disabled={approvingOperatorId === (operator._id || operator.id)}
+                                className="rounded-lg border border-emerald-500/40 px-3 py-1.5 text-xs font-bold text-emerald-600 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {approvingOperatorId === (operator._id || operator.id) ? 'Approving' : 'Approve'}
+                              </button>
+                            ) : (
+                              <span className="text-xs font-semibold text-[var(--text-muted)]">--</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-[var(--nqs-panel-soft)] text-[11px] uppercase tracking-wide text-[var(--text-muted)]">
                   <tr>
-                    {['Ticket Number', 'Citizen Name', 'Phone', 'Appointment Date', 'Queue Number', 'Status', 'Actions'].map((heading) => (
+                    {['Request Number', 'Citizen Name', 'Phone', 'Appointment Date', 'Queue Number', 'Status', 'Actions'].map((heading) => (
                       <th key={heading} className="px-4 py-3.5 font-black">{heading}</th>
                     ))}
                   </tr>
@@ -761,6 +825,7 @@ const CenterOperatorDetail = () => {
                     const isBusy = actionLoading.endsWith(`-${appointmentId}`);
                     const canComplete = canCompleteAppointment(appointment);
                     const canCancel = canCancelAppointment(appointment);
+                    const canReaccept = canReacceptAppointment(appointment);
 
                     return (
                       <tr key={appointmentId} className="transition hover:bg-blue-500/5">
@@ -806,6 +871,15 @@ const CenterOperatorDetail = () => {
                                 <FiXCircle /> Cancel
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleReacceptAppointment(appointment)}
+                              disabled={Boolean(actionLoading) || !canReaccept}
+                              title={canReaccept ? 'Return completed appointment to Waiting' : 'Available after Complete'}
+                              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold !text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:!text-white"
+                            >
+                              <FiRepeat /> Re-accept
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -857,14 +931,46 @@ const CenterOperatorDetail = () => {
                 </div>
               ))}
             </div>
+
+            {getCancellationReasonList(selectedAppointment).length > 0 && (
+              <div className="px-5 pb-5">
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                  <span className="block text-xs font-black uppercase tracking-wide text-red-300">
+                    Cancellation / Correction Feedback
+                  </span>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-red-100">
+                    {getCancellationFeedbackText(selectedAppointment, 'No cancellation reason was provided.')}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {getCancellationReasonList(selectedAppointment).map((reason) => (
+                      <span key={reason} className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-black text-red-100">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {cancelModalTicket && (() => {
         const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+        const isLostReq = isLostReplacementRequest(cancelModalTicket);
+        const fieldOptions = getIncorrectFieldOptionsForTicket(cancelModalTicket);
         const changedFields = isUpdateReq ? getChangedUpdateFields(cancelModalTicket) : [];
         const hasNoChanges = isUpdateReq && changedFields.length === 0;
+        const modalTitle = isUpdateReq
+          ? 'Cancel Update Request'
+          : isLostReq
+            ? 'Cancel Replace Lost National ID'
+            : 'Cancel Appointment';
+        const modalHelp = isUpdateReq
+          ? 'Review the changed information and provide a cancellation reason for this update request.'
+          : isLostReq
+            ? 'Review the Lost ID details the citizen submitted, select incorrect fields, and add notes. The citizen will see this feedback and can resubmit.'
+            : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.';
 
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-6 backdrop-blur-sm">
@@ -872,14 +978,8 @@ const CenterOperatorDetail = () => {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Operator Action</p>
-                <h2 className="mt-1 text-2xl font-black">
-                  {isUpdateReq ? 'Cancel Update Request' : 'Cancel Appointment'}
-                </h2>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">
-                  {isUpdateReq
-                    ? 'Review the changed information and provide a cancellation reason for this update request.'
-                    : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.'}
-                </p>
+                <h2 className="mt-1 text-2xl font-black">{modalTitle}</h2>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">{modalHelp}</p>
               </div>
               <button
                 type="button"
@@ -894,11 +994,11 @@ const CenterOperatorDetail = () => {
             <div className="rounded-xl border border-[var(--border-light)] bg-[var(--bg-app)] p-4 text-sm">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Ticket Reference</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Request Reference</p>
                   <p className="mt-1 font-mono text-sm font-black text-[#7CB8FF]">{cancelModalTicket.ref || '--'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Citizen</p>
+                  <p className="text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Full Name</p>
                   <p className="mt-1 text-sm font-black">{getCitizenName(cancelModalTicket)}</p>
                 </div>
                 <div>
@@ -911,6 +1011,8 @@ const CenterOperatorDetail = () => {
                 </div>
               </div>
             </div>
+
+            {isLostReq && <LostIdCancelDetails ticket={cancelModalTicket} />}
 
             {isUpdateReq ? (
               <div className="mt-5 space-y-4">
@@ -963,9 +1065,11 @@ const CenterOperatorDetail = () => {
             ) : (
               <>
                 <div className="mt-5">
-                  <span className="text-sm font-bold">Select incorrect fields</span>
+                  <span className="text-sm font-bold">
+                    {isLostReq ? 'Select incorrect Lost ID fields' : 'Select incorrect fields'}
+                  </span>
                   <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-[var(--border-light)] bg-[var(--bg-app)] p-3 sm:grid-cols-2">
-                    {INCORRECT_FIELD_OPTIONS.map((reason) => {
+                    {fieldOptions.map((reason) => {
                       const checked = selectedCancelReasons.includes(reason);
                       return (
                         <label
@@ -1011,7 +1115,7 @@ const CenterOperatorDetail = () => {
                 <p className="mt-2">
                   {isUpdateReq
                     ? `Cancellation reason: ${customCancelReason.trim()}. Are you sure you want to cancel this update request?`
-                    : `You selected the following incorrect fields: ${selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment?`}
+                    : `You selected the following incorrect fields: ${selectedReasonLabels(cancelModalTicket).join(', ')}. Are you sure you want to cancel this ${isLostReq ? 'Lost ID request' : 'appointment'}?`}
                 </p>
               </div>
             )}
@@ -1030,7 +1134,13 @@ const CenterOperatorDetail = () => {
                 disabled={Boolean(actionLoading) || hasNoChanges}
                 className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {actionLoading ? 'Cancelling...' : (isUpdateReq ? 'Confirm Cancel Update' : 'Confirm Cancellation')}
+                {actionLoading
+                  ? 'Cancelling...'
+                  : (isUpdateReq
+                    ? 'Confirm Cancel Update'
+                    : isLostReq
+                      ? 'Confirm Cancel Lost ID'
+                      : 'Confirm Cancellation')}
               </button>
             </div>
           </div>
@@ -1038,51 +1148,18 @@ const CenterOperatorDetail = () => {
         );
       })()}
 
-      {completeOtpTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-[var(--border-light)] bg-[var(--bg-card)] p-6 text-[var(--text-main)] shadow-2xl shadow-black/40">
-            <div className="text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-xl font-black text-white">
-                OTP
-              </div>
-              <h2 className="mt-4 text-xl font-black">Complete Service OTP</h2>
-              <p className="mt-2 text-sm text-[var(--text-muted)]">
-                Enter the 6-digit SMS code sent to {completeOtpTarget.completeOtpPhone || getCitizenPhone(completeOtpTarget)} for {completeOtpTarget.ref}.
-              </p>
-            </div>
-
-            <input
-              value={completeOtp}
-              onChange={(event) => setCompleteOtp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="000000"
-              className="mt-6 w-full rounded-xl border border-[var(--border-light)] bg-[var(--bg-app)] px-4 py-3 text-center text-2xl font-black tracking-[0.4em] text-[var(--text-main)] outline-none focus:border-[#4189DD] focus:ring-4 focus:ring-blue-500/20"
-            />
-
-            <div className="mt-5 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCompleteOtpTarget(null);
-                  setCompleteOtp('');
-                }}
-                className="flex-1 rounded-xl border border-[var(--border-light)] px-4 py-3 text-sm font-bold text-[var(--text-main)] hover:bg-blue-500/10"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={completeOtpLoading || completeOtp.length !== 6}
-                onClick={verifyCompleteOtp}
-                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {completeOtpLoading ? 'Verifying...' : 'Verify & Complete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OtpGateModal
+        flow={otpFlow}
+        digits={otpDigits}
+        seconds={otpSeconds}
+        requesting={otpRequesting}
+        verifying={otpVerifying}
+        error={otpError}
+        onDigitChange={updateOtpDigit}
+        onVerify={verifyOtpGate}
+        onResend={resendOtpGate}
+        onClose={closeOtpGate}
+      />
 
       {operatorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-sm">
@@ -1115,11 +1192,11 @@ const CenterOperatorDetail = () => {
             <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Full Name</span>
-                <input className={inputClass} placeholder="Operator full name" value={form.name} onChange={(event) => updateField('name', event.target.value)} />
+                <input className={inputClass} placeholder="Operator full name" value={form.name} onChange={(event) => updateField('name', event.target.value.replace(/[^A-Za-z\s'-]/g, ''))} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Username</span>
-                <input className={inputClass} placeholder="username" value={form.username} onChange={(event) => updateField('username', event.target.value)} disabled={Boolean(editingId)} />
+                <input className={inputClass} placeholder="username" value={form.username} onChange={(event) => updateField('username', event.target.value.toLowerCase().replace(/[^a-z]/g, ''))} disabled={Boolean(editingId)} />
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Phone Number</span>
@@ -1133,13 +1210,17 @@ const CenterOperatorDetail = () => {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Status</span>
-                <select className={inputClass} value={form.status} onChange={(event) => updateField('status', event.target.value)} disabled>
+                <select className={inputClass} value={editingId ? form.status : (isAdmin ? 'active' : 'pending_approval')} onChange={(event) => updateField('status', event.target.value)} disabled>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="pending_approval">Pending Approval</option>
                   <option value="rejected">Rejected</option>
                 </select>
-                <p className="mt-1 text-xs font-semibold text-[var(--text-muted)]">New staff accounts are activated only after Super Admin approval.</p>
+                <p className="mt-1 text-xs font-semibold text-[var(--text-muted)]">
+                  {isAdmin
+                    ? 'Staff accounts you create are activated immediately.'
+                    : 'New staff accounts are activated only after Super Admin approval.'}
+                </p>
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[var(--text-muted)]">Assigned Center</span>

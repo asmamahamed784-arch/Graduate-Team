@@ -36,7 +36,10 @@ class ApiClient {
         },
         onError: (error, handler) {
           final isAuthCall = error.requestOptions.extra['skipAuth'] == true;
-          if (error.response?.statusCode == 401 && !isAuthCall) {
+          final path = error.requestOptions.path;
+          // Wrong current-password on change-password is not a session expiry.
+          final isPasswordChange = path.contains('/api/auth/password');
+          if (error.response?.statusCode == 401 && !isAuthCall && !isPasswordChange) {
             // The backend has no refresh flow: an invalid token ends the session.
             _onUnauthorized?.call();
           }
@@ -120,6 +123,26 @@ class ApiClient {
   }) async {
     final response = await _send('POST', path, body: body, query: query, skipAuth: skipAuth);
     return _asMap(_unwrap(response));
+  }
+
+  /// Full success envelope (`data`, `message`, `temporaryPassword`, …).
+  Future<Map<String, dynamic>> postFull(
+    String path, {
+    Object? body,
+    Map<String, dynamic>? query,
+    bool skipAuth = false,
+  }) async {
+    final response = await _send(
+      'POST',
+      path,
+      body: body,
+      query: query,
+      skipAuth: skipAuth,
+    );
+    final raw = response.data;
+    _assertSuccess(raw, response.statusCode);
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return {'data': raw};
   }
 
   Future<Map<String, dynamic>> put(

@@ -102,10 +102,10 @@ const QRVerify = () => {
         const payload = res.data.data;
         setVerificationResult(mapTicketPayload(payload, code, { valid: true, displayStatus: payload.status || 'Valid' }));
         addRecent(payload.ticketNumber || payload.ticketRef, 'Valid');
-        toast.success(res.data.message || 'Ticket verified.');
+        toast.success(res.data.message || 'Request verified.');
       }
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'This QR ticket could not be verified.';
+      const errMsg = e.response?.data?.message || e.message || 'This QR Request could not be verified.';
       const payload = e.response?.data?.data || {};
       setVerificationResult(mapTicketPayload(payload, code, {
         valid: false,
@@ -159,7 +159,7 @@ const QRVerify = () => {
   const handleTicketAction = async (action) => {
     const ticketRef = verificationResult?.reference || manualCode.trim().toUpperCase();
     if (!ticketRef) {
-      toast.warning('Please scan or enter a ticket reference first.');
+      toast.warning('Please scan or enter a request reference first.');
       return;
     }
 
@@ -171,12 +171,12 @@ const QRVerify = () => {
       setVerificationResult(mapTicketPayload(payload, ticketRef, {
         valid: !['Cancelled', 'Rejected'].includes(actionStatus),
         displayStatus: actionStatus,
-        error: action === 'reject' ? 'This ticket was rejected for review.' : ''
+        error: action === 'reject' ? 'This request was rejected for review.' : ''
       }));
       addRecent(payload.ticketNumber || payload.ticketRef || ticketRef, actionStatus);
-      toast.success(res.data.message || 'QR ticket updated.');
+      toast.success(res.data.message || 'QR Request updated.');
     } catch (e) {
-      const errMsg = e.response?.data?.message || e.message || 'Unable to update this QR ticket.';
+      const errMsg = e.response?.data?.message || e.message || 'Unable to update this QR Request.';
       toast.error(errMsg);
     } finally {
       setActionLoading('');
@@ -197,7 +197,7 @@ const QRVerify = () => {
       : 'bg-amber-900/40 text-amber-200';
   const resultDetails = verificationResult ? [
     { label: 'Full Name', value: verificationResult.fullName || verificationResult.citizenName, icon: FiUser },
-    { label: 'Ticket Number', value: verificationResult.ticketNumber || verificationResult.reference, icon: FiHash },
+    { label: 'Request Number', value: verificationResult.ticketNumber || verificationResult.reference, icon: FiHash },
     { label: 'National ID Number', value: verificationResult.nationalId || 'Not available', icon: FiClipboard },
     { label: 'Email', value: verificationResult.email || 'Not available', icon: FiMail },
     { label: 'Phone', value: verificationResult.phone || 'Not available', icon: FiPhone },
@@ -243,7 +243,7 @@ const QRVerify = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">QR Scan</h1>
-            <p className="text-sm text-slate-400">Scan or enter a ticket reference to verify a National ID appointment</p>
+            <p className="text-sm text-slate-400">Scan or enter a request reference to verify a National ID appointment</p>
           </div>
         </div>
       </motion.div>
@@ -255,7 +255,7 @@ const QRVerify = () => {
           transition={{ delay: 0.1, duration: 0.4 }}
           className="rounded-2xl border border-[#4189DD]/20 bg-slate-900/90 p-6 shadow-xl shadow-black/20"
         >
-          <h2 className="text-lg font-semibold text-white mb-4">Scan Ticket</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Scan Request</h2>
 
           <div
             className={`relative aspect-square max-h-72 rounded-xl bg-gray-900 dark:bg-gray-950 flex flex-col items-center justify-center mb-4 overflow-hidden ${
@@ -332,7 +332,7 @@ const QRVerify = () => {
           <div className="rounded-2xl border border-[#4189DD]/20 bg-slate-900/90 p-6 shadow-xl shadow-black/20">
             <h2 className="text-lg font-semibold text-white mb-4">Enter Reference</h2>
             <p className="text-xs text-slate-400 mb-4">
-              Enter the ticket reference printed on the QR ticket or shown in the confirmation email.
+              Enter the request reference printed on the QR Request or shown in the confirmation email.
             </p>
             <div className="flex gap-3">
               <div className="relative flex-1">
@@ -445,7 +445,7 @@ const QRVerify = () => {
                     className={`${actionButtonClass} bg-blue-700 text-white hover:bg-blue-800`}
                   >
                     <FiCheckCircle size={16} />
-                    {actionLoading === 'verify' ? 'Saving...' : 'Verify Ticket'}
+                    {actionLoading === 'verify' ? 'Saving...' : 'Verify Request'}
                   </button>
                   <button
                     type="button"
@@ -506,7 +506,7 @@ const QRVerify = () => {
               {recentVerifications.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                    No QR tickets checked in this session yet.
+                    No QR requests checked in this session yet.
                   </td>
                 </tr>
               ) : (

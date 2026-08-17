@@ -41,14 +41,17 @@ class OtpRepository {
     required String purpose,
     required String code,
     String? otpId,
+    String? phone,
     String? ticketId,
   }) async {
+    final normalizedPhone = Validators.normalizePhone(phone);
     final data = await _api.post(
       ApiEndpoints.otpVerify,
       body: {
         'purpose': purpose,
         'code': code.trim(),
         if (otpId != null && otpId.isNotEmpty) 'otpId': otpId,
+        if (normalizedPhone.isNotEmpty) 'phone': normalizedPhone,
         if (ticketId != null) 'ticketId': ticketId,
       },
     );

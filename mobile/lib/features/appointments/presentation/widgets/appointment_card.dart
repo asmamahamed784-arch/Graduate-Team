@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../shared/models/appointment.dart';
 import '../../../../shared/widgets/common_widgets.dart';
+import 'staff_cancellation_feedback.dart';
 
 class AppointmentCard extends StatelessWidget {
   const AppointmentCard({
@@ -49,28 +50,9 @@ class AppointmentCard extends StatelessWidget {
               StatusChip(status: appointment.status),
             ],
           ),
-          if (appointment.needsResubmission) ...[
+          if (appointment.needsResubmission || appointment.isCancelled) ...[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      size: 17, color: AppColors.warning),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'This request needs a correction before it can continue.',
-                      style: TextStyle(fontSize: 12.5, color: AppColors.warning),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            StaffCancellationFeedback(appointment: appointment),
           ],
           const SizedBox(height: 14),
           Wrap(
@@ -89,6 +71,18 @@ class AppointmentCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          if (appointment.needsResubmission ||
+              (appointment.isCancelled &&
+                  appointment.hasStaffCancellationFeedback)) ...[
+            FilledButton.icon(
+              onPressed: () =>
+                  context.push(AppRoutes.correction(appointment.id)),
+              icon: const Icon(Icons.edit_note_rounded, size: 18),
+              label: const Text('Correct information'),
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             children: [
               Expanded(

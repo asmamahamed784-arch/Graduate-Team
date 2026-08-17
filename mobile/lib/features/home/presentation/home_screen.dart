@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,179 +9,161 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../shared/models/appointment.dart';
-import '../../../shared/models/service.dart';
-import '../../../shared/widgets/common_widgets.dart';
+import '../../../shared/models/center.dart';
+import '../../../shared/widgets/app_surfaces.dart';
 import '../../appointments/application/appointments_controller.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../auth/presentation/widgets/nqs_auth_page.dart';
 import '../../centers/data/center_repository.dart';
 import '../../notifications/application/notifications_controller.dart';
-import '../../services/data/service_repository.dart';
+import '../application/protected_action.dart';
+import '../data/public_stats_repository.dart';
 import 'home_shell.dart';
 
-/// Citizen home — native mobile layout (banner + grids + lists), scrollable.
-class HomeScreen extends ConsumerStatefulWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _bannerIndex = 0;
-
-  Future<void> _refresh() async {
+  Future<void> _refresh(WidgetRef ref) async {
+    final auth = ref.read(authControllerProvider);
+    ref.invalidate(publicHomeStatsProvider);
+    if (!auth.isAuthenticated) return;
     await Future.wait([
       ref.read(authControllerProvider.notifier).refreshProfile(),
       ref.read(appointmentsControllerProvider.notifier).refresh(),
       ref.read(notificationsControllerProvider.notifier).refresh(),
     ]);
-    ref.invalidate(servicesProvider);
-    ref.invalidate(centersProvider);
   }
 
   @override
-  Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
-
-    // Safety net if router redirect is skipped — admin never sees citizen UI.
-    if (user != null && user.isAdmin) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) context.go(AppRoutes.adminHome);
-      });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (user != null && user.isOperator) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) context.go(AppRoutes.operatorHome);
-      });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    final current = ref.watch(currentAppointmentProvider);
-    final services = ref.watch(activeServicesProvider);
-    final centers = ref.watch(activeCentersProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(unreadNotificationCountProvider);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final centerItems = centers.isEmpty
-        ? const <({String title, String subtitle, String? id})>[
-            (title: 'No centers yet', subtitle: 'Pull to refresh', id: null),
-          ]
-        : centers
-            .take(8)
-            .map(
-              (c) => (
-                title: c.name,
-                subtitle: c.district.isEmpty ? c.city : c.district,
-                id: c.id,
-              ),
-            )
-            .toList();
+    final appointments = ref.watch(appointmentsControllerProvider);
+    final currentAppointment = ref.watch(currentAppointmentProvider);
 
-    // Single ListView only — no PageView / nested scrollables (those break
-    // vertical scroll on Android emulators with mouse/touch drag).
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: _refresh,
-      child: ListView(
-        primary: true,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: ClampingScrollPhysics(),
-        ),
-        padding: EdgeInsets.only(bottom: 24 + bottomInset + 72),
-        children: [
-          _BannerHeader(
-            index: _bannerIndex,
-            onSelect: (i) => setState(() => _bannerIndex = i),
-            onOpenMenu: () => HomeShellScope.maybeOf(context)?.openDrawer(),
-            unread: unread,
-            onAlerts: () => context.go(AppRoutes.notifications),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _GreetingRow(name: user?.displayName ?? 'Citizen'),
-                const SizedBox(height: 8),
-                _StatusChip(
-                  status: user?.summary?.nationalIdStatus ??
-                      user?.nationalIdStatus ??
-                      'NOT_STARTED',
-                ),
-                if (current != null) ...[
-                  const SizedBox(height: 18),
-                  const SectionHeader(title: 'Active request'),
-                  _ActiveRequestCard(appointment: current),
-                ],
-                const SizedBox(height: 22),
-                SectionHeader(
-                  title: 'Services',
-                  actionLabel: 'See all',
-                  onAction: () => context.go(AppRoutes.services),
-                ),
-                const _ServicesGrid(),
-                const SizedBox(height: 22),
-                SectionHeader(
-                  title: 'Centers',
-                  actionLabel: 'View all',
-                  onAction: () => context.push(AppRoutes.centers),
-                ),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < centerItems.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 10),
-                        _CenterChip(
-                          title: centerItems[i].title,
-                          subtitle: centerItems[i].subtitle,
-                          onTap: () {
-                            final id = centerItems[i].id;
-                            if (id == null) {
-                              context.push(AppRoutes.centers);
-                            } else {
-                              context.push(AppRoutes.centerDetail(id));
-                            }
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 22),
-                SectionHeader(
-                  title: 'Popular services',
-                  actionLabel: 'Browse',
-                  onAction: () => context.go(AppRoutes.services),
-                ),
-                if (services.isEmpty)
-                  const SectionCard(
-                    child: Text(
-                      'Services will appear here once they are published.',
-                      style: TextStyle(color: AppColors.muted),
-                    ),
-                  )
-                else
-                  ...services.take(5).map((service) => _ServiceTile(service: service)),
-                const SizedBox(height: 12),
-                SectionCard(
-                  onTap: () => context.push(AppRoutes.track),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.timeline_rounded, color: AppColors.primary),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Track your queue live',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-                    ],
-                  ),
-                ),
-              ],
+    var stagger = 0;
+    Widget animated(Widget child) =>
+        _FadeSlideIn(index: stagger++, child: child);
+
+    return ColoredBox(
+      color: AppSurface.background(context),
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => _refresh(ref),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: tabListPadding(context),
+          children: [
+            _HomeHeader(unread: unread),
+            const SizedBox(height: 18),
+            animated(const _HeroSlider()),
+            const SizedBox(height: 18),
+            AppSectionTitle(
+              title: 'Services',
+              actionLabel: 'View all',
+              onAction: () => context.go(AppRoutes.services),
             ),
+            const SizedBox(height: 12),
+            animated(_ServicesGrid(unread: unread)),
+            const SizedBox(height: 16),
+            animated(
+              _AppointmentStatusCard(
+                loading: appointments.isLoading,
+                appointment: currentAppointment,
+              ),
+            ),
+            const SizedBox(height: 14),
+            animated(
+              _StatusChipsRow(appointments: appointments.value ?? const []),
+            ),
+            const SizedBox(height: 22),
+            const AppSectionTitle(title: 'Facts & Figures'),
+            const SizedBox(height: 10),
+            animated(const _FactsAndFigures()),
+            const SizedBox(height: 22),
+            AppSectionTitle(
+              title: 'Nearby Centers',
+              actionLabel: 'View all',
+              onAction: () => context.go(AppRoutes.centers),
+            ),
+            const SizedBox(height: 10),
+            animated(const _NearbyCentersCard()),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Subtle fade + slide-up entrance, staggered by [index] so Home's sections
+/// cascade in on first load instead of popping in all at once.
+class _FadeSlideIn extends StatelessWidget {
+  const _FadeSlideIn({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 420 + (index * 60).clamp(0, 240)),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 16),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _HomeHeader extends ConsumerWidget {
+  const _HomeHeader({required this.unread});
+
+  final int unread;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 4),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => HomeShellScope.maybeOf(context)?.openDrawer(),
+            icon: Icon(Icons.menu_rounded, color: AppSurface.ink(context)),
+            tooltip: 'Menu',
+          ),
+          const NqsCrest(size: 42),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'NQS National ID',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppSurface.brand(context),
+                fontWeight: FontWeight.w800,
+                fontSize: 23,
+              ),
+            ),
+          ),
+          HeaderBellButton(
+            unread: unread,
+            onTap: () {
+              if (!ensureSignedIn(
+                context,
+                ref,
+                ProtectedAction.notifications,
+              )) {
+                return;
+              }
+              context.go(AppRoutes.notifications);
+            },
           ),
         ],
       ),
@@ -187,500 +171,399 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _BannerHeader extends StatelessWidget {
-  const _BannerHeader({
-    required this.index,
-    required this.onSelect,
-    required this.onOpenMenu,
-    required this.unread,
-    required this.onAlerts,
-  });
+class _HeroSlider extends StatefulWidget {
+  const _HeroSlider();
 
-  final int index;
-  final ValueChanged<int> onSelect;
-  final VoidCallback onOpenMenu;
-  final int unread;
-  final VoidCallback onAlerts;
+  @override
+  State<_HeroSlider> createState() => _HeroSliderState();
+}
 
-  static const _banners = [
+class _HeroSliderState extends State<_HeroSlider> {
+  final _controller = PageController();
+  int _page = 0;
+  Timer? _autoAdvance;
+
+  /// Same six slides, images and captions as the web app's Home hero
+  /// carousel (`frontend/src/pages/Home.jsx`) â€” kept in sync so mobile and
+  /// web tell the same story with the same real photos.
+  static const _slides = [
     (
-      'Book National ID',
-      'Schedule your appointment from home.',
-      [AppColors.navyDeepest, AppColors.primary],
-      Icons.badge_rounded,
+      image: 'assets/images/hero_service_center.png',
+      title: 'Your ID, Your Right, Your Future',
+      subtitle:
+          'Apply for your National ID, update your information, or replace a lost card.',
     ),
     (
-      'Track your queue',
-      'Live updates before you arrive.',
-      [Color(0xFF0F766E), Color(0xFF14B8A6)],
-      Icons.timeline_rounded,
+      image: 'assets/images/hero_slide_office.png',
+      title: 'Professional Service, Closer to You',
+      subtitle:
+          'Modern registration centers with trusted staff and clear guidance.',
     ),
     (
-      'Replace lost ID',
-      'Start a replacement request anytime.',
-      [Color(0xFF9A3412), Color(0xFFF97316)],
-      Icons.credit_card_off_rounded,
+      image: 'assets/images/hero_slide_mobile.png',
+      title: 'National ID Services in Your Pocket',
+      subtitle:
+          'Book appointments, follow updates, and manage requests from anywhere.',
+    ),
+    (
+      image: 'assets/images/hero_digital.png',
+      title: 'Identity. Dignity. Future.',
+      subtitle:
+          'Secure digital identity services connecting citizens with trusted centers.',
+    ),
+    (
+      image: 'assets/images/hero_slide_devices.png',
+      title: 'One Platform for Every Citizen',
+      subtitle:
+          'Track your queue in real time and complete services with confidence.',
+    ),
+    (
+      image: 'assets/images/hero_slide_booking.png',
+      title: 'Book Online, Skip the Wait',
+      subtitle:
+          'Choose your service, pick a date, and manage your appointment online.',
     ),
   ];
 
+  static const _slideDuration = Duration(seconds: 7);
+
+  @override
+  void initState() {
+    super.initState();
+    _autoAdvance = Timer.periodic(_slideDuration, (_) {
+      if (!mounted || !_controller.hasClients) return;
+      final next = (_page + 1) % _slides.length;
+      _controller.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoAdvance?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final safeTop = MediaQuery.paddingOf(context).top;
-    final b = _banners[index.clamp(0, _banners.length - 1)];
-
-    return Container(
-      // Tall enough that the rest of the page must scroll on phone/emulator.
-      constraints: BoxConstraints(minHeight: 200 + safeTop),
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-      padding: EdgeInsets.fromLTRB(20, safeTop + 56, 20, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: b.$3,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _CircleBtn(icon: Icons.apps_rounded, onTap: onOpenMenu),
-              const Spacer(),
-              _CircleBtn(
-                icon: Icons.notifications_none_rounded,
-                badge: unread,
-                onTap: onAlerts,
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 178,
+            child: PageView.builder(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemCount: _slides.length,
+              itemBuilder: (context, i) {
+                final slide = _slides[i];
+                return Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Text(
-                      b.$1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
+                    Image.asset(
+                      slide.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const ColoredBox(color: AppColors.navy),
+                    ),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          stops: const [0.4, 1],
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.72),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      b.$2,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.88),
-                        fontSize: 13.5,
-                        height: 1.35,
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.15),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        ),
+                        child: Column(
+                          key: ValueKey(i),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              slide.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 17,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              slide.subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
-                ),
-              ),
-              Icon(b.$4, color: Colors.white.withValues(alpha: 0.9), size: 48),
-            ],
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: List.generate(_banners.length, (i) {
-              final active = i == index;
-              return GestureDetector(
-                onTap: () => onSelect(i),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _slides.length; i++)
+              GestureDetector(
+                onTap: () => _controller.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeInOutCubic,
+                ),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.only(right: 6),
-                  width: active ? 16 : 7,
-                  height: 7,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: _page == i ? 18 : 6,
+                  height: 6,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: active ? 1 : 0.45),
-                    borderRadius: BorderRadius.circular(99),
+                    color: _page == i
+                        ? AppColors.primary
+                        : AppColors.primary.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CircleBtn extends StatelessWidget {
-  const _CircleBtn({
-    required this.icon,
-    required this.onTap,
-    this.badge = 0,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final int badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      elevation: 2,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Center(
-            child: Badge(
-              isLabelVisible: badge > 0,
-              label: Text('$badge'),
-              child: Icon(icon, color: AppColors.ink, size: 22),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GreetingRow extends StatelessWidget {
-  const _GreetingRow({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 22,
-          backgroundColor: AppColors.primarySoft,
-          child: Text(
-            Formatters.initials(name),
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Welcome back', style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.ink,
-                ),
               ),
-            ],
-          ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
+class _ServicesGrid extends StatelessWidget {
+  const _ServicesGrid({required this.unread});
 
-  final String status;
+  final int unread;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+    final tiles =
+        <
+          ({
+            String label,
+            IconData icon,
+            Color color,
+            ProtectedAction action,
+            int badge,
+          })
+        >[
+          (
+            label: 'New Registration',
+            icon: Icons.badge_outlined,
+            color: const Color(0xFF2563EB),
+            action: ProtectedAction.newRegistration,
+            badge: 0,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.badge_outlined, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'National ID status: ${Formatters.titleCase(status)}',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          (
+            label: 'Update Information',
+            icon: Icons.manage_accounts_outlined,
+            color: const Color(0xFF168B53),
+            action: ProtectedAction.updateInformation,
+            badge: 0,
+          ),
+          (
+            label: 'Lost ID Replacement',
+            icon: Icons.file_copy_outlined,
+            color: const Color(0xFFD97706),
+            action: ProtectedAction.lostReplacement,
+            badge: 0,
+          ),
+          (
+            label: 'Notifications',
+            icon: Icons.notifications_outlined,
+            color: const Color(0xFFDC2626),
+            action: ProtectedAction.notifications,
+            badge: unread,
+          ),
+          (
+            label: 'Track Queue',
+            icon: Icons.groups_2_outlined,
+            color: const Color(0xFF8B5CF6),
+            action: ProtectedAction.trackQueue,
+            badge: 0,
+          ),
+        ];
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(child: _ServiceTile(tile: tiles[i], height: 134)),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _ServiceTile(tile: tiles[3], height: 118)),
+            const SizedBox(width: 12),
+            Expanded(child: _ServiceTile(tile: tiles[4], height: 118)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceTile extends ConsumerWidget {
+  const _ServiceTile({required this.tile, required this.height});
+
+  final ({
+    String label,
+    IconData icon,
+    Color color,
+    ProtectedAction action,
+    int badge,
+  })
+  tile;
+  final double height;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      height: height,
+      child: AppCard(
+        radius: 15,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+        tintColor: tile.color,
+        onTap: () {
+          if (!ensureSignedIn(context, ref, tile.action)) return;
+          runProtectedAction(context, ref, tile.action);
+        },
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Badge(
+              isLabelVisible: tile.badge > 0,
+              label: Text('${tile.badge}'),
+              child: SoftIconBadge(
+                icon: tile.icon,
+                color: tile.color,
+                size: 38,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 7),
+            Flexible(
+              child: Text(
+                tile.label,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppSurface.ink(context),
+                  fontSize: 11.8,
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ServicesGrid extends ConsumerWidget {
-  const _ServicesGrid();
+class _AppointmentStatusCard extends StatelessWidget {
+  const _AppointmentStatusCard({
+    required this.loading,
+    required this.appointment,
+  });
+
+  final bool loading;
+  final Appointment? appointment;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final current = ref.watch(currentAppointmentProvider);
-    final tiles = [
-      (
-        AppConstants.newIdServiceName,
-        'New National ID',
-        Icons.badge_rounded,
-        const Color(0xFFFF7A45),
-      ),
-      (
-        AppConstants.replaceIdServiceName,
-        'Replace lost ID',
-        Icons.credit_card_off_rounded,
-        const Color(0xFF8B5CF6),
-      ),
-      (
-        AppConstants.updateInfoServiceName,
-        'Update details',
-        Icons.edit_document,
-        const Color(0xFF22C55E),
-      ),
-      (
-        AppConstants.renewIdServiceName,
-        'Renew ID',
-        Icons.autorenew_rounded,
-        const Color(0xFF0EA5E9),
-      ),
-      (
-        null,
-        'Track queue',
-        Icons.timeline_rounded,
-        AppColors.accent,
-      ),
-      (
-        null,
-        'Book appointment',
-        Icons.event_available_rounded,
-        const Color(0xFF14B8A6),
-      ),
-      (
-        null,
-        'My ticket',
-        Icons.qr_code_2_rounded,
-        const Color(0xFFEF4444),
-      ),
-      (
-        null,
-        'Service centers',
-        Icons.location_city_rounded,
-        const Color(0xFFF59E0B),
-      ),
-    ];
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const AppCard(
+        padding: EdgeInsets.symmetric(vertical: 26),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+      );
+    }
 
-    Widget tile(String? serviceName, String label, IconData icon, Color color) {
-      return Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () {
-            if (serviceName == null) {
-              if (label == 'Track queue') {
-                context.push(AppRoutes.track);
-              } else if (label == 'Book appointment') {
-                context.go(AppRoutes.services);
-              } else if (label == 'My ticket') {
-                if (current != null && current.reference.isNotEmpty) {
-                  context.push(AppRoutes.ticket(current.reference));
-                } else {
-                  context.go(AppRoutes.appointments);
-                }
-              } else {
-                context.push(AppRoutes.centers);
-              }
-              return;
-            }
-            final services = ref.read(activeServicesProvider);
-            final match = services.where((s) {
-              final name = s.name.toLowerCase();
-              if (serviceName == AppConstants.renewIdServiceName) {
-                return name.contains('renew');
-              }
-              return name == serviceName.toLowerCase();
-            });
-            if (match.isEmpty) {
-              context.go(AppRoutes.services);
-              return;
-            }
-            context.push(AppRoutes.book(match.first.id));
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 28),
-                const SizedBox(height: 10),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-              ],
+    final a = appointment;
+    if (a == null) {
+      return AppCard(
+        onTap: () => context.go(AppRoutes.services),
+        child: Row(
+          children: [
+            SoftIconBadge(
+              icon: Icons.confirmation_num_outlined,
+              color: AppColors.info,
             ),
-          ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'No active appointment. Book a National ID service to see it here.',
+                style: TextStyle(
+                  color: AppSurface.muted(context),
+                  fontSize: 12.8,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: AppSurface.muted(context)),
+          ],
         ),
       );
     }
 
-    // Plain rows — avoid nested GridView scrollables on Android emulator.
-    return Column(
-      children: [
-        for (var i = 0; i < tiles.length; i += 2) ...[
-          if (i > 0) const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: tile(tiles[i].$1, tiles[i].$2, tiles[i].$3, tiles[i].$4),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: i + 1 < tiles.length
-                    ? tile(
-                        tiles[i + 1].$1,
-                        tiles[i + 1].$2,
-                        tiles[i + 1].$3,
-                        tiles[i + 1].$4,
-                      )
-                    : const SizedBox(),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
+    final queueNumber = a.queueNumber.isNotEmpty
+        ? a.queueNumber
+        : a.ticketNumber;
+    final appointmentText = a.hasAppointmentSlot
+        ? [
+            Formatters.readableDate(a.date),
+            if (a.timeSlot != null) a.timeSlot!,
+          ].join(' • ')
+        : '--';
+    final status = a.status.isEmpty
+        ? 'Scheduled'
+        : Formatters.titleCase(a.status);
 
-class _CenterChip extends StatelessWidget {
-  const _CenterChip({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE8EEF7)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.location_on_rounded, color: AppColors.primary, size: 22),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.muted, fontSize: 11.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ServiceTile extends StatelessWidget {
-  const _ServiceTile({required this.service});
-
-  final ServiceModel service;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SectionCard(
-        onTap: () => context.push(AppRoutes.serviceDetail(service.id)),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.primarySoft,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.badge_outlined, color: AppColors.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    service.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${service.duration} min • ${service.category}',
-                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActiveRequestCard extends StatelessWidget {
-  const _ActiveRequestCard({required this.appointment});
-
-  final Appointment appointment;
-
-  @override
-  Widget build(BuildContext context) {
-    return SectionCard(
-      onTap: () => context.push(AppRoutes.appointmentDetail(appointment.id)),
+    return AppCard(
+      radius: 18,
+      padding: const EdgeInsets.all(12),
+      onTap: () => context.push(AppRoutes.appointmentDetail(a.id)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -688,44 +571,503 @@ class _ActiveRequestCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  appointment.reference,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
-              StatusChip(status: appointment.status),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            appointment.serviceName.isEmpty
-                ? appointment.requestTypeLabel
-                : appointment.serviceName,
-            style: const TextStyle(color: AppColors.muted),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              if (appointment.isTrackable)
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () =>
-                        context.push(AppRoutes.trackRef(appointment.reference)),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42)),
-                    child: const Text('Track'),
+                  'My Appointment Status',
+                  style: TextStyle(
+                    color: AppSurface.ink(context),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-              if (appointment.isTrackable) const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => context.push(AppRoutes.ticket(appointment.reference)),
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
-                  child: const Text('QR ticket'),
+              ),
+              Text(
+                'View details',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _StatusInfoBox(
+            child: Row(
+              children: [
+                SoftIconBadge(
+                  icon: Icons.calendar_month_outlined,
+                  color: AppColors.primary,
+                  size: 42,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _TinyStatusField(
+                          label: 'Ticket No.',
+                          value: a.reference.isEmpty ? '--' : a.reference,
+                        ),
+                      ),
+                      const _MiniDivider(),
+                      Expanded(
+                        child: _TinyStatusField(
+                          label: 'Queue No.',
+                          value: queueNumber.isEmpty ? '--' : queueNumber,
+                          valueColor: AppColors.primary,
+                        ),
+                      ),
+                      const _MiniDivider(),
+                      Expanded(
+                        child: _TinyStatusField(
+                          label: 'Service',
+                          value: a.serviceName.isEmpty
+                              ? a.requestTypeLabel
+                              : a.serviceName,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          _StatusInfoBox(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TinyStatusField(
+                    label: 'Center',
+                    value: a.centerName.isEmpty ? '--' : a.centerName,
+                  ),
+                ),
+                const _MiniDivider(),
+                Expanded(
+                  child: _TinyStatusField(
+                    label: 'Appointment',
+                    value: appointmentText,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(child: _StatusPill(label: status)),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _StatusInfoBox extends StatelessWidget {
+  const _StatusInfoBox({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppSurface.isDark(context)
+            ? Colors.white.withValues(alpha: 0.04)
+            : const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppSurface.border(context)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _TinyStatusField extends StatelessWidget {
+  const _TinyStatusField({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppSurface.muted(context),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: valueColor ?? AppSurface.ink(context),
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            height: 1.12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniDivider extends StatelessWidget {
+  const _MiniDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 34,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: AppSurface.border(context),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChipsRow extends StatelessWidget {
+  const _StatusChipsRow({required this.appointments});
+
+  final List<Appointment> appointments;
+
+  @override
+  Widget build(BuildContext context) {
+    final withSlot = appointments.where((a) => a.hasAppointmentSlot).toList();
+    final waiting = withSlot
+        .where(
+          (a) =>
+              a.status == TicketStatus.waiting ||
+              a.status == TicketStatus.beingServed,
+        )
+        .length;
+    final completed = withSlot
+        .where(
+          (a) =>
+              a.requestStatus.toLowerCase() == 'completed' ||
+              a.status.toLowerCase() == 'completed',
+        )
+        .length;
+    final upcoming = withSlot
+        .where(
+          (a) =>
+              a.isActive &&
+              !a.isCancelled &&
+              a.status != TicketStatus.waiting &&
+              a.status != TicketStatus.beingServed &&
+              a.requestStatus.toLowerCase() != 'completed',
+        )
+        .length;
+
+    final items = [
+      (waiting, 'Waiting', Icons.schedule_rounded, AppColors.warning),
+      (
+        completed,
+        'Completed',
+        Icons.check_circle_outline_rounded,
+        AppColors.success,
+      ),
+      (upcoming, 'Upcoming', Icons.event_available_outlined, AppColors.info),
+    ];
+
+    return Row(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: AppCard(
+              radius: 14,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  SoftIconBadge(icon: items[i].$3, color: items[i].$4),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${items[i].$1}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
+                      color: AppSurface.ink(context),
+                    ),
+                  ),
+                  Text(
+                    items[i].$2,
+                    style: TextStyle(
+                      color: AppSurface.muted(context),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FactsAndFigures extends ConsumerWidget {
+  const _FactsAndFigures();
+
+  String _compact(int value) {
+    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M+';
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K+';
+    return '$value';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(publicHomeStatsProvider);
+    final data = stats.asData?.value ?? PublicHomeStats.empty;
+
+    final items = [
+      (
+        _compact(data.registeredCitizens),
+        'Registered Users',
+        Icons.groups_2_rounded,
+        const Color(0xFF2563EB),
+      ),
+      (
+        _compact(data.serviceCenters),
+        'Service Centers',
+        Icons.location_city_rounded,
+        AppColors.success,
+      ),
+      (
+        _compact(data.appointmentsBooked),
+        'Appointments Booked',
+        Icons.event_note_rounded,
+        const Color(0xFF7C3AED),
+      ),
+    ];
+
+    return Row(
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(width: 10),
+          Expanded(
+            child: AppCard(
+              radius: 14,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+              tintColor: items[i].$4,
+              child: Column(
+                children: [
+                  SoftIconBadge(icon: items[i].$3, color: items[i].$4),
+                  const SizedBox(height: 8),
+                  stats.isLoading
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          items[i].$1,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            color: AppSurface.ink(context),
+                          ),
+                        ),
+                  const SizedBox(height: 3),
+                  Text(
+                    items[i].$2,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppSurface.muted(context),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _NearbyCentersCard extends ConsumerWidget {
+  const _NearbyCentersCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final centers = ref.watch(centersProvider).value ?? const <CenterModel>[];
+
+    if (centers.isEmpty) {
+      return const _NearbyCenterTile(center: null);
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < centers.length; i++) ...[
+          if (i > 0) const SizedBox(height: 10),
+          _NearbyCenterTile(center: centers[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _NearbyCenterTile extends StatelessWidget {
+  const _NearbyCenterTile({required this.center});
+
+  final CenterModel? center;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = center;
+    final name = item?.name.trim().isNotEmpty == true
+        ? item!.name
+        : 'NQS City Center';
+    final location = item?.location.trim().isNotEmpty == true
+        ? item!.location
+        : '123 Independence Avenue, Capital City';
+    final hours = item?.hoursLabel.trim().isNotEmpty == true
+        ? item!.hoursLabel
+        : 'Mon - Fri: 8:00 AM - 4:30 PM';
+
+    return AppCard(
+      radius: 17,
+      padding: const EdgeInsets.all(10),
+      onTap: () {
+        if (item != null) {
+          context.push(AppRoutes.centerDetail(item.id));
+        } else {
+          context.go(AppRoutes.centers);
+        }
+      },
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              'assets/images/hero_service_center.png',
+              width: 82,
+              height: 64,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 82,
+                height: 64,
+                color: AppSurface.tint(context, AppColors.primary),
+                child: const Icon(Icons.location_city_rounded),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppSurface.ink(context),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _CenterMetaLine(icon: Icons.place_outlined, text: location),
+                const SizedBox(height: 4),
+                _CenterMetaLine(icon: Icons.schedule_rounded, text: hours),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppSurface.tint(context, AppColors.muted),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '1.2 km',
+              style: TextStyle(
+                color: AppSurface.muted(context),
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: AppSurface.muted(context)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CenterMetaLine extends StatelessWidget {
+  const _CenterMetaLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: AppSurface.muted(context)),
+        const SizedBox(width: 5),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: AppSurface.muted(context),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

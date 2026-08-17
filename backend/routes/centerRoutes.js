@@ -21,7 +21,7 @@ router.get('/assigned/me', protect, authorize('operator', 'super_operator', 'cen
 
 router.route('/:id')
   .get(optionalProtect, getCenterById)
-  .put(protect, authorize('admin'), updateCenter)
+  .put(protect, authorize('admin', 'super_operator', 'center_manager'), updateCenter)
   .delete(protect, authorize('admin'), deleteCenter);
 
 export default router;

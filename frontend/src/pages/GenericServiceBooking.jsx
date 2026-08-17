@@ -172,7 +172,7 @@ const GenericServiceBooking = () => {
           url: '/api/bookings',
           payload
         },
-        successPath: '/dashboard/user/appointments',
+        successPath: '/dashboard/user/my-appointments',
         successMessage: `${service.name} booking submitted successfully.`
       }));
       toast.success('OTP sent.');
@@ -216,7 +216,7 @@ const GenericServiceBooking = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <Field label="Full Name" icon={FiUser} value={form.fullName} onChange={(value) => updateForm('fullName', value)} />
+                <Field label="Full Name" icon={FiUser} value={form.fullName} onChange={(value) => updateForm('fullName', value.replace(/[^A-Za-z\s'-]/g, ''))} />
                 <Field label="Phone Number" icon={FiPhone} value={form.phone} onChange={(value) => updateForm('phone', value)} />
                 <label className="sm:col-span-2">
                   <span className={labelClass}>Service Center</span>

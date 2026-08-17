@@ -61,6 +61,14 @@ class Json {
     if (value is List) {
       return value.map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList();
     }
+    // Some older center rows store a single day as a plain string ("Friday").
+    if (value is String && value.trim().isNotEmpty) {
+      return value
+          .split(RegExp(r'[,|]'))
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .toList();
+    }
     return const [];
   }
 

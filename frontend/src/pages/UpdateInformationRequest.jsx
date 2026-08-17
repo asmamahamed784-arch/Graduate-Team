@@ -386,7 +386,7 @@ const UpdateInformationRequest = () => {
             url: '/api/bookings',
             payload
           },
-          successPath: '/dashboard/user/appointments',
+          successPath: '/dashboard/user/my-appointments',
           successMessage: 'Update request submitted successfully.'
         }));
         toast.success('OTP sent.');
@@ -428,7 +428,7 @@ const UpdateInformationRequest = () => {
           </span>
           <h1 className="mt-3 text-2xl font-black sm:text-3xl">Update National ID Information</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-            Submit the information that needs correction. This request does not create an appointment, queue ticket, or QR code.
+            Submit the information that needs correction. This request does not create an appointment, queue request, or QR code.
           </p>
         </section>
 
@@ -454,7 +454,7 @@ const UpdateInformationRequest = () => {
           <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-100">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-200">Existing registration found</p>
             <p className="mt-1 text-sm font-semibold">
-              This update request will be linked to ticket {existingRegistration.ref}.
+              This update request will be linked to request {existingRegistration.ref}.
             </p>
           </section>
         )}
@@ -500,7 +500,7 @@ const UpdateInformationRequest = () => {
               <div className="mt-5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
                 <h3 className="text-sm font-black text-emerald-200">Linked to existing National ID registration</h3>
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Info label="Previous Ticket Number" value={request.existingRegistration.ticketNumber} />
+                  <Info label="Previous Request Number" value={request.existingRegistration.ticketNumber} />
                   <Info label="Previous Queue Number" value={request.existingRegistration.queueNumber} />
                   <Info label="Previous Center" value={request.existingRegistration.centerName} />
                   <Info label="Previous Status" value={request.existingRegistration.status} />
@@ -618,7 +618,15 @@ const UpdateInformationRequest = () => {
                           </select>
                         </label>
                       ) : (
-                        <Field label="New Value" value={change.newValue} onChange={(value) => updateChange(change.field, 'newValue', value)} />
+                        <Field
+                          label="New Value"
+                          value={change.newValue}
+                          onChange={(value) => updateChange(
+                            change.field,
+                            'newValue',
+                            ['Name', "Mother's Name"].includes(change.field) ? value.replace(/[^A-Za-z\s'-]/g, '') : value
+                          )}
+                        />
                       )}
                       <Field label="Reason" value={change.reason} onChange={(value) => updateChange(change.field, 'reason', value)} />
                     </div>

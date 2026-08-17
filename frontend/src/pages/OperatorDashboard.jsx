@@ -1,18 +1,39 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+} from 'chart.js';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { io } from 'socket.io-client';
 import api from '../api/axiosInstance';
-import { useAuth } from '../hooks';
+import { useAuth, useCountUp, useOtpGate } from '../hooks';
+import OtpGateModal from '../components/OtpGateModal';
 import {
   canCancelAppointment,
   canCompleteAppointment,
+  canReacceptAppointment,
 } from '../utils/appointmentActions';
-import { INCORRECT_FIELD_OPTIONS } from '../utils/cancellationFields';
+import { getCancellationFeedbackText, getCancellationReasonList } from '../utils/cancellationDisplay';
+import LostIdCancelDetails from '../components/LostIdCancelDetails';
+import {
+  getIncorrectFieldOptionsForTicket,
+  isLostReplacementRequest,
+} from '../utils/cancellationFields';
 import { getChangedUpdateFields } from '../utils/updateRequestFields';
 import {
   FaBuilding,
+  FaCalendarAlt,
   FaCheck,
   FaCheckDouble,
   FaPhoneAlt,
@@ -22,9 +43,18 @@ import {
   FaTimesCircle,
   FaUserClock,
   FaUsers,
+  FaUserCheck,
+  FaClipboardList,
   FaEye,
-  FaRedo,
+  FaSyncAlt,
 } from 'react-icons/fa';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
+
+function AnimatedStatValue({ value }) {
+  const animated = useCountUp(Number(value) || 0);
+  return animated.toLocaleString();
+}
 
 const container = {
   hidden: { opacity: 0 },
@@ -96,11 +126,13 @@ const FILTER_LABELS = {
   lost_replacement: 'Lost National ID Replacement',
 };
 
-const today = new Date().toLocaleDateString('en-US', {
+const today = new Date().toLocaleString('en-US', {
   weekday: 'long',
   year: 'numeric',
   month: 'long',
   day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
 });
 
 const statusLabel = (status) => (status === 'Being Served' ? 'Now Serving' : status || 'Waiting');
@@ -217,18 +249,23 @@ const valueOrDash = (value) => {
 };
 
 const formatMaritalStatus = (value) => {
-  if (value === 'SINGLE') return 'Single';
-  if (value === 'MARRIED') return 'Married';
-  if (value === 'DIVORCED') return 'Divorced';
-  if (value === 'WIDOWED') return 'Widowed';
+  const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (normalized === 'single' || normalized === 'singe') return 'Single';
+  if (normalized === 'married' || normalized === 'marrid') return 'Married';
+  if (normalized === 'divorced') return 'Divorced';
+  if (normalized === 'widowed') return 'Widowed';
   return value || '--';
 };
 
 const getOriginalRegistrationDetails = (ticket = {}) => (
-  ticket.existingRegistration?.registrationDetails || {}
+  ticket.updateDetails?.previousData ||
+  ticket.updateDetails?.oldDataSnapshot ||
+  ticket.existingRegistration?.registrationDetails ||
+  {}
 );
 
 const getOriginalValueByField = (ticket = {}, field = '', fallback = '') => {
+  if (fallback && fallback !== '--' && fallback !== 'Not recorded in current record') return valueOrDash(fallback);
   const details = getOriginalRegistrationDetails(ticket);
   const existing = ticket.existingRegistration || {};
   const values = {
@@ -252,6 +289,23 @@ const getOriginalValueByField = (ticket = {}, field = '', fallback = '') => {
   return valueOrDash(values[fieldKey(field)] || fallback);
 };
 
+const getPreviousDataRows = (ticket = {}) => {
+  const previous = ticket.updateDetails?.previousData || ticket.updateDetails?.oldDataSnapshot || {};
+  const rows = [
+    ['Full Name', previous.fullName],
+    ["Mother's Name", previous.motherName],
+    ['Date of Birth', formatDate(previous.dateOfBirth)],
+    ['Phone', previous.phone],
+    ['Gender', previous.gender],
+    ['Marital Status', formatMaritalStatus(previous.maritalStatus)],
+    ['District', previous.district],
+    ['Full Address', previous.address || previous.fullAddress],
+    ['Nearest Landmark', previous.nearestLandmark],
+    ['National ID Number', previous.nationalIdNumber]
+  ];
+  return rows.filter(([, value]) => value && value !== '--');
+};
+
 const getUpdateChangeList = (ticket = {}) => {
   const details = ticket.updateDetails || {};
   return details.changes?.length
@@ -270,7 +324,7 @@ const normalizeCompareValue = (field = '', value = '') => {
   const text = String(value ?? '').trim();
   if (!text || text === '--') return '';
   const key = fieldKey(field);
-  if (key.includes('marital')) return text.toUpperCase();
+  if (key.includes('marital')) return formatMaritalStatus(text).toUpperCase();
   if (key.includes('date')) {
     const parsed = new Date(text);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
@@ -280,7 +334,8 @@ const normalizeCompareValue = (field = '', value = '') => {
 
 const getUpdateComparisonRows = (ticket = {}) => getUpdateChangeList(ticket).map((change, index) => {
   const originalValue = getOriginalValueByField(ticket, change.field, change.currentValue);
-  const newValue = valueOrDash(change.newValue);
+  const isMaritalStatus = fieldKey(change.field).includes('marital');
+  const newValue = isMaritalStatus ? formatMaritalStatus(change.newValue) : valueOrDash(change.newValue);
   const changed = normalizeCompareValue(change.field, originalValue) !== normalizeCompareValue(change.field, newValue);
   return {
     ...change,
@@ -326,13 +381,22 @@ const StatCardSkeleton = () => (
 const OperatorDashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const autoOpenedTicketRef = useRef('');
   const [tickets, setTickets] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
-  const [activeFilter, setActiveFilter] = useState('new_national_id');
+  const {
+    otpFlow, otpDigits, otpSeconds, otpRequesting, otpVerifying, otpError,
+    requestOtp, updateOtpDigit, verifyOtpGate, resendOtpGate, closeOtpGate
+  } = useOtpGate();
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [highlightedSection, setHighlightedSection] = useState('');
+  const sectionRefs = useRef({});
+  const highlightTimeoutRef = useRef(null);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [centerSummary, setCenterSummary] = useState(null);
   const [cancelModalTicket, setCancelModalTicket] = useState(null);
@@ -358,7 +422,6 @@ const OperatorDashboard = () => {
       const payload = response.data?.data || {};
       const nextTickets = (payload.tickets || payload.allCenterTickets || []).map(normalizeTicket);
       setTickets(sortTickets(nextTickets));
-      setStaff(payload.staff || []);
       setCenterSummary(payload.centerStats || null);
       setError('');
     } catch (err) {
@@ -368,11 +431,28 @@ const OperatorDashboard = () => {
     }
   }, []);
 
+  // /api/operator/dashboard never returns a staff list, so center managers
+  // (already authorized for /api/operators, auto-scoped server-side to their
+  // own center) fetch their roster from there instead.
+  const fetchStaff = useCallback(async () => {
+    if (!isCenterManager) return;
+    try {
+      const response = await api.get('/api/operators');
+      setStaff(response.data?.data || []);
+    } catch {
+      setStaff([]);
+    }
+  }, [isCenterManager]);
+
   useEffect(() => {
     fetchDashboard(true);
     const intervalId = window.setInterval(() => fetchDashboard(false), 5000);
     return () => window.clearInterval(intervalId);
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    fetchStaff();
+  }, [fetchStaff]);
 
   useEffect(() => {
     if (!activeCenterId) return undefined;
@@ -393,12 +473,50 @@ const OperatorDashboard = () => {
     };
   }, [activeCenterId, fetchDashboard]);
 
+  const scrollToSection = useCallback((sectionKey) => {
+    window.requestAnimationFrame(() => {
+      sectionRefs.current[sectionKey]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    setHighlightedSection(sectionKey);
+    if (highlightTimeoutRef.current) window.clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = window.setTimeout(() => setHighlightedSection(''), 1800);
+  }, []);
+
+  // Which service section holds the first ticket matching a given status —
+  // used so clicking a status card (Completed, Cancelled, ...) scrolls to
+  // wherever those tickets actually are, not always the same section.
+  const findSectionForStatus = useCallback((status) => {
+    const matches = (ticket) => {
+      if (status === 'all') return true;
+      if (status === 'pending') return matchesAnyStatus(ticket, ['Pending']);
+      if (status === 'waiting') return matchesAnyStatus(ticket, ['Waiting']);
+      if (status === 'nowServing') return matchesAnyStatus(ticket, ['Being Served', 'In Progress']);
+      if (status === 'completed') return matchesAnyStatus(ticket, ['Completed']);
+      if (status === 'cancelled') return matchesAnyStatus(ticket, ['Cancelled', 'Canceled', 'Rejected']);
+      if (status === 'noShow') return matchesAnyStatus(ticket, ['No Show', 'No-Show', 'NoShow']);
+      return true;
+    };
+    return (
+      SERVICE_SECTIONS.find((section) => tickets.some((ticket) => ticket.requestType === section.key && matches(ticket)))
+      || SERVICE_SECTIONS[0]
+    );
+  }, [tickets]);
+
   useEffect(() => {
+    const viewQuery = String(searchParams.get('view') || '').trim().toLowerCase();
     const ticketQuery = String(searchParams.get('ticket') || '').trim().toUpperCase();
     const requestTypeQuery = String(searchParams.get('requestType') || '').trim().toLowerCase();
 
-    if (requestTypeQuery && FILTER_LABELS[requestTypeQuery]) {
-      setActiveFilter(requestTypeQuery);
+    if (viewQuery && FILTER_LABELS[viewQuery]) {
+      setStatusFilter(viewQuery);
+      if (viewQuery === 'staff') {
+        window.setTimeout(() => scrollToSection('staff'), 0);
+      } else if (viewQuery !== 'all') {
+        scrollToSection(findSectionForStatus(viewQuery).key);
+      }
+    } else if (requestTypeQuery && isServiceFilter(requestTypeQuery)) {
+      setStatusFilter('all');
+      scrollToSection(requestTypeQuery);
     }
 
     if (!ticketQuery || !tickets.length || autoOpenedTicketRef.current === ticketQuery) return;
@@ -410,10 +528,58 @@ const OperatorDashboard = () => {
 
     if (matchedTicket) {
       autoOpenedTicketRef.current = ticketQuery;
-      setActiveFilter(matchedTicket.requestType || requestTypeQuery || 'all');
+      setStatusFilter('all');
+      scrollToSection(matchedTicket.requestType || 'new_national_id');
       setSelectedTicket(matchedTicket);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, tickets]);
+
+  const goToFilter = useCallback((filter) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('view', filter);
+    params.delete('requestType');
+    params.delete('ticket');
+    navigate({
+      pathname: location.pathname,
+      search: `?${params.toString()}`
+    });
+  }, [location.pathname, navigate, searchParams]);
+
+  const goToRequestType = useCallback((requestType) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('requestType', requestType);
+    params.delete('view');
+    params.delete('ticket');
+    setStatusFilter('all');
+    navigate({
+      pathname: location.pathname,
+      search: `?${params.toString()}`
+    });
+    scrollToSection(requestType);
+  }, [location.pathname, navigate, scrollToSection, searchParams]);
+
+  const handleStatCardClick = useCallback((filterKey, isActive, alwaysOpen = false) => {
+    if (filterKey === 'staff') {
+      if (isActive && !alwaysOpen) {
+        goToFilter('all');
+        return;
+      }
+      goToFilter('staff');
+      window.setTimeout(() => scrollToSection('staff'), 0);
+      return;
+    }
+    if (isActive && !alwaysOpen) {
+      goToFilter('all');
+      return;
+    }
+    goToFilter(filterKey);
+    scrollToSection(findSectionForStatus(filterKey).key);
+  }, [findSectionForStatus, goToFilter, scrollToSection]);
+
+  const handleServiceCardClick = useCallback((sectionKey) => {
+    goToRequestType(sectionKey);
+  }, [goToRequestType]);
 
   const stats = useMemo(() => {
     const sorted = sortTickets(tickets);
@@ -427,6 +593,9 @@ const OperatorDashboard = () => {
       acc[section.key] = sorted.filter((ticket) => ticket.requestType === section.key).length;
       return acc;
     }, {});
+    const citizensServed = new Set(
+      completedServices.map((ticket) => ticket.citizenPhone || ticket.citizenDisplayName).filter(Boolean)
+    );
     const summary = centerSummary || {};
 
     return {
@@ -442,50 +611,111 @@ const OperatorDashboard = () => {
       cancelledCount: summary.cancelled ?? cancelledTickets.length,
       noShowTickets,
       noShowCount: summary.noShow ?? noShowTickets.length,
+      citizensServedCount: citizensServed.size,
       requestBreakdown,
       totalRequestsCount: summary.totalAppointments ?? sorted.length,
     };
   }, [centerSummary, tickets]);
 
+  const weekDays = useMemo(() => {
+    const monday = new Date();
+    const day = monday.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+      return { key: date.toISOString().slice(0, 10), label: date.toLocaleDateString('en-US', { weekday: 'short' }) };
+    });
+  }, []);
+
+  const dailyAppointmentsChart = useMemo(() => ({
+    labels: weekDays.map((day) => day.label),
+    datasets: [{
+      label: 'Appointments',
+      data: weekDays.map((day) => tickets.filter((ticket) => ticket.date === day.key).length),
+      backgroundColor: '#1F6FC2',
+      borderRadius: 8,
+      borderSkipped: false,
+      maxBarThickness: 40
+    }]
+  }), [tickets, weekDays]);
+
+  const queueActivityChart = useMemo(() => ({
+    labels: weekDays.map((day) => day.label),
+    datasets: [{
+      label: 'Average Queue Size',
+      data: weekDays.map((day) => tickets.filter((ticket) => (
+        ticket.date === day.key && !matchesAnyStatus(ticket, ['Cancelled', 'Canceled', 'Rejected', 'No Show', 'No-Show', 'NoShow'])
+      )).length),
+      borderColor: '#1F6FC2',
+      backgroundColor: 'rgba(31, 111, 194, 0.14)',
+      tension: 0.4,
+      fill: true,
+      pointRadius: 4,
+      pointBackgroundColor: '#fff',
+      pointBorderColor: '#1F6FC2',
+      pointBorderWidth: 2,
+      pointHoverRadius: 6
+    }]
+  }), [tickets, weekDays]);
+
+  const requestDistributionChart = useMemo(() => ({
+    labels: ['Pending', 'Waiting', 'Now Serving', 'Completed', 'Cancelled', 'No Show'],
+    datasets: [{
+      data: [
+        stats.pendingCount,
+        stats.ticketsWaitingCount,
+        stats.nowServingCount,
+        stats.completedServicesCount,
+        stats.cancelledCount,
+        stats.noShowCount
+      ],
+      backgroundColor: ['#F59E0B', '#60A5FA', '#8B5CF6', '#22C55E', '#F472B6', '#EF4444'],
+      borderWidth: 0
+    }]
+  }), [stats]);
+
+  const distributionTotal = requestDistributionChart.datasets[0].data.reduce((sum, value) => sum + value, 0);
+
+  const recentAppointments = useMemo(() => (
+    [...tickets].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 8)
+  ), [tickets]);
+
+  // Status-only filter — service is never filtered out here, since all three
+  // service sections stay permanently visible and are split out afterward.
   const visibleTickets = useMemo(() => {
     const sorted = sortTickets(tickets);
 
-    if (activeFilter === 'pending') {
+    if (statusFilter === 'pending') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['Pending']));
     }
 
-    if (activeFilter === 'waiting') {
+    if (statusFilter === 'waiting') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['Waiting']));
     }
 
-    if (activeFilter === 'nowServing') {
+    if (statusFilter === 'nowServing') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['Being Served', 'In Progress']));
     }
 
-    if (activeFilter === 'completed') {
+    if (statusFilter === 'completed') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['Completed']));
     }
 
-    if (activeFilter === 'cancelled') {
+    if (statusFilter === 'cancelled') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['Cancelled', 'Canceled', 'Rejected']));
     }
 
-    if (activeFilter === 'noShow') {
+    if (statusFilter === 'noShow') {
       return sorted.filter((ticket) => matchesAnyStatus(ticket, ['No Show', 'No-Show', 'NoShow']));
     }
 
-    if (activeFilter === 'staff') {
-      return [];
-    }
-
-    if (isServiceFilter(activeFilter)) {
-      return sorted.filter((ticket) => ticket.requestType === activeFilter);
-    }
-
     return sorted;
-  }, [activeFilter, tickets]);
+  }, [statusFilter, tickets]);
 
-  const visibleCount = activeFilter === 'staff' ? staff.length : visibleTickets.length;
+  const visibleCount = statusFilter === 'staff' ? staff.length : visibleTickets.length;
 
   const groupedTickets = useMemo(() => {
     const grouped = SERVICE_SECTIONS.reduce((acc, section) => {
@@ -501,12 +731,9 @@ const OperatorDashboard = () => {
     return grouped;
   }, [visibleTickets]);
 
-  const visibleSections = useMemo(() => {
-    if (isServiceFilter(activeFilter)) {
-      return SERVICE_SECTIONS.filter((section) => section.key === activeFilter);
-    }
-    return SERVICE_SECTIONS.filter((section) => (groupedTickets[section.key] || []).length > 0);
-  }, [activeFilter, groupedTickets]);
+  // All three service sections are always shown, stacked, one below another —
+  // never hidden based on the active filter.
+  const visibleSections = SERVICE_SECTIONS;
 
   const callTicket = async (ticket) => {
     if (!ticket?.ref) return;
@@ -539,26 +766,22 @@ const OperatorDashboard = () => {
     }
     setActionLoading(`complete-${ticket.ref}`);
     try {
-      const otpRequest = await api.post('/api/otp/request', {
+      const otpToken = await requestOtp({
         purpose: 'complete_service',
-        ticketId: ticket.id
+        ticketId: ticket.id,
+        ticketRef: ticket.ref,
+        title: 'Verify to Complete',
+        description: `Ask the citizen for the 6-digit code sent to their phone to complete ${ticket.ref}.`
       });
-      const code = window.prompt(`Enter OTP sent to citizen for ${ticket.ref}`);
-      if (!code) {
+      if (!otpToken) {
         toast.info('Complete service cancelled.');
         return;
       }
-      const otpRes = await api.post('/api/otp/verify', {
-        purpose: 'complete_service',
-        ticketId: ticket.id,
-        otpId: otpRequest.data?.data?.otpId,
-        code
-      });
       await api.put(`/api/bookings/admin/${ticket.id}/status`, {
         status: 'Completed',
-        otpToken: otpRes.data.data?.verificationToken
+        otpToken
       });
-      toast.success(`Ticket ${ticket.ref} completed.`);
+      toast.success(`Request ${ticket.ref} completed.`);
 
       await fetchDashboard(false);
     } catch (err) {
@@ -572,12 +795,24 @@ const OperatorDashboard = () => {
     if (!ticket?.ref) return;
     setActionLoading(`cancel-${ticket.ref}`);
     try {
+      const otpToken = await requestOtp({
+        purpose: 'cancel_service',
+        ticketId: ticket.id,
+        ticketRef: ticket.ref,
+        title: 'Verify to Cancel',
+        description: `Ask the citizen for the 6-digit code sent to their phone to cancel ${ticket.ref}.`
+      });
+      if (!otpToken) {
+        toast.info('Cancellation aborted.');
+        return;
+      }
       await api.put(`/api/bookings/${ticket.id}/cancel`, {
         cancellationReason: cancelData.cancellationReason || 'Cancelled by center staff',
         cancellationReasons: cancelData.cancellationReasons || [],
         additionalNotes: cancelData.additionalNotes || '',
+        otpToken
       });
-      toast.success(`Ticket ${ticket.ref} cancelled. Citizen has been notified.`);
+      toast.success(`Request ${ticket.ref} cancelled. Citizen has been notified.`);
       setCancelModalTicket(null);
       setSelectedCancelReasons([]);
       setCancelNotes('');
@@ -620,12 +855,15 @@ const OperatorDashboard = () => {
     );
   };
 
-  const selectedReasonLabels = () =>
-    selectedCancelReasons.filter((reason) => INCORRECT_FIELD_OPTIONS.includes(reason));
+  const selectedReasonLabels = (ticket = cancelModalTicket) => {
+    const allowed = getIncorrectFieldOptionsForTicket(ticket);
+    return selectedCancelReasons.filter((reason) => allowed.includes(reason));
+  };
 
   const submitCancel = () => {
     if (!cancelModalTicket) return;
     const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+    const isLostReq = isLostReplacementRequest(cancelModalTicket);
 
     if (isUpdateReq) {
       const changedFields = getChangedUpdateFields(cancelModalTicket);
@@ -650,9 +888,13 @@ const OperatorDashboard = () => {
       return;
     }
 
-    const validReasons = selectedReasonLabels();
+    const validReasons = selectedReasonLabels(cancelModalTicket);
     if (!validReasons.length) {
-      toast.error('Please select at least one incorrect field.');
+      toast.error(
+        isLostReq
+          ? 'Please select at least one incorrect Lost ID field.'
+          : 'Please select at least one incorrect field.'
+      );
       return;
     }
     if (!showCancelConfirmation) {
@@ -668,10 +910,16 @@ const OperatorDashboard = () => {
 
   const handleReturn = async (ticket) => {
     if (!ticket?.id) return;
+    if (!canReacceptAppointment(ticket)) {
+      toast.info('Re-accept is available only after the appointment is completed.');
+      return;
+    }
+    const confirmed = window.confirm(`Re-accept ${ticket.ref}? This will return it to Waiting so it can be handled again.`);
+    if (!confirmed) return;
     setActionLoading(`return-${ticket.ref}`);
     try {
       await api.put(`/api/bookings/admin/${ticket.id}/status`, { status: 'Waiting' });
-      toast.success(`Ticket ${ticket.ref} returned to waiting.`);
+      toast.success(`Request ${ticket.ref} returned to waiting.`);
       setSelectedTicket(null);
       await fetchDashboard(false);
     } catch (err) {
@@ -686,7 +934,7 @@ const OperatorDashboard = () => {
     setActionLoading(`reject-${ticket.ref}`);
     try {
       await api.put(`/api/bookings/admin/${ticket.id}/status`, { status: 'Rejected' });
-      toast.success(`Ticket ${ticket.ref} rejected.`);
+      toast.success(`Request ${ticket.ref} rejected.`);
       setSelectedTicket(null);
       await fetchDashboard(false);
     } catch (err) {
@@ -696,88 +944,141 @@ const OperatorDashboard = () => {
     }
   };
 
-  const statsData = [
-    ...(isCenterManager ? [{
-      label: 'Staff / Operators',
-      value: staff.length.toString(),
-      helper: 'Staff assigned to this center',
-      icon: FaUsers,
-      bg: 'bg-blue-100 dark:bg-blue-900/40',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      border: 'border-blue-500',
-      filter: 'staff',
-    }] : []),
+  // Sitewide soft-pastel card tone system (styles/nqs-theme-system.css): tone
+  // names map to nqs-card-tone-{tone} / nqs-card-tone-icon-{tone} classes below.
+  const statsData = isCenterManager ? [
     {
       label: 'Total Appointments',
-      value: stats.totalRequestsCount.toString(),
+      value: stats.totalRequestsCount,
       helper: 'All center appointments',
       icon: FaChartBar,
-      bg: 'bg-blue-100 dark:bg-blue-900/40',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-      border: 'border-blue-500',
+      tone: 'purple',
       filter: 'all',
     },
     {
-      label: 'Pending',
-      value: stats.pendingCount.toString(),
-      helper: 'Requests awaiting action',
-      icon: FaUserClock,
-      bg: 'bg-amber-100 dark:bg-amber-900/40',
-      iconColor: 'text-amber-600 dark:text-amber-300',
-      border: 'border-amber-500',
-      filter: 'pending',
-    },
-    {
       label: 'Waiting',
-      value: stats.ticketsWaitingCount.toString(),
+      value: stats.ticketsWaitingCount,
       helper: 'Waiting appointments',
       icon: FaTicketAlt,
-      bg: 'bg-yellow-100 dark:bg-yellow-900/40',
-      iconColor: 'text-yellow-600 dark:text-yellow-400',
-      border: 'border-yellow-500',
+      tone: 'blue',
       filter: 'waiting',
     },
     {
-      label: 'Now Serving',
-      value: stats.nowServingCount.toString(),
-      helper: 'Currently being served',
-      icon: FaPhoneAlt,
-      bg: 'bg-cyan-100 dark:bg-cyan-900/40',
-      iconColor: 'text-cyan-600 dark:text-cyan-300',
-      border: 'border-cyan-500',
-      filter: 'nowServing',
-    },
-    {
       label: 'Completed',
-      value: stats.completedServicesCount.toString(),
+      value: stats.completedServicesCount,
       helper: 'Completed appointments',
       icon: FaCheckDouble,
-      bg: 'bg-green-100 dark:bg-green-900/40',
-      iconColor: 'text-green-600 dark:text-green-400',
-      border: 'border-green-500',
+      tone: 'green',
       filter: 'completed',
     },
     {
       label: 'Cancelled',
-      value: stats.cancelledCount.toString(),
+      value: stats.cancelledCount,
       helper: 'Cancelled or rejected',
       icon: FaTimesCircle,
-      bg: 'bg-red-100 dark:bg-red-900/40',
-      iconColor: 'text-red-600 dark:text-red-300',
-      border: 'border-red-500',
+      tone: 'pink',
       filter: 'cancelled',
     },
     {
       label: 'No Show',
-      value: stats.noShowCount.toString(),
+      value: stats.noShowCount,
       helper: 'Missed appointments',
       icon: FaTimesCircle,
-      bg: 'bg-slate-100 dark:bg-slate-700',
-      iconColor: 'text-slate-600 dark:text-slate-300',
-      border: 'border-slate-500',
+      tone: 'pink',
+      filter: 'noShow',
+    },
+    {
+      label: 'Operators',
+      value: staff.length,
+      helper: 'Staff assigned to this center',
+      icon: FaUserCheck,
+      tone: 'cyan',
+      filter: 'staff',
+    },
+    {
+      label: 'Citizens Served',
+      value: stats.citizensServedCount,
+      helper: 'Unique citizens completed',
+      icon: FaUsers,
+      tone: 'blue',
+      filter: 'completed',
+      alwaysOpen: true,
+    },
+  ] : [
+    {
+      label: 'Total Appointments',
+      value: stats.totalRequestsCount,
+      helper: 'All center appointments',
+      icon: FaChartBar,
+      tone: 'purple',
+      filter: 'all',
+    },
+    {
+      label: 'Pending',
+      value: stats.pendingCount,
+      helper: 'Requests awaiting action',
+      icon: FaUserClock,
+      tone: 'orange',
+      filter: 'pending',
+    },
+    {
+      label: 'Waiting',
+      value: stats.ticketsWaitingCount,
+      helper: 'Waiting appointments',
+      icon: FaTicketAlt,
+      tone: 'blue',
+      filter: 'waiting',
+    },
+    {
+      label: 'Now Serving',
+      value: stats.nowServingCount,
+      helper: 'Currently being served',
+      icon: FaPhoneAlt,
+      tone: 'purple',
+      filter: 'nowServing',
+    },
+    {
+      label: 'Completed',
+      value: stats.completedServicesCount,
+      helper: 'Completed appointments',
+      icon: FaCheckDouble,
+      tone: 'green',
+      filter: 'completed',
+    },
+    {
+      label: 'Cancelled',
+      value: stats.cancelledCount,
+      helper: 'Cancelled or rejected',
+      icon: FaTimesCircle,
+      tone: 'pink',
+      filter: 'cancelled',
+    },
+    {
+      label: 'No Show',
+      value: stats.noShowCount,
+      helper: 'Missed appointments',
+      icon: FaTimesCircle,
+      tone: 'pink',
       filter: 'noShow',
     },
   ];
+
+  const chartAxisOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: 'var(--ad-muted)' }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: 'var(--ad-muted)' }, grid: { color: 'rgba(15, 45, 87, 0.06)' } }
+    }
+  };
+
+  const doughnutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '72%',
+    plugins: { legend: { display: false } }
+  };
 
   if ((authLoading || loading) && tickets.length === 0) {
     return (
@@ -795,9 +1096,11 @@ const OperatorDashboard = () => {
     );
   }
 
+  const serviceTone = { new_national_id: 'blue', update_information: 'purple', lost_replacement: 'orange' };
+
   return (
     <motion.div
-      className="nqs-operator-dashboard min-h-screen bg-slate-50 p-2 text-slate-900 dark:bg-slate-950 dark:text-slate-100 sm:p-3"
+      className="nqs-operator-dashboard nqs-admin-dashboard"
       variants={container}
       initial="hidden"
       animate="show"
@@ -805,13 +1108,11 @@ const OperatorDashboard = () => {
       <div className="mx-auto max-w-none space-y-3">
         <motion.div variants={item} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg font-bold text-slate-950 dark:text-white sm:text-xl">
+            <h1 className="text-lg font-bold sm:text-xl" style={{ color: 'var(--ad-navy)' }}>
               {isCenterManager ? 'Center Dashboard' : 'Operator Dashboard'}
             </h1>
-            <div className="mt-1 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300 sm:text-sm">
-              <FaBuilding className="text-blue-500" />
-              <span>{activeCenter}</span>
-              <span className="mx-1">|</span>
+            <div className="mt-1 flex items-center gap-2 text-xs sm:text-sm" style={{ color: 'var(--ad-muted)' }}>
+              <FaCalendarAlt className="text-[#1F6FC2]" />
               <span>{today}</span>
             </div>
             {error && <p className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
@@ -819,28 +1120,23 @@ const OperatorDashboard = () => {
           <div className="flex flex-col gap-2 sm:flex-row">
             {isCenterManager && (
               <>
-                <Link
-                  to="/dashboard/operator/staff"
-                  className="flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all hover:bg-blue-50 dark:border-blue-500/40 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700 sm:text-sm"
-                >
+                <Link to="/dashboard/operator/staff" className="nqs-ad-ghost-btn">
                   <FaUserClock className="text-sm" />
                   Manage Staff
                 </Link>
-                <Link
-                  to="/dashboard/operator/center-schedule"
-                  className="flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm transition-all hover:bg-blue-50 dark:border-blue-500/40 dark:bg-slate-800 dark:text-blue-300 dark:hover:bg-slate-700 sm:text-sm"
-                >
+                <Link to="/dashboard/operator/center-schedule" className="nqs-ad-ghost-btn">
                   <FaBuilding className="text-sm" />
                   Center Schedule
                 </Link>
+                <Link to="/dashboard/operator/report" className="nqs-ad-ghost-btn">
+                  <FaChartBar className="text-sm" />
+                  Reports
+                </Link>
               </>
             )}
-            <Link
-              to="/dashboard/operator/qr-scan"
-              className="flex items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-blue-800 sm:text-sm"
-            >
+            <Link to="/dashboard/operator/qr-scan" className="nqs-ad-primary-btn">
               <FaQrcode className="text-sm" />
-              Scan QR Ticket
+              Scan QR Request
             </Link>
             <button
               type="button"
@@ -849,85 +1145,198 @@ const OperatorDashboard = () => {
               className="flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-slate-400 sm:text-sm"
             >
               <FaPhoneAlt className="text-sm" />
-              Call Next Ticket
+              Call Next Request
             </button>
           </div>
         </motion.div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="nqs-ad-stat-grid">
           {statsData.map((stat) => {
-            const isActive = activeFilter === stat.filter;
+            const isActive = statusFilter === stat.filter;
             return (
-              <motion.button
+              <button
                 key={stat.label}
-                variants={item}
                 type="button"
-                onClick={() => setActiveFilter((current) => (current === stat.filter ? 'new_national_id' : stat.filter))}
-                className={`flex min-h-[70px] items-center gap-2 rounded-lg border bg-white p-2 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-800 ${isActive ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700'} border-l-4 ${stat.border}`}
+                onClick={() => handleStatCardClick(stat.filter, isActive, stat.alwaysOpen)}
+                className={`nqs-ad-stat nqs-ad-stat-${stat.tone} ${isActive ? 'ring-2 ring-[#1F6FC2]/30' : ''}`}
               >
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${stat.bg}`}>
-                  <stat.icon className={`text-sm ${stat.iconColor}`} />
+                <div className="nqs-ad-stat-top">
+                  <span className="nqs-ad-stat-label">{stat.label}</span>
+                  <span className="nqs-ad-stat-icon"><stat.icon /></span>
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-base font-bold text-slate-950 dark:text-white">{stat.value}</p>
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">{stat.label}</p>
-                  <p className="truncate text-[10px] text-slate-500 dark:text-slate-400">{stat.helper}</p>
-                </div>
-              </motion.button>
+                <strong className="nqs-ad-stat-value"><AnimatedStatValue value={stat.value} /></strong>
+                <span className="nqs-ad-stat-note">{stat.helper}</span>
+              </button>
             );
           })}
         </div>
 
-        <motion.section variants={item} className="grid grid-cols-1 gap-2 md:grid-cols-3">
+        <motion.section variants={item} className="nqs-ad-service-grid">
           {SERVICE_SECTIONS.map((section) => {
-            const isActive = activeFilter === section.key;
+            const isActive = highlightedSection === section.key;
             const count = stats.requestBreakdown[section.key] || 0;
+            const tone = serviceTone[section.key];
             return (
               <button
                 key={section.key}
                 type="button"
-                onClick={() => setActiveFilter(section.key)}
-                className={`rounded-lg border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                  isActive
-                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/20 dark:border-blue-400 dark:bg-blue-950/50'
-                    : 'border-slate-200 bg-white hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-blue-500'
-                }`}
+                onClick={() => handleServiceCardClick(section.key)}
+                className={isActive ? 'nqs-ad-service-card nqs-od-service-active' : `nqs-ad-service-card nqs-ad-service-${tone}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className={`text-xs font-black uppercase tracking-wide ${isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                      {section.title}
-                    </p>
-                    <p className="mt-2 text-3xl font-black text-slate-950 dark:text-white">{count}</p>
-                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Requests in this center</p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isActive ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'}`}>
+                  <p className="text-xs font-black uppercase tracking-wide">{section.title}</p>
+                  <span className={isActive ? 'rounded-full bg-white/25 px-2.5 py-1 text-[11px] font-bold text-white' : 'rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-bold'} style={isActive ? {} : { color: 'var(--ad-primary)' }}>
                     Open
                   </span>
                 </div>
-                <p className="mt-3 text-[11px] font-bold text-blue-700 dark:text-blue-300">{section.helper}</p>
+                <strong className="nqs-ad-service-total"><AnimatedStatValue value={count} /></strong>
+                <span className="nqs-ad-service-total-label">Requests in this center</span>
+                <p className="mt-2 text-[11px] font-bold">{section.helper}</p>
               </button>
             );
           })}
         </motion.section>
 
+        <motion.div variants={item} className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+          <div className="nqs-ad-widget xl:col-span-2">
+            <div className="nqs-ad-widget-head">
+              <div>
+                <h3>Daily Appointments</h3>
+                <p>This week</p>
+              </div>
+            </div>
+            <div className="nqs-ad-widget-body">
+              <div className="nqs-ad-chart-canvas" style={{ height: 125 }}>
+                <Bar data={dailyAppointmentsChart} options={chartAxisOptions} />
+              </div>
+            </div>
+          </div>
+
+          <div className="nqs-ad-widget">
+            <div className="nqs-ad-widget-head">
+              <div>
+                <h3>Request Status Distribution</h3>
+              </div>
+            </div>
+            <div className="nqs-ad-widget-body">
+              {distributionTotal > 0 ? (
+                <>
+                  <div className="nqs-ad-donut-wrap">
+                    <div className="nqs-ad-chart-canvas nqs-ad-chart-donut">
+                      <Doughnut data={requestDistributionChart} options={doughnutOptions} />
+                    </div>
+                    <div className="nqs-ad-donut-center">
+                      <span>Total</span>
+                      <strong>{distributionTotal}</strong>
+                    </div>
+                  </div>
+                  <ul className="nqs-ad-donut-legend">
+                    {requestDistributionChart.labels.map((label, index) => (
+                      <li key={label}>
+                        <span className="nqs-ad-dot" style={{ background: requestDistributionChart.datasets[0].backgroundColor[index] }} />
+                        <span className="nqs-ad-donut-legend-label">{label}</span>
+                        <strong>{Math.round((requestDistributionChart.datasets[0].data[index] / distributionTotal) * 100)}%</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : <p className="nqs-ad-empty">No requests recorded yet.</p>}
+            </div>
+          </div>
+
+          <div className="nqs-ad-widget xl:col-span-3">
+            <div className="nqs-ad-widget-head">
+              <div>
+                <h3>Queue Activity</h3>
+                <p>This week</p>
+              </div>
+            </div>
+            <div className="nqs-ad-widget-body">
+              <div className="nqs-ad-chart-canvas" style={{ height: 110 }}>
+                <Line data={queueActivityChart} options={chartAxisOptions} />
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {isCenterManager && (
+          <motion.div variants={item} className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            <div className="nqs-ad-widget">
+              <div className="nqs-ad-widget-head">
+                <div>
+                  <h3>Operator Performance</h3>
+                  <p>{staff.length} staff assigned to this center</p>
+                </div>
+              </div>
+              <div className="nqs-ad-widget-body">
+                {staff.length === 0 ? (
+                  <p className="nqs-ad-empty">No staff operators created for this center yet.</p>
+                ) : (
+                  <ul className="nqs-ad-activity-list">
+                    {staff.map((member) => (
+                      <li key={member._id || member.id}>
+                        <span className="nqs-ad-stat-icon nqs-card-tone-icon-cyan"><FaUserCheck /></span>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center justify-between gap-2">
+                            <span>{member.name || 'No name'} · {staffRoleLabel(member)}</span>
+                            <span className={member.status === 'active' ? 'nqs-badge-tone-green' : 'nqs-badge-tone-pink'} style={{ padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+                              {member.status || 'active'}
+                            </span>
+                          </p>
+                          <span>{member.phone || member.username || '--'}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="nqs-ad-widget">
+              <div className="nqs-ad-widget-head">
+                <div>
+                  <h3>Recent Appointments</h3>
+                  <p>Latest activity in this center</p>
+                </div>
+              </div>
+              <div className="nqs-ad-widget-body">
+                {recentAppointments.length === 0 ? (
+                  <p className="nqs-ad-empty">No appointments recorded yet.</p>
+                ) : (
+                  <ul className="nqs-ad-activity-list">
+                    {recentAppointments.map((ticket) => (
+                      <li key={ticket.id || ticket.ref}>
+                        <span className="nqs-ad-activity-dot"><FaClipboardList /></span>
+                        <div className="min-w-0 flex-1">
+                          <p>{ticket.citizenDisplayName} · {getRequestTypeLabel(ticket.requestType)}</p>
+                          <span>{ticket.ref} · {getDisplayStatus(ticket)} · {formatDate(ticket.date)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div variants={item} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs shadow-sm dark:border-slate-700 dark:bg-slate-800">
           <span className="font-semibold text-slate-700 dark:text-slate-200">
-            Showing: {FILTER_LABELS[activeFilter]} ({visibleCount})
+            Showing: {FILTER_LABELS[statusFilter]} ({visibleCount})
           </span>
-          {!isServiceFilter(activeFilter) && (
+          {statusFilter !== 'all' && (
             <button
               type="button"
-              onClick={() => setActiveFilter('new_national_id')}
+              onClick={() => goToFilter('all')}
               className="rounded-md border border-blue-200 px-3 py-1 font-semibold text-blue-700 hover:bg-blue-50 dark:border-blue-500/40 dark:text-blue-300 dark:hover:bg-blue-950/40"
             >
-              Back to New Registration
+              Clear filter
             </button>
           )}
         </motion.div>
 
-        {activeFilter === 'staff' ? (
-          <motion.section variants={item} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        {statusFilter === 'staff' ? (
+          <motion.section ref={(node) => { sectionRefs.current.staff = node; }} variants={item} className="scroll-mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-700">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
                 <FaUsers className="text-blue-500" />
@@ -972,50 +1381,51 @@ const OperatorDashboard = () => {
           </motion.section>
         ) : (
           <>
-            {activeFilter === 'requests' ? (
-              <motion.div variants={item} className="rounded-lg border border-blue-200 bg-blue-50 p-5 text-center shadow-sm dark:border-blue-500/40 dark:bg-blue-950/30">
-                <FaChartBar className="mx-auto text-2xl text-blue-600 dark:text-blue-300" />
-                <p className="mt-2 text-base font-bold text-slate-950 dark:text-white">Choose a service type above</p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  New Registration, Update Information, and Lost ID Replacement are now separated. Click one card to open only that service's records.
-                </p>
-              </motion.div>
-            ) : visibleTickets.length === 0 ? (
+            {tickets.length === 0 ? (
           <motion.div variants={item} className="rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <FaTicketAlt className="mx-auto text-3xl text-slate-300 dark:text-slate-600" />
-            <p className="mt-3 text-base font-semibold text-slate-950 dark:text-white">
-              {tickets.length === 0 ? 'No appointments available.' : `No records found for ${FILTER_LABELS[activeFilter].toLowerCase()}.`}
-            </p>
+            <p className="mt-3 text-base font-semibold text-slate-950 dark:text-white">No appointments available.</p>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Appointments booked for your assigned center will appear here automatically.</p>
           </motion.div>
             ) : (
-          <div className="space-y-3">
+          <div className="space-y-5">
             {visibleSections.map((section) => {
               const sectionTickets = groupedTickets[section.key] || [];
+              const isHighlighted = highlightedSection === section.key;
               return (
                 <motion.section
                   key={section.key}
+                  ref={(node) => { sectionRefs.current[section.key] = node; }}
+                  id={`section-${section.key}`}
                   variants={item}
-                  className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                  className={`scroll-mt-4 overflow-hidden rounded-lg border bg-white shadow-sm transition-all duration-500 dark:bg-slate-800 ${
+                    isHighlighted
+                      ? 'border-[#2F80ED] ring-4 ring-[#2F80ED]/30'
+                      : 'border-slate-200 dark:border-slate-700'
+                  }`}
                 >
-                  <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-700">
-                    <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-950 dark:text-white">
+                  <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-950 dark:text-white">
                       <FaTicketAlt className="text-yellow-500" />
                       {section.title}
                     </h2>
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+                    <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
                       {sectionTickets.length} appointment{sectionTickets.length === 1 ? '' : 's'}
                     </span>
                   </div>
 
                   {sectionTickets.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-sm text-slate-500 dark:text-slate-400">No appointments available.</p>
+                    <p className="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                      {statusFilter === 'all'
+                        ? 'No appointments in this service yet.'
+                        : `No ${FILTER_LABELS[statusFilter].toLowerCase()} in this service.`}
+                    </p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-left text-sm">
                         <thead className="bg-slate-100 text-xs uppercase text-slate-700 dark:bg-[#0b2444] dark:text-slate-100">
                           <tr>
-                            <th className="px-4 py-3">Ticket Number</th>
+                            <th className="px-4 py-3">Request Number</th>
                             <th className="px-4 py-3">Citizen Name</th>
                             <th className="px-4 py-3">Phone</th>
                             <th className="px-4 py-3">Appointment Date</th>
@@ -1028,6 +1438,7 @@ const OperatorDashboard = () => {
                           {sectionTickets.map((ticket) => {
                             const canComplete = canCompleteAppointment(ticket);
                             const canCancel = canCancelAppointment(ticket);
+                            const canReaccept = canReacceptAppointment(ticket);
 
                             return (
                               <tr key={ticket.id || ticket.ref} className="bg-white transition-colors hover:bg-blue-50 dark:bg-slate-800 dark:hover:bg-slate-700/60">
@@ -1072,6 +1483,15 @@ const OperatorDashboard = () => {
                                             <FaTimesCircle /> Cancel
                                           </button>
                                         )}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleReturn(ticket)}
+                                          disabled={Boolean(actionLoading) || !canReaccept}
+                                          title={canReaccept ? 'Return completed appointment to Waiting' : 'Available after Complete'}
+                                          className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold !text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-45 [&_svg]:!text-white"
+                                        >
+                                          <FaSyncAlt /> Re-accept
+                                        </button>
                                   </div>
                                 </td>
                                 )}
@@ -1124,6 +1544,24 @@ const OperatorDashboard = () => {
                 ))}
               </div>
 
+              {getCancellationReasonList(selectedTicket).length > 0 && (
+                <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+                  <span className="block text-xs font-black uppercase tracking-[0.16em] text-red-300">
+                    Cancellation / Correction Feedback
+                  </span>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-red-100">
+                    {getCancellationFeedbackText(selectedTicket, 'No cancellation reason was provided.')}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {getCancellationReasonList(selectedTicket).map((reason) => (
+                      <span key={reason} className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-black text-red-100">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {selectedTicket.requestType === 'update_information' && (
                 <div className="mt-5 rounded-xl border border-slate-700 bg-slate-950/40 p-4">
                   <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -1139,6 +1577,20 @@ const OperatorDashboard = () => {
                     <span className="block text-xs font-black uppercase tracking-wide text-slate-400">National ID Number</span>
                     {selectedTicket.updateDetails?.nationalIdNumber || selectedTicket.existingRegistration?.nationalIdNumber || '--'}
                   </p>
+
+                  {getPreviousDataRows(selectedTicket).length > 0 && (
+                    <div className="mb-4 rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+                      <h4 className="mb-3 text-sm font-black text-white">Previous National ID Data</h4>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {getPreviousDataRows(selectedTicket).map(([label, value]) => (
+                          <p key={label}>
+                            <span className="block text-xs font-black uppercase tracking-wide text-slate-400">{label}</span>
+                            <span className="text-slate-100">{value || '--'}</span>
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {getUpdateComparisonRows(selectedTicket).length > 0 ? (
                     <div className="overflow-x-auto rounded-lg border border-slate-800">
@@ -1196,8 +1648,20 @@ const OperatorDashboard = () => {
         )}
         {cancelModalTicket && (() => {
           const isUpdateReq = cancelModalTicket.requestType === 'update_information';
+          const isLostReq = isLostReplacementRequest(cancelModalTicket);
+          const fieldOptions = getIncorrectFieldOptionsForTicket(cancelModalTicket);
           const changedFields = isUpdateReq ? getChangedUpdateFields(cancelModalTicket) : [];
           const hasNoChanges = isUpdateReq && changedFields.length === 0;
+          const modalTitle = isUpdateReq
+            ? 'Cancel Update Request'
+            : isLostReq
+              ? 'Cancel Replace Lost National ID'
+              : 'Cancel Appointment';
+          const modalHelp = isUpdateReq
+            ? 'Review the changed information and provide a cancellation reason for this update request.'
+            : isLostReq
+              ? 'Review the Lost ID details the citizen submitted, select incorrect fields, and add notes. The citizen will see this feedback and can resubmit.'
+              : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.';
 
           return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-sm">
@@ -1205,14 +1669,8 @@ const OperatorDashboard = () => {
               <div className="mb-5 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">Operator Action</p>
-                  <h2 className="mt-1 text-2xl font-black">
-                    {isUpdateReq ? 'Cancel Update Request' : 'Cancel Appointment'}
-                  </h2>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                    {isUpdateReq
-                      ? 'Review the changed information and provide a cancellation reason for this update request.'
-                      : 'Select the incorrect fields. The citizen will receive this feedback and can resubmit from their dashboard.'}
-                  </p>
+                  <h2 className="mt-1 text-2xl font-black">{modalTitle}</h2>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{modalHelp}</p>
                 </div>
                 <button
                   type="button"
@@ -1226,11 +1684,11 @@ const OperatorDashboard = () => {
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950/40">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">Ticket Reference</p>
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">Request Reference</p>
                     <p className="mt-1 font-mono text-sm font-black text-blue-700 dark:text-[#7CB8FF]">{cancelModalTicket.ref}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">Citizen</p>
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-500">Full Name</p>
                     <p className="mt-1 text-sm font-black">{cancelModalTicket.citizenDisplayName || '--'}</p>
                   </div>
                   <div>
@@ -1243,6 +1701,8 @@ const OperatorDashboard = () => {
                   </div>
                 </div>
               </div>
+
+              {isLostReq && <LostIdCancelDetails ticket={cancelModalTicket} />}
 
               {isUpdateReq ? (
                 <div className="mt-5 space-y-4">
@@ -1295,9 +1755,11 @@ const OperatorDashboard = () => {
               ) : (
                 <>
                   <div className="mt-5">
-                    <span className="text-sm font-bold">Select incorrect fields</span>
+                    <span className="text-sm font-bold">
+                      {isLostReq ? 'Select incorrect Lost ID fields' : 'Select incorrect fields'}
+                    </span>
                     <div className="mt-2 grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-2">
-                      {INCORRECT_FIELD_OPTIONS.map((reason) => {
+                      {fieldOptions.map((reason) => {
                         const checked = selectedCancelReasons.includes(reason);
                         return (
                           <label
@@ -1343,7 +1805,7 @@ const OperatorDashboard = () => {
                   <p className="mt-2">
                     {isUpdateReq
                       ? `Cancellation reason: ${customCancelReason.trim()}. Are you sure you want to cancel this update request?`
-                      : `You selected the following incorrect fields: ${selectedReasonLabels().join(', ')}. Are you sure you want to cancel this appointment?`}
+                      : `You selected the following incorrect fields: ${selectedReasonLabels(cancelModalTicket).join(', ')}. Are you sure you want to cancel this ${isLostReq ? 'Lost ID request' : 'appointment'}?`}
                   </p>
                 </div>
               )}
@@ -1362,13 +1824,32 @@ const OperatorDashboard = () => {
                   disabled={Boolean(actionLoading) || hasNoChanges}
                   className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {actionLoading ? 'Cancelling...' : (isUpdateReq ? 'Confirm Cancel Update' : 'Confirm Cancellation')}
+                  {actionLoading
+                    ? 'Cancelling...'
+                    : (isUpdateReq
+                      ? 'Confirm Cancel Update'
+                      : isLostReq
+                        ? 'Confirm Cancel Lost ID'
+                        : 'Confirm Cancellation')}
                 </button>
               </div>
             </div>
           </div>
           );
         })()}
+
+        <OtpGateModal
+          flow={otpFlow}
+          digits={otpDigits}
+          seconds={otpSeconds}
+          requesting={otpRequesting}
+          verifying={otpVerifying}
+          error={otpError}
+          onDigitChange={updateOtpDigit}
+          onVerify={verifyOtpGate}
+          onResend={resendOtpGate}
+          onClose={closeOtpGate}
+        />
       </div>
     </motion.div>
   );

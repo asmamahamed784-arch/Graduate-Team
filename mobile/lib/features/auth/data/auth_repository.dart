@@ -91,6 +91,8 @@ class AuthRepository {
     required String username,
     required String password,
     String? phone,
+    String? name,
+    String? email,
   }) async {
     final normalizedPhone = Validators.normalizePhone(phone);
     final data = await _api.post(
@@ -99,6 +101,8 @@ class AuthRepository {
         'username': username.trim(),
         'password': password,
         if (normalizedPhone.isNotEmpty) 'phone': normalizedPhone,
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
       },
       skipAuth: true,
     );

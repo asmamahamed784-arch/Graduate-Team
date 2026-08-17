@@ -31,9 +31,14 @@ export const useDashboard = () => {
     try {
       if (isAdmin) {
         const statsRes = await apiClient.get('/api/reports/stats');
-        setStats(statsRes.data || null);
-        const auditsRes = await apiClient.get('/api/logs/list');
-        setLogs(auditsRes.data || []);
+        // Always replace with fresh payload; never keep a previous stats object.
+        setStats(statsRes?.data ? { ...statsRes.data } : null);
+        try {
+          const auditsRes = await apiClient.get('/api/logs/list');
+          setLogs(auditsRes.data || []);
+        } catch {
+          setLogs([]);
+        }
       } else {
         setStats(null);
         setLogs([]);
@@ -41,11 +46,12 @@ export const useDashboard = () => {
 
       if (isOperator) {
         const operatorStatsRes = await apiClient.get('/api/operator/dashboard');
-        setOperatorDashboardStats(operatorStatsRes.data || null);
+        setOperatorDashboardStats(operatorStatsRes?.data ? { ...operatorStatsRes.data } : null);
       } else {
         setOperatorDashboardStats(null);
       }
     } catch {
+      // Failed request must not retain old metric values.
       setStats(null);
       setLogs([]);
       setOperatorDashboardStats(null);
@@ -138,21 +144,25 @@ export const useDashboard = () => {
   // Memoize Admin Stats
   const adminStats = useMemo(() => {
     if (!isAdmin || !stats) return null;
+    const completedToday = Number(stats.completedToday ?? stats.completedServices ?? 0) || 0;
+    const activeOperators = Number(stats.activeOperators ?? 0) || 0;
     return {
-      totalUsers: stats.totalCitizens || 0,
-      totalBookings: stats.totalBookings || stats.totalAppointments || 0,
-      totalOperators: stats.totalOperators || 0,
-      waitingQueue: stats.waitingQueue || 0,
-      nowServing: stats.nowServing || 0,
-      completedServices: stats.completedServices || 0,
-      cancelledAppointments: stats.cancelledAppointments || 0,
-      lostIdRequests: stats.lostIdRequests || 0,
-      updateRequests: stats.updateRequests || 0,
-      activeOperators: stats.activeOperators || 0,
-      pendingOperators: stats.pendingOperators || 0,
-      activeServices: stats.activeServices || 0,
-      serviceCenters: stats.totalServiceCenters || stats.serviceCenters || 0,
-      todayAppointmentsCount: stats.dailyVisitors || 0,
+      totalUsers: Number(stats.totalCitizens ?? stats.totalUsers ?? 0) || 0,
+      totalBookings: Number(stats.totalBookings ?? stats.totalAppointments ?? 0) || 0,
+      totalOperators: Number(stats.totalOperators ?? 0) || 0,
+      waitingQueue: Number(stats.waitingQueue ?? 0) || 0,
+      nowServing: Number(stats.nowServing ?? 0) || 0,
+      completedToday,
+      completedServices: completedToday,
+      cancelledAppointments: Number(stats.cancelledAppointments ?? 0) || 0,
+      lostIdRequests: Number(stats.lostIdRequests ?? 0) || 0,
+      updateRequests: Number(stats.updateRequests ?? 0) || 0,
+      activeOperators,
+      enabledOperators: Number(stats.enabledOperators ?? 0) || 0,
+      pendingOperators: Number(stats.pendingOperators ?? 0) || 0,
+      activeServices: Number(stats.activeServices ?? 0) || 0,
+      serviceCenters: Number(stats.totalServiceCenters ?? stats.serviceCenters ?? 0) || 0,
+      todayAppointmentsCount: Number(stats.dailyVisitors ?? 0) || 0,
       queueEfficiency: stats.efficiency || '0%',
       systemUptime: 'Online',
       averageWaitTimeGlobal: `${stats.averageWaitingTime || 0} min`,
